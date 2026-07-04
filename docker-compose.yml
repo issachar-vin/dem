@@ -1,0 +1,16 @@
+services:
+  conductor:
+    build: ./conductor
+    container_name: dem-conductor
+    restart: unless-stopped
+    ports:
+      - "8420:8420"
+    env_file:
+      - .env
+    volumes:
+      - ./conductor/src:/app/src
+      - conductor_data:/data
+    command: uv run uvicorn conductor.main:app --host 0.0.0.0 --port 8420 --reload
+
+volumes:
+  conductor_data:
