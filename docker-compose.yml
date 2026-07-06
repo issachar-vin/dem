@@ -10,7 +10,7 @@ services:
     volumes:
       - ./conductor/src:/app/src
       - conductor_data:/data
-    command: uv run uvicorn conductor.main:app --host 0.0.0.0 --port 8420 --reload
+    command: sh -c "uv run alembic upgrade head && uv run uvicorn conductor.main:create_app --factory --host 0.0.0.0 --port 8420 --reload"
 
 volumes:
   conductor_data:
