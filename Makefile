@@ -1,10 +1,13 @@
-.PHONY: setup dev up down lint format test clean
+.PHONY: setup dev up down lint format typecheck test migrate clean
 
 CONDUCTOR = uv --directory conductor
 
 setup:
 	$(CONDUCTOR) sync
 	$(CONDUCTOR) run pre-commit install
+
+migrate:
+	$(CONDUCTOR) run alembic upgrade head
 
 dev up:
 	docker compose up --build
@@ -18,6 +21,9 @@ lint:
 
 format:
 	$(CONDUCTOR) run ruff format .
+
+typecheck:
+	$(CONDUCTOR) run mypy src
 
 test:
 	$(CONDUCTOR) run pytest
