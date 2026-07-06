@@ -33,6 +33,35 @@ class Job(Base):
     )
 
 
+class Secret(Base):
+    """A credential stored encrypted at rest (Fernet, keyed by DEM_SECRET_KEY)."""
+
+    __tablename__ = "secrets"
+
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ciphertext: Mapped[str] = mapped_column(String)
+    last_four: Mapped[str] = mapped_column(String(4), default="")
+    source: Mapped[str] = mapped_column(String(16), default="ui")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Setting(Base):
+    """Non-secret application config; DB is the source of truth after first-boot seeding."""
+
+    __tablename__ = "settings"
+
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String)
+    source: Mapped[str] = mapped_column(String(16), default="ui")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class Ticket(Base):
     """Conductor-side mirror of a Plane work item's pipeline state.
 
