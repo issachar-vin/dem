@@ -111,6 +111,13 @@ GitHub client + webhook → agent image & dispatcher → four agent roles + revi
 observability wired to the existing barad-dur stack → docs/packaging/release.
 Carry forward from 2b: **semantic Job dedupe** (per project+issue, see decision #3) and the
 **live end-to-end Plane check** (needs real creds, below).
+**DB decision (confirmed): stay on SQLite** — the conductor is a single-process, single-writer, and
+the spin-up-anywhere/home-lab goal rewards SQLite's zero-friction (no extra container, creds, or
+tuning). No future phase requires Postgres; `DATABASE_URL` keeps it pluggable if that ever changes.
+**Phase 3 prerequisite (before concurrent writes land):** `db.py` currently sets no SQLite PRAGMAs
+— add `journal_mode=WAL`, a `busy_timeout`, and `foreign_keys=ON` on connect (sqlite-only, via an
+engine `connect` event). Without it, overlapping webhook-ingest + dispatcher + status writes will
+raise `database is locked`. Not needed in Phase 2 (nothing writes concurrently yet).
 
 ## Pending from the user
 - **Live Plane check (2b, still unverified end-to-end):** real `PLANE_API_KEY` +
