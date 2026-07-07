@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from conductor.crypto import SecretBox, generate_key
 from conductor.db import Base, create_sessionmaker
+from conductor.mappings import MappingStore
 from conductor.store import ConfigStore
 
 # Env vars that could leak in from the host and make config tests non-deterministic.
@@ -57,6 +58,13 @@ async def store(
     sessionmaker: async_sessionmaker[AsyncSession], box: SecretBox
 ) -> ConfigStore:
     return ConfigStore(sessionmaker, box)
+
+
+@pytest_asyncio.fixture
+async def mappings(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> MappingStore:
+    return MappingStore(sessionmaker)
 
 
 @pytest.fixture

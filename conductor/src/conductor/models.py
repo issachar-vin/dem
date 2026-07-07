@@ -2,10 +2,14 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, DateTime, String, func
+from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from conductor.db import Base
+
+# A BigInteger primary key is not a rowid alias on SQLite, so it won't autoincrement there
+# (and SQLite is the default backend). Fall back to INTEGER on SQLite, keep BIGINT on Postgres.
+_AutoPK = BigInteger().with_variant(Integer, "sqlite")
 
 
 class JobStatus(StrEnum):
@@ -15,10 +19,24 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
+class WorkflowState(StrEnum):
+    """Canonical pipeline states, fixed in-app. StateMapping maps each onto whatever state
+    already exists in a given Plane project (we map, we don't create — Plane CE has no state API
+    for creation and boards are user-owned)."""
+
+    BACKLOG = "backlog"
+    READY_FOR_DEV = "ready_for_dev"
+    IN_PROGRESS = "in_progress"
+    IN_REVIEW = "in_review"
+    CHANGES_REQUESTED = "changes_requested"
+    READY_FOR_APPROVAL = "ready_for_approval"
+    DONE = "done"
+
+
 class Job(Base):
     __tablename__ = "jobs"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
     # Provider delivery id (Plane/GitHub), used to dedupe redelivered webhooks.
     delivery_id: Mapped[str | None] = mapped_column(String(255), unique=True, default=None)
     source: Mapped[str] = mapped_column(String(32))
@@ -56,6 +74,38 @@ class Setting(Base):
     name: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String)
     source: Mapped[str] = mapped_column(String(16), default="ui")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ProjectMapping(Base):
+    """Routes a Plane project to the GitHub repo the conductor builds it into (one repo per
+    project). Seeded once from targets.yml; the DB wins thereafter."""
+
+    __tablename__ = "project_mappings"
+
+    plane_project_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    repo: Mapped[str] = mapped_column(String(255))
+    base_branch: Mapped[str] = mapped_column(String(255), default="main")
+    source: Mapped[str] = mapped_column(String(16), default="ui")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class StateMapping(Base):
+    """Maps a canonical WorkflowState onto a concrete Plane state id, per project."""
+
+    __tablename__ = "state_mappings"
+    __table_args__ = (UniqueConstraint("plane_project_id", "workflow_state"),)
+
+    id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
+    plane_project_id: Mapped[str] = mapped_column(String(64), index=True)
+    workflow_state: Mapped[str] = mapped_column(String(32))
+    plane_state_id: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
