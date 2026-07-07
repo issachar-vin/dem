@@ -9,9 +9,12 @@ from fastapi import FastAPI
 
 from conductor import __version__, telemetry
 from conductor.api import config as config_api
+from conductor.api import mappings as mappings_api
+from conductor.api import webhooks as webhooks_api
 from conductor.config import BootstrapSettings, get_settings
 from conductor.crypto import SecretBox
 from conductor.db import create_engine, create_sessionmaker
+from conductor.mappings import MappingStore
 from conductor.store import ConfigStore
 
 logger = logging.getLogger("conductor")
@@ -42,6 +45,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     logger.info("Seeded %d config value(s) from env/seed file", seeded)
 
+    mappings = MappingStore(sessionmaker)
+    app.state.mappings = mappings
+    if settings.targets_file:
+        imported = await mappings.import_targets(
+            settings.targets_file, reseed=settings.reseed_from_env
+        )
+        logger.info("Seeded %d project mapping(s) from %s", imported, settings.targets_file)
+
     issues = (await store.status())["issues"]
     if issues:
         logger.warning("App config incomplete: %s", "; ".join(issues))
@@ -60,6 +71,8 @@ def create_app(settings: BootstrapSettings | None = None) -> FastAPI:
     app.state.settings = settings
     app.include_router(telemetry.router)
     app.include_router(config_api.router)
+    app.include_router(mappings_api.router)
+    app.include_router(webhooks_api.router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

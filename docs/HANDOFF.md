@@ -3,57 +3,66 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** Phase 2a complete — toolchain green, app boots, PR opening.
-**Active branch:** `feat/phase-2a-config-secret-store`.
+**Last updated:** Phase 2b built on branch `feat/phase-2b-plane` (PR open). Next: Phase 2-UI.
+**Active branch:** `feat/phase-2b-plane` (off `main` @ `f50132d`).
 
-## Phase 1 — DONE (merged, PR #1 on `main`)
+## Phase 1 — DONE (merged, PR #1)
 Conductor skeleton: `Job` + `Ticket` models, async engine, Alembic initial migration
 (`jobs`, `tickets`), FastAPI app factory + lifespan, `/health`, `/metrics`, `targets.yml` loader,
-`.env.example`, CI (ruff/mypy/pytest), tests. (`config.py` has since been refactored in Phase 2a.)
+CI (ruff/mypy/pytest). (`config.py` was refactored in Phase 2a.)
 
-## Phase 2a — DONE (config & secret store + setup-wizard backend)
+## Phase 2a — DONE (merged, PR #2 — config & secret store + setup-wizard backend)
+Env `BootstrapSettings` + DB-backed application config. `Secret` (Fernet-encrypted) + `Setting`
+(plain) tables; DB is the source of truth, env/YAML seed it once (`RESEED_FROM_ENV` re-imports).
+Modules: `crypto.py` (`SecretBox` + passphrase bundle), `catalog.py` (ConfigField registry, wizard
+steps, `validate_config`/`step_status`), `store.py` (`ConfigStore`), `verify.py` (live Claude/Plane/
+GitHub tests), `api/config.py` (management router). App boots with no app config; gaps reported via
+`GET /api/config/status`, not a hard fail. Migration `bf64e81c963c` (`secrets`+`settings`).
+**Key patterns to reuse in 2b:** creds come from `store.resolved()` (dict keyed by catalog `name`,
+e.g. `plane_base_url`/`plane_api_key`/`plane_workspace_slug`/`plane_webhook_secret`), not env;
+httpx clients take an injectable `client=` param for `MockTransport` tests (see `verify.py`);
+`ConfigStore` lives on `request.app.state.store`.
 
-All items below built and verified: ruff + mypy --strict + pytest (47) green; migration chain
-(`f4ff4cd58b95 → bf64e81c963c`) applies cleanly (`jobs, tickets, secrets, settings`); app boots
-with **no** app config and `/api/config/status` reports per-step completeness (200). PR opening.
+## Phase 2b — DONE (branch `feat/phase-2b-plane`, PR open) — Plane integration
+Signed Plane webhook for an epic-labelled issue → verified, deduped `Job`; conductor can
+read/comment/transition Plane issues; DB-backed project↔repo + canonical-state↔Plane-state maps.
 
-### Built
-- `conductor/src/conductor/crypto.py` — `SecretBox` (Fernet encrypt/decrypt), `generate_key`,
-  passphrase-based `encrypt_bundle`/`decrypt_bundle` (portable config export).
-- `conductor/src/conductor/catalog.py` — declarative `ConfigField` registry with wizard **steps**
-  (Claude/Plane/GitHub/Notifications/Advanced), `required` flags, `validate_config()`,
-  `step_status()` (drives wizard resumability).
-- `conductor/src/conductor/config.py` — refactored to `BootstrapSettings` (env-only: `DEM_SECRET_KEY`,
-  `DATABASE_URL`, host/port, `RESEED_FROM_ENV`, `CONFIG_SEED_FILE`; validates the Fernet key).
-- `conductor/src/conductor/models.py` — added `Secret` (encrypted) + `Setting` (plain) tables.
-- `conductor/src/conductor/store.py` — `ConfigStore`: set/get secret+setting, `resolved()`,
-  `seed_from_env()` (seed-once unless reseed), masked `list_config()`, `status()`, `export_env()`,
-  `export_bundle()`/`import_bundle()`.
-- `conductor/src/conductor/verify.py` — `verify_claude`/`verify_plane`/`verify_github` (httpx,
-  injectable client for tests). Claude test: `claude-haiku-4-5`, `max_tokens=4`; OAuth token →
-  `Authorization: Bearer` + `anthropic-beta: oauth-2025-04-20`; API key → `x-api-key`.
-- `conductor/pyproject.toml` — added `cryptography`, `types-pyyaml`.
-- `conductor/src/conductor/api/__init__.py` — empty package created.
+**Confirmed webhook signing scheme** (from Plane source `apps/api/plane/bgtasks/webhook_task.py`
++ `IssueExpandSerializer`, not from memory):
+- Headers: `X-Plane-Delivery` (uuid, per-attempt → idempotency key), `X-Plane-Event`
+  (`issue`, `issue_comment`, …), `X-Plane-Signature` (hex).
+- Signature = `HMAC-SHA256(secret, raw_body).hexdigest()`, timing-safe. Plane signs
+  `json.dumps(payload)` == the wire body, so **verify over the raw request body**.
+- Envelope: `{event, action(create|update|delete), webhook_id, workspace_id, workspace_slug,
+  data, activity}`. Issue `data` (fields `__all__`): `id`, `project` (**UUID**), `workspace`,
+  `name`, `state` (nested `{id,name,color,group}`), `labels` (**list of UUIDs**), `assignees`.
+  **Labels arrive as UUIDs, not names** → epic detection resolves label names via
+  `PlaneClient.list_labels` and matches `name == "epic"`.
 
-- `conductor/src/conductor/api/config.py` — management router (`GET /api/config`, `GET
-  /api/config/status`, `PUT /secret/{name}`, `PUT /setting/{name}`, `POST /test/{service}`, `GET
-  /export.env`, `POST /export-bundle`, `POST /import-bundle`), pulling `ConfigStore` from
-  `app.state.store`.
-- `main.py` — lifespan builds `SecretBox` + `ConfigStore` on `app.state.store`, seeds from
-  env/YAML (`_seed_env`), logs incomplete-config issues (non-fatal), includes the config router.
-  Phase 1's hard auth-XOR fail-fast is gone — reported via `catalog.validate_config`, not fatal.
-- Alembic migration `bf64e81c963c_config_store` (`secrets` + `settings`).
-- Tests rewritten/added: `test_config.py` (BootstrapSettings), `test_crypto.py`, `test_catalog.py`,
-  `test_store.py`, `test_verify.py` (httpx `MockTransport`), `test_api.py`; conftest gained
-  `secret_key`/`box`/`sessionmaker`/`store` fixtures + reworked `make_env`.
-- `.env.example` — added bootstrap section (`DEM_SECRET_KEY`, `RESEED_FROM_ENV`, `CONFIG_SEED_FILE`)
-  and the "first-boot seed; DB wins after" note; corrected the stale Claude hard-fail comment.
+**Built:**
+- `plane.py` — `PlaneClient` (httpx, `X-API-Key`, injectable `client=`): `get_issue`,
+  `create_issue`, `post_comment`, `set_state`, `list_states`, `list_labels`; `PlaneError`;
+  `client_from_resolved(resolved)`. Endpoints confirmed against Plane API v1 url modules
+  (`/api/v1/workspaces/{slug}/projects/{pid}/issues|states|labels/`).
+- `models.py` — `WorkflowState` enum (Backlog→Ready-for-dev→In-progress→In-review→
+  Changes-requested→Ready-for-approval→Done), `ProjectMapping` (PK `plane_project_id`→repo,
+  base_branch), `StateMapping` (unique `project_id`+`workflow_state`→`plane_state_id`). Migration
+  `22f2c570f81f`.
+- **BigInteger-PK fix (latent Phase-1 bug):** a `BigInteger` PK is not a rowid alias on SQLite
+  (the default backend) so it never autoincrements → Job inserts raised `NOT NULL … jobs.id`. Now
+  `BigInteger().with_variant(Integer, "sqlite")` on `Job.id` + `StateMapping.id`, in both models
+  and migration DDL (initial + new). Safe to amend the initial migration — nothing deployed yet.
+- `mappings.py` — `MappingStore` (project + state CRUD, `import_targets` seed-once). `api/webhooks.py`
+  — `POST /webhooks/plane` (raw-body HMAC → 401 on bad/missing; epic check; `ProjectMapping`
+  resolve; delivery-id-deduped `Job`). `api/mappings.py` — CRUD + live `state-scan`. Wired into
+  `main.py` (`app.state.mappings`; seeds `targets_file` on boot). `config.py` gained `targets_file`.
+- `targets.py` demoted: still the yml parser, now feeding `MappingStore.import_targets` (DB wins).
+- Tests: `test_plane.py`, `test_mappings.py`, `test_webhooks.py` (valid sig → Job; bad/missing →
+  401; replayed delivery → no dup). **71 passed; ruff + mypy --strict green.** Migration chain
+  applies on fresh sqlite and Job insert autoincrements.
 
-## Phase 2b — NEXT (Plane integration)
-Typed Plane client (read issue/epic, create issues, post comments, set state, **scan states**);
-`POST /webhooks/plane` with HMAC verification + delivery-id idempotency → verified deduped `Job` row;
-DB tables `ProjectMapping` (project↔repo) + `StateMapping` (canonical→Plane state) + management API.
-Acceptance: Plane issue event → verified deduped Job row; comment posting works; unsigned webhook → 401.
+**Still pending live end-to-end** (needs the user's real Plane creds, see below): confirm the
+signature matches a genuine Plane delivery and that `list_labels`/`state-scan` hit the live API.
 
 ## Phase 2-UI — Streamlit admin console
 Setup wizard (steps from the catalog, live key verification, resumable via `/api/config/status`),
@@ -64,6 +73,9 @@ Behind auth (Cloudflare Access for barad-dur; Streamlit-native login as the port
 GitHub client + webhook → agent image & dispatcher → four agent roles + review loop/state machine →
 observability wired to the existing barad-dur stack → docs/packaging/release.
 
-## Pending from the user (not blocking Phase 2a)
-Plane PAT, GitHub machine-account PAT + webhook secret, the barad-dur otel-collector host:port,
-ntfy/Slack notify target. And they must generate a `DEM_SECRET_KEY` (Fernet) for any real run.
+## Pending from the user
+- **For Phase 2b live-testing:** Plane PAT (`PLANE_API_KEY`) + `PLANE_WEBHOOK_SECRET` from a real
+  Plane webhook. Unit tests can synthesize signatures, but an end-to-end check needs these.
+- **Later phases:** GitHub machine-account PAT + webhook secret, barad-dur otel-collector host:port,
+  ntfy/Slack notify target.
+- A `DEM_SECRET_KEY` (Fernet) is required for any real run (generate per `.env.example`).

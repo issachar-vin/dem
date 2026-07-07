@@ -27,6 +27,8 @@ class BootstrapSettings(BaseSettings):
     reseed_from_env: bool = False
     # Optional YAML file to seed config from on first boot, in addition to env vars.
     config_seed_file: Path | None = None
+    # Optional targets.yml to seed project→repo mappings on first boot (DB wins after).
+    targets_file: Path | None = None
 
     @model_validator(mode="after")
     def _validate_secret_key(self) -> "BootstrapSettings":
