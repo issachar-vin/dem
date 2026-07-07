@@ -6,7 +6,7 @@ CONSOLE = uv --directory console
 # First-run: seed .env from the example (only if absent) and install deps into each
 # package's .venv so your IDE can use them. Does not touch containers.
 setup:
-	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
+	@test -f .env || (cp .env.minimal.example .env && echo "Created .env from .env.minimal.example")
 	$(CONDUCTOR) sync
 	$(CONDUCTOR) run pre-commit install
 	$(CONSOLE) sync

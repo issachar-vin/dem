@@ -78,10 +78,16 @@ Single writer stays the conductor (SQLite-safe). See `docs/PLAN.md` Phase 2 + CL
 
 **Local Docker deploy — DONE (this PR):** `console/Dockerfile` + a `console` service in
 `docker-compose.yml` (`CONDUCTOR_API_URL=http://conductor:8420`, `depends_on` conductor, port 8501,
-src bind-mount + `--server.runOnSave`). Root Makefile: `setup` = seed `.env` from `.env.example`
-(no clobber) + `uv sync` both packages + pre-commit (venvs for the IDE; no containers); `restart` =
-`down` → `build --no-cache` → `up -d`. `.env.example` carries a throwaway **dev** `DEM_SECRET_KEY`
-(valid Fernet) + dummy placeholders so a fresh copy boots and the console opens; not for prod.
+src bind-mount + `--server.runOnSave`). Root Makefile: `setup` = seed `.env` from
+`.env.minimal.example` (no clobber) + `uv sync` both packages + pre-commit (venvs for the IDE; no
+containers); `restart` = `down` → `build --no-cache` → `up -d`.
+**Two env templates:** `.env.minimal.example` = the two mandatory bootstrap fields only
+(`DEM_SECRET_KEY` [throwaway dev Fernet key] + `DATABASE_URL`) — what `make setup` copies, so a
+fresh boot has empty app config and the **wizard drives first-run setup**. `.env.example` = the full
+annotated reference (mirrors a wizard `Export .env`): mandatory two on top, then an `OPTIONAL`
+divider and groups in wizard order (bootstrap-opts, claude, plane, github, notifications, advanced),
+one header comment per group. Its dummy values boot *and* mark the wizard complete (presence, not
+validity — Test-connection still fails on dummies); not for prod.
 **Latent bug fixed:** both `pyproject.toml`s had `readme = "../README.md"`, which is outside each
 image's build context → hatchling failed `uv sync` in Docker (conductor image never built either).
 Dropped the `readme` field from both. Verified: `make restart` brings both containers up healthy
