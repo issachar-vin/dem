@@ -76,11 +76,22 @@ Single writer stays the conductor (SQLite-safe). See `docs/PLAN.md` Phase 2 + CL
   the transport-error path. ruff + mypy --strict green. **Verified end-to-end** via Streamlit
   `AppTest` against a live local conductor: badges, seeded project, and the states gate all render.
 
-**Deferred to a follow-up (were steps 6–7):**
+**Local Docker deploy — DONE (this PR):** `console/Dockerfile` + a `console` service in
+`docker-compose.yml` (`CONDUCTOR_API_URL=http://conductor:8420`, `depends_on` conductor, port 8501,
+src bind-mount + `--server.runOnSave`). Root Makefile: `setup` = seed `.env` from `.env.example`
+(no clobber) + `uv sync` both packages + pre-commit (venvs for the IDE; no containers); `restart` =
+`down` → `build --no-cache` → `up -d`. `.env.example` carries a throwaway **dev** `DEM_SECRET_KEY`
+(valid Fernet) + dummy placeholders so a fresh copy boots and the console opens; not for prod.
+**Latent bug fixed:** both `pyproject.toml`s had `readme = "../README.md"`, which is outside each
+image's build context → hatchling failed `uv sync` in Docker (conductor image never built either).
+Dropped the `readme` field from both. Verified: `make restart` brings both containers up healthy
+and the console reaches the conductor over the compose network.
+
+**Still deferred to a follow-up:**
 6. **Auth** — Streamlit-native login as the portable default (shipped, so a clone is protected);
    Cloudflare Access in front on barad-dur (infra-level; trust the header, no app logic).
-7. **Deploy** — add the console to the Portainer stack + a Caddy route (own subpath/host). Compose
-   wiring; keep observability external per CLAUDE.md.
+7. **barad-dur deploy** — add the console to the Portainer stack + a Caddy route (own subpath/host);
+   keep observability external per CLAUDE.md. (Local compose is done, above.)
 
 **Known gaps to decide during 2-UI (surfaced by 2b, intentionally deferred):**
 - **No `targets.yml` import endpoint** — seeding is boot-only via `TARGETS_FILE`. If the UI wants an
