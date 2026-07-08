@@ -1,6 +1,6 @@
 # Plane SWE Agents — Build Plan & Specification
 
-An open-source, self-hostable pipeline that turns a Plane epic into approved pull requests using Claude Code agents. Write an epic in Plane; a planner agent breaks it into tickets; engineer agents build each ticket in an isolated container and open PRs; reviewer and QA agents critique the work and loop feedback back to the engineer until both pass; a human approves and merges. The human touchpoints are exactly two: writing the epic and approving the PR.
+An open-source, self-hostable pipeline that turns Plane work into approved pull requests using Claude Code agents. Write an epic in Plane; a planner agent breaks it into tickets; engineer agents build each ticket in an isolated container and open PRs; reviewer and QA agents critique the work and loop feedback back to the engineer until both pass; a human approves and merges. Individual tickets can also skip the planner and go straight to an engineer — see [Work intake, ordering & concurrency](#work-intake-ordering--concurrency). The human touchpoints are exactly two: describing the work (an epic, or a single ticket) and approving the PR.
 
 This document is the canonical spec. It lives at `docs/PLAN.md` in the repo and is written to be executable by AI coding agents (Claude Code) as well as humans — every phase has concrete deliverables and acceptance criteria.
 
@@ -43,7 +43,29 @@ This document is the canonical spec. It lives at `docs/PLAN.md` in the repo and 
 - **Observability** — Claude Code's native OpenTelemetry export, shipped to a bundled or external Grafana stack.
 
 **Agent roles and loop**
-Planner (epic → tickets) → Engineer (ticket → PR) → Reviewer + QA in parallel → if either fails, findings are posted as ticket comments and fed back to the engineer via `claude -p --resume` → re-review → repeat until both pass → ticket `Ready for approval`, human merges. No iteration cap; instead a stall detector: if the engineer produces an identical diff two rounds in a row (sha256 of `git diff`), the ticket is marked `stalled` and the human is notified.
+Planner (epic → tickets) → Engineer (ticket → PR) → Reviewer + QA in parallel → if either fails, findings are posted as ticket comments and fed back to the engineer via `claude -p --resume` → re-review → repeat until both pass → ticket `Ready for approval`, human merges. No iteration cap; instead a stall detector: if the engineer produces an identical diff two rounds in a row (sha256 of `git diff`), the ticket is marked `stalled` and the human is notified. By default the pipeline runs **one agent per role at a time**, so exactly one ticket is being built at any moment; the rest queue. See [Work intake, ordering & concurrency](#work-intake-ordering--concurrency) for how tickets enter, in what order they are picked up, and how blocking relationships gate them.
+
+---
+
+## Work intake, ordering & concurrency
+
+Two entry points into the pipeline, both scoped to a project the conductor has mapped:
+
+1. **Epic → planner.** An issue carrying the `epic` label (per `PLANE_EPIC_SIGNAL`) is handed to the planner, which decomposes it into independently-shippable tickets. The conductor creates those tickets in Plane and sets Plane **work-item "blocking" relationships** between them (blocker → blocked) so downstream ordering is enforced by the board itself, not just a hint. The planner's plan JSON therefore carries the blocks/blocked-by graph, not merely a flat list.
+2. **Ticket → engineer (no planner).** A single issue is worked directly. The trigger is the ticket entering its mapped **`ready_for_dev`** state (canonical `WorkflowState.READY_FOR_DEV`). Backlog/draft issues are ignored until a human — or the planner — moves the card into that state. This reuses the existing per-project state mapping and gives the human an explicit "hand it to the robot" gesture. Non-epic issues that are *not* in `ready_for_dev` are ignored (no agent runs on arbitrary project noise).
+
+Planner-created tickets are dropped into `ready_for_dev`, so they flow through the **same** engineer path a human-created ticket does — one dispatch code path serves both entry points.
+
+**Ordering.** Work-selection priority is two-tier:
+
+1. **Finish what's in flight first.** Tickets already past the gate — `in_progress`, `in_review`, or `changes_requested` — take priority over pulling any new ticket. Concretely, a reviewer/QA finding on an in-review ticket (which moves it to `changes_requested`) is worked *before* a fresh `ready_for_dev` ticket is picked up. This keeps a ticket moving through the engineer → review → engineer loop to completion instead of accumulating half-finished work.
+2. **Then oldest new ticket.** Only when nothing is in flight does the conductor pull a new ticket from `ready_for_dev`, in **order of issue creation** (oldest first).
+
+Before dispatching *any* ticket the conductor reads its Plane blocking relationships: a ticket **blocked by an issue that is not yet `done`** is skipped and retried on the next pass. So in-flight work outranks new work, creation order sets priority among new work, and blocking relationships gate eligibility throughout. This is what makes a planner-decomposed epic build in dependency order without the conductor inventing its own scheduler — the order lives in Plane.
+
+**Concurrency — one agent per role.** `MAX_CONCURRENT_AGENTS=1` is the default and the supported v1 mode: at most one engineer, one reviewer, and one QA container run at a time. Consequently only one ticket is actively built at once; remaining eligible tickets wait and are picked up one-by-one, in the order above, as the active ticket clears the engineer stage. The knob exists for future parallelism, but v1 is deliberately serial — simpler reasoning, predictable cost, and no cross-ticket volume contention.
+
+**Review loop & the human gate** (restated from *Agent roles and loop* for completeness). Engineer declares done → ticket moves to `in_review` → reviewer and QA inspect the diff/branch and post findings as **ticket comments**. Any failure moves the ticket to `changes_requested` and resumes the engineer on those comments (`claude -p --resume <engineer_session_id>`), pushing new commits to the **same** PR; re-review repeats until both pass. On pass the ticket moves to **`ready_for_approval`** and stops — **nothing is merged automatically**. A human reviews the PR and merges; branch protection on the base branch is the hard guarantee that no agent can merge on its own.
 
 ---
 
@@ -264,19 +286,23 @@ Acceptance: with poll mode and a manually opened PR on a tracked branch, the con
 
 Deliverables: `agent/Dockerfile` (node:22-slim, Claude Code CLI, git, gh, Python 3.12 + pytest, non-root `agent` user); `entrypoint.sh` that (a) exits loudly if both auth vars present, (b) seeds `~/.claude.json` from `seed-claude.json` (onboarding-complete + trusted `/work`) if the state volume is fresh, (c) execs the passed `claude -p` command; dispatcher module building `docker run` with per-ticket volumes (`psa-repo-<id>` at `/work`, `psa-claude-<id>` at `/home/agent/.claude`), role env (model, OTel resource attrs `agent.role`, `ticket.id`, `loop.round`), memory/CPU limits, `--rm`, named `psa-<role>-<ticket>`, hard timeout → kill; volume lifecycle module (create + clone `--depth 50` + branch `ticket/<id>`; destroy on cleanup); agent output contracts (Pydantic): planner plan JSON, engineer result + session_id, reviewer/QA verdict `{"pass": bool, "findings": [{severity, file, line, comment}]}` with a malformed-output policy (one re-prompt asking for valid JSON, then mark ticket `awaiting_human`).
 
-Acceptance: `make agent-smoke` runs a containerized `claude -p "say hi" --output-format json` successfully with either auth mode; a second run against the same state volume resumes the prior session; kill-on-timeout verified.
+The dispatcher enforces a **per-role concurrency limit** (`MAX_CONCURRENT_AGENTS`, default and v1-supported value `1`): a role semaphore ensures at most one engineer / reviewer / QA container runs at a time, so tickets are built serially (see [Work intake, ordering & concurrency](#work-intake-ordering--concurrency)).
+
+Acceptance: `make agent-smoke` runs a containerized `claude -p "say hi" --output-format json` successfully with either auth mode; a second run against the same state volume resumes the prior session; kill-on-timeout verified; with two tickets eligible and `MAX_CONCURRENT_AGENTS=1`, only one engineer container runs at a time and the second starts only after the first clears the engineer stage.
 
 ## Phase 5 — The four roles
 
 Prompt files with explicit output contracts (deliverable: `agent/prompts/*.md`):
-- **Planner** — input: epic title/body. Tools: Read/Glob/Grep on a read-only clone of the base branch (so ticket scoping reflects the real codebase). Must produce tickets that are independently shippable, single-PR sized, with acceptance criteria QA can execute; emits plan JSON (titles, bodies, criteria, dependency order); conductor creates the Plane issues (agent does not call Plane directly — keeps credentials out of agent containers).
+- **Planner** — input: epic title/body. Tools: Read/Glob/Grep on a read-only clone of the base branch (so ticket scoping reflects the real codebase). Must produce tickets that are independently shippable, single-PR sized, with acceptance criteria QA can execute; emits plan JSON (titles, bodies, criteria, and a **blocks/blocked-by graph** referencing the plan's own ticket keys). The conductor creates the Plane issues, drops them in `ready_for_dev`, and **sets the corresponding Plane work-item blocking relationships** so the board enforces build order (agent does not call Plane directly — keeps credentials out of agent containers).
 - **Engineer** — input: ticket + criteria (+ findings JSON on resume). Tools: full read/write/Bash inside its container at `/work`. Must run the test suite before declaring done; conventional commits referencing the ticket ID; no scope creep. Conductor performs push + PR creation afterward (deterministic, credentialed step stays out of the agent).
 - **Reviewer** — input: `git diff <base>...ticket/<id>` (+ full checkout read access). Tools: Read/Glob/Grep + read-only Bash (lint, typecheck). Focus: correctness, security, error handling, repo-consistent style, test coverage. Explicitly instructed not to nitpick what the linter enforces. Verdict JSON.
 - **QA** — input: acceptance criteria + the branch. Tools: Read + Bash to build/run/test; no source edits; throwaway scripts to `/tmp` allowed. Focus: do the criteria actually pass; edge cases; adjacent regressions. Verdict JSON with reproduction steps.
 
-Loop mechanics in the state machine: reviewer + QA run in parallel after PR creation (or sequentially when `MAX_CONCURRENT_AGENTS=1`); any fail → findings posted as ticket comments, `loop_round++`, diff-hash stall check (identical hash twice → `stalled` + notify), else `claude -p --resume <engineer_session_id>` with findings; conductor pushes the new commits to the same PR; re-run both checkers. Both pass → `Ready for approval` + notify with PR link.
+Intake & scheduling in the state machine (full semantics in [Work intake, ordering & concurrency](#work-intake-ordering--concurrency)): an `epic`-labelled issue dispatches the planner; a ticket entering `ready_for_dev` dispatches an engineer. The scheduler prefers **in-flight tickets** (`in_progress`/`in_review`/`changes_requested`) over pulling a new `ready_for_dev` ticket, then takes the oldest-created among new ones, skipping any blocked by a not-yet-`done` issue.
 
-Acceptance: on a fixture repo (tiny FastAPI todo app included in `tests/fixtures/demo-repo`), a seeded ticket with a deliberate bug goes engineer → fail QA → resume → pass → `Ready for approval` without human input.
+Loop mechanics: reviewer + QA run in parallel after PR creation (or sequentially when `MAX_CONCURRENT_AGENTS=1`, the default); any fail → findings posted as ticket comments, ticket → `changes_requested`, `loop_round++`, diff-hash stall check (identical hash twice → `stalled` + notify), else `claude -p --resume <engineer_session_id>` with findings; conductor pushes the new commits to the same PR; re-run both checkers. Both pass → `ready_for_approval` + notify with PR link. **No auto-merge** — a human merges behind branch protection.
+
+Acceptance: on a fixture repo (tiny FastAPI todo app included in `tests/fixtures/demo-repo`), a seeded ticket with a deliberate bug goes engineer → fail QA → resume → pass → `ready_for_approval` without human input, and stops there (not merged); with one ticket in `changes_requested` and a newer ticket in `ready_for_dev`, the conductor works the `changes_requested` ticket first.
 
 ## Phase 6 — Observability
 
