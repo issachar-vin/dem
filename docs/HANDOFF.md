@@ -3,10 +3,9 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** Phase 2 step 6 **Auth** — **complete with the merge of PR #5**. Phase 2's only
-remaining work is step 7 — split into **(a) an image-publish GitHub Actions workflow** (pure CI, do it
-next in a fresh session) and **(b) the barad-dur instance** (the user's manual step, unblocked by (a)).
-See "▶ resume here" below. Cut a fresh branch off `main`.
+**Last updated:** Phase 2 step 7a **GHCR image-publish CI** — **complete with the merge of PR #7**.
+Phase 2's only remaining work is step **7b — the barad-dur instance** (the user's manual step, now
+unblocked). See "▶ resume here" below. Cut a fresh branch off `main`.
 **Active branch:** none.
 
 ## Done & merged (durable detail lives in the code; summaries only here)
@@ -127,21 +126,15 @@ deviation #4's "Streamlit-native login" wording.
 (the client-level auth is covered by `test_api_client.py`; the Streamlit gate is thin glue).
 
 ## ▶ Finish Phase 2 — resume here
-Step 6 is complete (PR #5). One chunk remains, split into a CI half you can build now and a deploy
-half the user drives.
+Steps 6 (PR #5) and 7a (PR #7) are complete. Only the deploy half the user drives remains.
 
-**7a. Image-publish GitHub Actions workflow (NEXT — pure CI, no barad-dur access needed).**
-On push to `main`, build **both** images and publish them to **GitHub Container Registry (GHCR)** so
-the user can pull versioned images on barad-dur:
-- New workflow (e.g. `.github/workflows/release.yml`, or extend `ci.yml` with a post-merge job gated
-  on `github.ref == 'refs/heads/main'`). Two images from the existing Dockerfiles:
-  `conductor/Dockerfile` → `ghcr.io/issachar-vin/dem-conductor`, `console/Dockerfile` →
-  `ghcr.io/issachar-vin/dem-console` (GHCR names must be lowercase).
-- Tag each with `latest` **and** the commit SHA (immutable pin for rollbacks). Use
-  `docker/build-push-action` with `docker/login-action` against `ghcr.io`.
-- Auth: the built-in `GITHUB_TOKEN` with `permissions: packages: write` — **no extra secrets**. First
-  publish creates the packages; set them public (or grant barad-dur a read token) so the host can pull.
-- Verify: the workflow run pushes both tags and they appear under the repo's Packages.
+**7a. Image-publish GitHub Actions workflow — DONE (PR #7).**
+`.github/workflows/release.yml`: on push to `main`, a matrix job builds **both** images and pushes to
+GHCR — `conductor/` → `ghcr.io/issachar-vin/dem-conductor`, `console/` → `.../dem-console`. Tags each
+`latest` + `sha-<commit-sha>` (metadata-action). Auth via built-in `GITHUB_TOKEN` +
+`permissions: packages: write` (no extra secrets); first publish creates the packages.
+- **User TODO before 7b can pull:** confirm both tags landed under the repo's Packages, then set the
+  packages **public** (or grant barad-dur a read token) so the host can pull.
 
 **7b. barad-dur instance (the user's step, unblocked by 7a).**
 With images on GHCR, the user creates the **Portainer stack** from `docker-compose.yml` — swapping the
