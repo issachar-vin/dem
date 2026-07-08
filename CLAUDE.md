@@ -10,7 +10,7 @@ into the repo). Read it for the full architecture and phase-by-phase acceptance 
 file records how the *actual build* diverges from that spec and where the build currently stands.
 
 - **Repo:** github.com/issachar-vin/dem (public, squash-merge only, `main` branch-protected).
-- **Everything lives in this folder** (the D.E.M. dir is the repo root).
+- **Everything lives in this folder** (the `dem` dir is the repo root).
 
 ## Stack & conventions
 
