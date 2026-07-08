@@ -3,8 +3,8 @@
 
 The root VERSION file is the single source of truth. Pre-launch we read the parts as:
 major = 0 until launch, minor = the phase we're in, patch = changes within a phase. The conductor
-package version (__init__.py + pyproject.toml) is kept in sync so the /metrics build_info and the
-published Docker image tag always agree with VERSION.
+package version in pyproject.toml is kept in sync so the built image's metadata (and thus
+conductor.__version__ inside the container) agrees with VERSION.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = ROOT / "VERSION"
-INIT_FILE = ROOT / "conductor" / "src" / "conductor" / "__init__.py"
 PYPROJECT = ROOT / "conductor" / "pyproject.toml"
 
 
@@ -37,11 +36,6 @@ def main() -> None:
     new = bump(current, sys.argv[1])
 
     VERSION_FILE.write_text(f"{new}\n")
-    INIT_FILE.write_text(
-        re.sub(
-            r'__version__ = "[^"]+"', f'__version__ = "{new}"', INIT_FILE.read_text()
-        )
-    )
     PYPROJECT.write_text(
         re.sub(
             r'^version = "[^"]+"',
