@@ -3,66 +3,65 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** Phase 2 is built through step 7 and **deployed on barad-dur** (7a GHCR CI, PR #7; 7b
-Portainer stack + Caddy, live & verified). Two Phase 2 steps remain:
-- **Step 8 — NiceGUI console migration (NEXT).** Replace the Streamlit console with a NiceGUI UI
-  mounted inside the conductor (single process, single container, drops the whole `/api/*` layer).
-- **Step 9 — verification.** The user runs the setup wizard against the **NiceGUI** console, then we run
-  the live Plane acceptance test.
+**Last updated:** Phase 2 is built through **step 8** — the NiceGUI console migration is **done**
+(branch `feat/nicegui-console`, PR open). The console is now mounted inside the conductor
+(single process/container); the Streamlit `console/` package and the whole `/api/*` layer are gone.
+One Phase 2 step remains:
+- **Step 9 — verification.** (a) The user **redeploys barad-dur** to the single-container layout
+  (below), then (b) runs the setup wizard on the NiceGUI console, then (c) we run the live Plane
+  acceptance test.
 
-**Do not test the current Streamlit wizard** — it's being replaced in step 8. Phase 3 design
-(pipeline intake/ordering/concurrency) is already spec'd in `docs/PLAN.md` (PR #9) and waits behind
-step 9. See "▶ NEXT" below. Cut a fresh branch off `main`.
-**Active branch:** none.
+Phase 3 design (pipeline intake/ordering/concurrency) is spec'd in `docs/PLAN.md` (PR #9) and waits
+behind step 9.
+**Active branch:** `feat/nicegui-console` (PR open — awaiting merge).
 
-> **RESUME: the next task is Phase 2 step 8, the NiceGUI console migration (section "▶ NEXT" below),
-> NOT the wizard test.** After it's built and deployed, step 9 is the user testing the wizard on it,
-> then the live Plane acceptance test.
+> **RESUME: after this PR merges, the next task is Phase 2 step 9.** First the barad-dur redeploy
+> (drop `dem-console`, simplify Caddy — see below), then the user runs the wizard on the NiceGUI
+> console, then the live Plane acceptance test ("resume here" further down).
 
-## ▶ NEXT — Phase 2 step 8: migrate the console from Streamlit → NiceGUI (single-process)
+## Phase 2 step 8 — NiceGUI console migration DONE (PR open, branch `feat/nicegui-console`)
 
-**Why (decided this session, so a fresh session doesn't relitigate it):** Streamlit forced a second
-service — it's its own server runtime, can't host the webhook receiver (needs raw-body HTTP for HMAC),
-and can't share the conductor's process. That split is the sole reason the `/api/*` management layer
-exists: a separate container can't touch the conductor-owned SQLite DB directly without breaking
-single-writer, so the console talks to it over HTTP. **NiceGUI removes the split**: it's built on
-FastAPI and mounts *into* the conductor's app (`ui.run_with(app)`), so UI + webhooks + DB run in one
-process/container, the UI calls the stores in-process, and the `/api/*` layer can be deleted. It also
-looks like a real admin dashboard (Quasar/Material), which Streamlit did not. Reverses **CLAUDE.md
-deviation #4** (update that file when this lands — until then it still describes the built Streamlit
-state, which is accurate).
+**What & why:** Streamlit forced a second service (its own runtime; can't host the raw-body webhook
+receiver; can't share the conductor's process), and that split was the *sole* reason the `/api/*`
+management layer existed. **NiceGUI removes the split**: it's built on FastAPI and mounts *into* the
+conductor via `ui.run_with(app)`, so UI + webhooks + DB run in one process/container and the pages
+call the stores in-process. Reverses/rewrites **CLAUDE.md deviation #4** (updated in this PR).
 
-**Scope / plan (verify NiceGUI's mounting + auth APIs against current docs — don't code them from
-memory):**
-1. **Add** `nicegui` to `conductor/pyproject.toml`. Build UI under `conductor/src/conductor/ui/`
-   (pages: auth-gate, wizard, config, projects, states) — port the five `console/src/console/views/*`
-   screens. Each view currently calls `ConductorClient.<method>`; swap those for **direct in-process
-   calls** to `app.state.store` (ConfigStore), `app.state.mappings` (MappingStore), `AuthStore`, and
-   `verify.py` (live Claude/Plane/GitHub tests). No HTTP hop.
-2. **Mount into FastAPI** in `main.py::create_app`: NiceGUI pages at `/` (+ subpaths); keep
-   `/webhooks/*`, `/health`, `/metrics` as plain FastAPI routes (confirm route coexistence — NiceGUI
-   takes root, our webhook/ops routes stay). Auth: reuse `AuthStore` (argon2 + Fernet token); gate
-   pages via NiceGUI session storage (needs a `storage_secret` — reuse `DEM_SECRET_KEY`).
-3. **Delete** the `console/` package entirely (Dockerfile, pyproject, uv.lock, `views/`,
-   `api_client.py`, tests) and the `/api/config`, `/api/mappings`, `/api/auth` routers **iff** nothing
-   else consumes them (webhooks don't; export/import become in-process UI actions). *Keep-or-cut
-   decision:* the `/api/config` export-bundle/import-bundle + export.env were the only non-UI value
-   (IaC). If you want to keep a programmatic surface, retain just those; otherwise cut the whole
-   `api/` package. Lean: **cut**, since env/YAML seeding already covers IaC.
-4. **Compose / images / CI:** drop the `console` service from `docker-compose.yml`; conductor serves
-   the UI on 8420. `release.yml` matrix collapses to the single `dem-conductor` image (remove
-   `dem-console`). CI drops the parallel `console` job. Remove `CONDUCTOR_API_URL`.
-5. **barad-dur (user step after merge):** stack drops the `dem-console` service; **Caddy** simplifies
-   to `dem.eroizzy.com → 192.168.88.204:8440` for everything (root UI + `/webhooks/*`); the `:8441`
-   console route is removed. (Caddy + compose live in the `eroizzy-env` repo, per the 7b record below.)
-6. **Tests:** conductor store/verify/auth tests already cover the logic the views now call directly.
-   Add a thin NiceGUI render/smoke check (`nicegui.testing`) for the wizard gate. Drop the console
-   `test_api_client.py` with the package.
+**Built:**
+- **`conductor/ui/`** — `context.py` (module-level `AppContext` singleton: store/mappings/auth/settings,
+  populated in the FastAPI lifespan — required because NiceGUI's mounted sub-app does **not** share the
+  parent `app.state`), `views.py` (five `@ui.page` screens — login-gate, wizard `/`, config, projects,
+  states — plus the `AuthMiddleware`), `__init__.py` (`setup()` → `ui.run_with`). Pages call
+  `ConfigStore`/`MappingStore`/`AuthStore`/`verify.py`/`plane.py` directly. Repo `owner/name` validation
+  moved from the old router into the projects page.
+- **`main.py`** — lifespan now builds the stores, calls `ui.configure(...)`, and stashes them on
+  `app.state` (webhooks still read `request.app.state`); `create_app` includes only telemetry +
+  webhooks + `/health`, then calls `ui.setup(app, storage_secret=DEM_SECRET_KEY)` **last** so those
+  routes match before NiceGUI's root mount (`app.mount('/', core.app)`).
+- **Auth** — UI login gate uses `AuthStore.is_initialized/create_admin/verify_credentials`; the session
+  is NiceGUI's `storage_secret`-signed cookie (`app.storage.user`), so `AuthStore.issue_token/verify_token`
+  + the `secret_key` ctor arg were **deleted** as dead code.
+- **Cut:** the entire `console/` package; `api/config.py`, `api/mappings.py`, `api/auth.py` (kept
+  `api/webhooks.py`); `docker-compose.yml` `console` service; `release.yml` → single `dem-conductor`
+  image; CI `console` job; Makefile console targets; `CONDUCTOR_API_URL`. Export/import (.env + encrypted
+  bundle) are now in-process UI actions on the Config page (no base64 hop).
+- **Tests:** deleted `test_api.py` + the router halves of `test_mappings.py`/`test_auth.py` (store logic
+  still covered); added `test_ui.py` (page registration + mount/`/health` coexistence). 60 tests green;
+  ruff + mypy --strict clean.
 
-**Acceptance:** `dem.eroizzy.com` serves the NiceGUI console from the **single** conductor container;
-create-admin → wizard (config + live Test-connection + project/state mappings) all work in-process;
-webhooks/health/metrics unaffected. Then the user runs the wizard for real → proceed to the Phase 2
-live Plane acceptance test (kept in "resume here" below).
+**Verified live (local uvicorn):** `/health` + `/metrics` → 200; `/` and `/config` unauth → 307 →
+`/login`; `/login` → 200 serving the NiceGUI create-admin form (proves the in-process context DI +
+DB read work); `POST /webhooks/plane` unsigned → 401 (HMAC gate intact, bypasses UI auth).
+
+**Key NiceGUI facts (verified against docs, not memory):** `ui.run_with(app, storage_secret=…)` calls
+`app.mount(mount_path, core.app)` and **wraps the parent app's lifespan** to run NiceGUI's startup;
+`@ui.page`/`AuthMiddleware` register on the global `core.app`; the parent `app.state` is *not* shared
+with the mounted app (hence the `ui.context` singleton).
+
+**barad-dur redeploy (user step, step 9a):** the stack drops the `dem-console` service; **Caddy**
+simplifies to `dem.eroizzy.com → 192.168.88.204:8440` for everything (root UI + `/webhooks/*`); the
+`:8441` console route is removed. (Caddy + compose live in the `eroizzy-env` repo, per the 7b record
+below.) The `dem-conductor` image now serves the UI on 8420.
 
 ## Done & merged (durable detail lives in the code; summaries only here)
 - **Phase 1** (PR #1) — conductor skeleton: `Job`/`Ticket` models, async engine, Alembic, FastAPI
@@ -182,9 +181,9 @@ deviation #4's "Streamlit-native login" wording.
 (the client-level auth is covered by `test_api_client.py`; the Streamlit gate is thin glue).
 
 ## Phase 2 step 9 — verification (wizard run + live Plane acceptance test)
-**(Deferred until step 8, the NiceGUI console migration, ships — the wizard is tested on the NiceGUI
-console, not the current Streamlit one.)** Then ask whether the user has completed the setup wizard at
-https://dem.eroizzy.com and route on the answer:
+**(Step 8 has shipped, so the wizard is now the NiceGUI console.)** After the barad-dur redeploy
+(step 9a above), ask whether the user has completed the setup wizard at https://dem.eroizzy.com and
+route on the answer:
 
 ### If the wizard is NOT done yet — help finish it
 The console gates first-run behind create-admin, then the wizard drives config. Checklist (each item

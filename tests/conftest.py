@@ -75,15 +75,9 @@ async def mappings(
 
 @pytest_asyncio.fixture
 async def auth(
-    sessionmaker: async_sessionmaker[AsyncSession], secret_key: str
+    sessionmaker: async_sessionmaker[AsyncSession],
 ) -> AuthStore:
-    return AuthStore(sessionmaker, secret_key)
-
-
-@pytest_asyncio.fixture
-async def auth_token(auth: AuthStore) -> str:
-    await auth.create_admin("admin", "pw")
-    return auth.issue_token("admin")
+    return AuthStore(sessionmaker)
 
 
 @pytest.fixture
