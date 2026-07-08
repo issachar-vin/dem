@@ -3,20 +3,23 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 2 is code-complete AND deployed on barad-dur** (7a GHCR CI, PR #7; 7b
-Portainer stack + Caddy, live & verified). **NEXT TASK CHANGED — do not test the current Streamlit
-wizard.** The user decided to **replace the Streamlit console with a NiceGUI UI mounted inside the
-conductor** (single process, single container, drops the whole `/api/*` layer). Build that first; the
-user will then run the setup wizard against the **NiceGUI** console and we run the Phase 2 acceptance
-test on it. Phase 3 design (pipeline intake/ordering/concurrency) is already spec'd in `docs/PLAN.md`
-(PR #9) and waits behind the console migration. See "▶ NEXT" below. Cut a fresh branch off `main`.
+**Last updated:** Phase 2 is built through step 7 and **deployed on barad-dur** (7a GHCR CI, PR #7; 7b
+Portainer stack + Caddy, live & verified). Two Phase 2 steps remain:
+- **Step 8 — NiceGUI console migration (NEXT).** Replace the Streamlit console with a NiceGUI UI
+  mounted inside the conductor (single process, single container, drops the whole `/api/*` layer).
+- **Step 9 — verification.** The user runs the setup wizard against the **NiceGUI** console, then we run
+  the live Plane acceptance test.
+
+**Do not test the current Streamlit wizard** — it's being replaced in step 8. Phase 3 design
+(pipeline intake/ordering/concurrency) is already spec'd in `docs/PLAN.md` (PR #9) and waits behind
+step 9. See "▶ NEXT" below. Cut a fresh branch off `main`.
 **Active branch:** none.
 
-> **RESUME: the next task is the NiceGUI console migration (section "▶ NEXT" below), NOT the wizard
-> test.** After it's built and deployed, the user tests the wizard on it, then we run the Phase 2
-> acceptance test (the live Plane check, kept below).
+> **RESUME: the next task is Phase 2 step 8, the NiceGUI console migration (section "▶ NEXT" below),
+> NOT the wizard test.** After it's built and deployed, step 9 is the user testing the wizard on it,
+> then the live Plane acceptance test.
 
-## ▶ NEXT: migrate the console from Streamlit → NiceGUI (single-process)
+## ▶ NEXT — Phase 2 step 8: migrate the console from Streamlit → NiceGUI (single-process)
 
 **Why (decided this session, so a fresh session doesn't relitigate it):** Streamlit forced a second
 service — it's its own server runtime, can't host the webhook receiver (needs raw-body HTTP for HMAC),
@@ -178,9 +181,9 @@ deviation #4's "Streamlit-native login" wording.
 (defense-in-depth) — that's infra wiring, part of step 7, not app code. No console `AppTest` gate test
 (the client-level auth is covered by `test_api_client.py`; the Streamlit gate is thin glue).
 
-## After the NiceGUI migration — wizard run + Phase 2 acceptance test
-**(Deferred until the "▶ NEXT" console migration ships — the wizard is tested on the NiceGUI console,
-not the current Streamlit one.)** Then ask whether the user has completed the setup wizard at
+## Phase 2 step 9 — verification (wizard run + live Plane acceptance test)
+**(Deferred until step 8, the NiceGUI console migration, ships — the wizard is tested on the NiceGUI
+console, not the current Streamlit one.)** Then ask whether the user has completed the setup wizard at
 https://dem.eroizzy.com and route on the answer:
 
 ### If the wizard is NOT done yet — help finish it
