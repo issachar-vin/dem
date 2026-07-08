@@ -3,10 +3,16 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** Phase 2 step 7a **GHCR image-publish CI** — **complete with the merge of PR #7**.
-Phase 2's only remaining work is step **7b — the barad-dur instance** (the user's manual step, now
-unblocked). See "▶ resume here" below. Cut a fresh branch off `main`.
+**Last updated:** **Phase 2 is code-complete AND deployed on barad-dur.** 7a (GHCR image CI, PR #7)
+merged; 7b (Portainer stack + Caddy) is live and verified reachable. The remaining gate is a **human
+step**: the user runs the console setup wizard, after which we run the **Phase 2 end-to-end acceptance
+test** (the long-pending live Plane check). Then Phase 3 begins — its design (pipeline intake/ordering/
+concurrency) is now specified in `docs/PLAN.md` (PR #9). See "▶ resume here". Cut a fresh branch off `main`.
 **Active branch:** none.
+
+> **RESUME: first ask the user — "Have you finished the console setup wizard at https://dem.eroizzy.com
+> yet?"** Their answer routes you: **not yet** → help them complete it (checklist below); **done** →
+> run the Phase 2 acceptance test (below); **moving on** → start Phase 3 per `docs/PLAN.md`.
 
 ## Done & merged (durable detail lives in the code; summaries only here)
 - **Phase 1** (PR #1) — conductor skeleton: `Job`/`Ticket` models, async engine, Alembic, FastAPI
@@ -125,8 +131,40 @@ deviation #4's "Streamlit-native login" wording.
 (defense-in-depth) — that's infra wiring, part of step 7, not app code. No console `AppTest` gate test
 (the client-level auth is covered by `test_api_client.py`; the Streamlit gate is thin glue).
 
-## ▶ Finish Phase 2 — resume here
-Steps 6 (PR #5) and 7a (PR #7) are complete. Only the deploy half the user drives remains.
+## ▶ resume here — wizard check, then Phase 2 acceptance test
+**Step 0: ask the user whether they've completed the setup wizard** at https://dem.eroizzy.com. Route
+on the answer:
+
+### If the wizard is NOT done yet — help finish it
+The console gates first-run behind create-admin, then the wizard drives config. Checklist (each item
+maps to what's built in Phase 2a/2b/2-UI):
+1. Open https://dem.eroizzy.com → **create the admin account** (first-run; `GET /api/auth/status` still
+   reports `initialized:false` as of deploy).
+2. Wizard steps with a live **Test connection** button: **Claude** (subscription token per CLAUDE.md),
+   **Plane** (`PLANE_API_KEY`, `PLANE_BASE_URL=https://plane.eroizzy.com`), **GitHub** (machine PAT).
+   Each must go green before moving on.
+3. Set **`plane_webhook_secret`** to match the secret from the Plane webhook (next item).
+4. In Plane, create a **webhook → `https://dem.eroizzy.com/webhooks/plane`** (issue events), using the
+   same secret as step 3.
+5. **Map the `chessbro` project** (Projects page) and **map its workflow states** (States page: live
+   `state-scan` → assign each canonical `WorkflowState`, incl. `ready_for_dev`).
+
+### If the wizard IS done — run the Phase 2 end-to-end acceptance test
+This is the **live Plane check** that has been pending since 2b (unit tests only synthesize signatures).
+It validates the real HMAC signature, live label→name resolution, and project/state mapping. **Scope
+note:** Phase 3 (dispatcher/engineer) is NOT built, so a ticket will **not** get "worked" yet — success
+here = **the conductor accepts a genuine Plane delivery and enqueues a `Job`.**
+1. In the mapped `chessbro` project, create an issue and add the **`epic`** label.
+2. Plane fires `issue.*` → `POST /webhooks/plane`. Expected: HMAC verifies, `_is_epic` resolves the
+   label UUID→name via `list_labels`, a `Job` row is inserted.
+3. **Confirm it landed:** `docker logs dem-conductor` should show `Queued job for epic issue <id>
+   (project <pid> → <repo>)`. (There is no jobs API/UI yet; log line or the SQLite `jobs` table is the
+   check.) A non-epic issue should log/return `ignored`.
+4. If signature fails (401): the wizard's `plane_webhook_secret` ≠ the Plane webhook's secret — re-check
+   step 3/4 above. If `project ... is not mapped`: finish the Projects mapping.
+Once this passes, **Phase 2 is fully accepted** and Phase 3 starts (design in `docs/PLAN.md`, PR #9).
+
+<details><summary>Superseded: 7a/7b detail (kept for provenance)</summary>
 
 **7a. Image-publish GitHub Actions workflow — DONE (PR #7).**
 `.github/workflows/release.yml`: on push to `main`, a matrix job builds **both** images and pushes to
@@ -136,25 +174,44 @@ GHCR — `conductor/` → `ghcr.io/issachar-vin/dem-conductor`, `console/` → `
 - **User TODO before 7b can pull:** confirm both tags landed under the repo's Packages, then set the
   packages **public** (or grant barad-dur a read token) so the host can pull.
 
-**7b. barad-dur instance (the user's step, unblocked by 7a).**
-With images on GHCR, the user creates the **Portainer stack** from `docker-compose.yml` — swapping the
-local `build: ./conductor` / `build: ./console` for the published `image: ghcr.io/...:<sha>` refs, and
-dropping the `src` bind-mounts + `--reload`/`--server.runOnSave` (dev-only) — plus a **Caddy route**
-(own subpath/host). Keep observability external per CLAUDE.md (point at the existing barad-dur
-otel-collector; its host:port is still Pending from the user). A fresh session can pre-write a
-`docker-compose.prod.yml` (or an override) with the GHCR image refs to hand the user.
+**7b. barad-dur instance — DEPLOYED & verified reachable.**
+Stack lives **outside this repo**, in the `eroizzy-env` repo at
+`Barad-dur/Portainer/DEM/{docker-compose.yml, dem.env}` (mirrors the house convention — cf. Plane/
+ChessLearner stacks). Specifics:
+- **Images:** `ghcr.io/issachar-vin/dem-conductor:latest` + `dem-console:latest` (house convention is
+  `:latest`, not the SHA pin; Watchtower-style updates). No bind-mounts / `--reload` (prod).
+- **Host ports:** conductor **8440**:8420, console **8441**:8501. (First tried 8091/8092 — collided;
+  8440/8441 are clear. If a redeploy ever errors `port is already allocated` with no logs, it's
+  orphaned containers from a failed deploy: `docker rm -f dem-conductor dem-console` then redeploy.)
+- **Config:** conductor reads `${DEM_SECRET_KEY}` + `${DATABASE_URL}` via **Portainer stack env vars**
+  (the compose uses `environment:` interpolation, not `env_file`); paste `dem.env` into Portainer's
+  Environment variables section. A **fresh Fernet `DEM_SECRET_KEY` was generated** for this deploy and
+  lives in `dem.env`. SQLite in the `conductor_data` volume at `/data/conductor.db`.
+- **Caddy** (in `eroizzy-env` `Barad-dur/Portainer/Caddy/Caddyfile.Caddyfile`, deployed to
+  `/opt/caddy/Caddyfile`): `dem.eroizzy.com` → `/api/*` and `/webhooks/*` to `192.168.88.204:8440`
+  (conductor), everything else to `:8441` (console). No path stripping (routes are already prefixed).
+- **Verified live:** `GET https://dem.eroizzy.com/` → 200 (Streamlit); `GET /api/auth/status` →
+  `{"initialized":false}` (conductor reachable through Caddy, no admin yet).
 
-**Optional cleanup still open (fold into step 7 or drop):**
+**Optional cleanup still open (fold into a later phase or drop):**
 - **`targets.yml` import endpoint** — seeding is boot-only via `TARGETS_FILE`. For a UI "import
   targets.yml" button, add `POST /api/mappings/import-targets` calling `MappingStore.import_targets`;
   else leave mappings created one-by-one and drop the idea.
 - ~~Project delete cascade~~ — **done** in the step-6 PR (`delete_project` now cascades `delete_states`).
 
+</details>
+
 ## Phases 3–7 (per docs/PLAN.md, adjusted per CLAUDE.md deviations)
 GitHub client + webhook → agent image & dispatcher → four agent roles + review loop/state machine →
 observability wired to the existing barad-dur stack → docs/packaging/release.
+**Phase 3 intake design is now spec'd** in `docs/PLAN.md` → "Work intake, ordering & concurrency"
+(PR #9): two entry points (`epic` label → planner; `ready_for_dev` state → engineer), in-flight-first
+then oldest-created ordering, a Plane **blocking-relationship** eligibility gate, one-agent-per-role
+(`MAX_CONCURRENT_AGENTS=1`), planner **sets** the Plane blocks graph, and **no auto-merge** (human
+approves behind branch protection). The current webhook is **epic-only** (`_is_epic` gate drops
+everything else) — Phase 3 must widen it to the two-trigger router above.
 Carry forward from 2b: **semantic Job dedupe** (per project+issue, see decision #3) and the
-**live end-to-end Plane check** (needs real creds, below).
+**live end-to-end Plane check** (now the Phase 2 acceptance test above).
 **DB decision (confirmed): stay on SQLite** — the conductor is a single-process, single-writer, and
 the spin-up-anywhere/home-lab goal rewards SQLite's zero-friction (no extra container, creds, or
 tuning). No future phase requires Postgres; `DATABASE_URL` keeps it pluggable if that ever changes.
@@ -164,9 +221,9 @@ engine `connect` event). Without it, overlapping webhook-ingest + dispatcher + s
 raise `database is locked`. Not needed in Phase 2 (nothing writes concurrently yet).
 
 ## Pending from the user
-- **Live Plane check (2b, still unverified end-to-end):** real `PLANE_API_KEY` +
-  `PLANE_WEBHOOK_SECRET` from an actual Plane webhook, to confirm the signature matches a genuine
-  delivery and `list_labels`/`state-scan` hit the live API. Unit tests synthesize signatures.
+- **Run the setup wizard** at https://dem.eroizzy.com, then the **Phase 2 acceptance test** above
+  (live Plane check — real `PLANE_API_KEY` + a real Plane webhook + the matching `plane_webhook_secret`).
 - **Later phases:** GitHub machine-account PAT + webhook secret, barad-dur otel-collector
   host:port, ntfy/Slack notify target.
-- A `DEM_SECRET_KEY` (Fernet) is required for any real run (generate per `.env.example`).
+- `DEM_SECRET_KEY` for the barad-dur deploy is already generated and set in the Portainer stack env
+  (`eroizzy-env` `Barad-dur/Portainer/DEM/dem.env`). A local dev run still needs its own key.
