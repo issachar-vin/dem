@@ -1,22 +1,20 @@
-.PHONY: setup restart dev up down lint format typecheck test migrate clean console-run
+.PHONY: setup restart dev up down lint format typecheck test migrate clean
 
 CONDUCTOR = uv --directory conductor
-CONSOLE = uv --directory console
 
-# First-run: seed .env from the example (only if absent) and install deps into each
-# package's .venv so your IDE can use them. Does not touch containers.
+# First-run: seed .env from the example (only if absent) and install deps into the
+# conductor's .venv so your IDE can use them. Does not touch containers.
 setup:
 	@test -f .env || (cp .env.minimal.example .env && echo "Created .env from .env.minimal.example")
 	$(CONDUCTOR) sync
 	$(CONDUCTOR) run pre-commit install
-	$(CONSOLE) sync
 
-# Rebuild every image from scratch (no cache) and bring the stack back up.
+# Rebuild the image from scratch (no cache) and bring the stack back up.
 restart:
 	docker compose down
 	docker compose build --no-cache
 	docker compose up -d
-	@echo "Conductor: http://localhost:8420  ·  Console: http://localhost:8501"
+	@echo "Conductor + console: http://localhost:8420"
 
 migrate:
 	$(CONDUCTOR) run alembic upgrade head
@@ -27,26 +25,18 @@ dev up:
 down:
 	docker compose down
 
-console-run:
-	$(CONSOLE) run streamlit run src/console/app.py
-
 lint:
 	$(CONDUCTOR) run ruff format .
 	$(CONDUCTOR) run ruff check --fix .
-	$(CONSOLE) run ruff format .
-	$(CONSOLE) run ruff check --fix .
 
 format:
 	$(CONDUCTOR) run ruff format .
-	$(CONSOLE) run ruff format .
 
 typecheck:
 	$(CONDUCTOR) run mypy src
-	$(CONSOLE) run mypy src tests
 
 test:
 	$(CONDUCTOR) run pytest
-	$(CONSOLE) run pytest
 
 clean:
 	docker compose down

@@ -7,10 +7,7 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI
 
-from conductor import __version__, telemetry
-from conductor.api import auth as auth_api
-from conductor.api import config as config_api
-from conductor.api import mappings as mappings_api
+from conductor import __version__, telemetry, ui
 from conductor.api import webhooks as webhooks_api
 from conductor.auth import AuthStore
 from conductor.config import BootstrapSettings, get_settings
@@ -47,10 +44,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     logger.info("Seeded %d config value(s) from env/seed file", seeded)
 
-    app.state.auth = AuthStore(sessionmaker, settings.dem_secret_key)
+    auth = AuthStore(sessionmaker)
+    app.state.auth = auth
 
     mappings = MappingStore(sessionmaker)
     app.state.mappings = mappings
+
+    ui.configure(store=store, mappings=mappings, auth=auth, settings=settings)
     if settings.targets_file:
         imported = await mappings.import_targets(
             settings.targets_file, reseed=settings.reseed_from_env
@@ -74,15 +74,14 @@ def create_app(settings: BootstrapSettings | None = None) -> FastAPI:
     app = FastAPI(title="conductor", version=__version__, lifespan=lifespan)
     app.state.settings = settings
     app.include_router(telemetry.router)
-    app.include_router(auth_api.router)
-    app.include_router(config_api.router)
-    app.include_router(mappings_api.router)
     app.include_router(webhooks_api.router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    # Mount last so the routes above take precedence over NiceGUI's root mount.
+    ui.setup(app, storage_secret=settings.dem_secret_key)
     return app
 
 

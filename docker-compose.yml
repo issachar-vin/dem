@@ -12,19 +12,5 @@ services:
       - conductor_data:/data
     command: sh -c "uv run alembic upgrade head && uv run uvicorn conductor.main:create_app --factory --host 0.0.0.0 --port 8420 --reload"
 
-  console:
-    build: ./console
-    container_name: dem-console
-    restart: unless-stopped
-    ports:
-      - "8501:8501"
-    environment:
-      - CONDUCTOR_API_URL=http://conductor:8420
-    depends_on:
-      - conductor
-    volumes:
-      - ./console/src:/app/src
-    command: uv run streamlit run src/console/app.py --server.address=0.0.0.0 --server.port=8501 --server.runOnSave=true
-
 volumes:
   conductor_data:

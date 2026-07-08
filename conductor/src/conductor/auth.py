@@ -1,26 +1,18 @@
-import json
-
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from conductor.models import User
 
-# Sessions are stateless: a Fernet token (keyed by DEM_SECRET_KEY) carrying the username, with
-# Fernet's own timestamp giving us expiry. A week keeps the console logged in across a work session.
-TOKEN_TTL_SECONDS = 7 * 24 * 3600
-
 
 class AuthStore:
-    """Console operator accounts and stateless session tokens. Passwords are argon2-hashed
-    (one-way); tokens are signed+encrypted with the DEM_SECRET_KEY root of trust."""
+    """Console operator accounts. Passwords are argon2-hashed (one-way). The NiceGUI console signs
+    its own session cookie (keyed by DEM_SECRET_KEY), so this store no longer issues tokens."""
 
-    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession], secret_key: str) -> None:
+    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]) -> None:
         self._sessionmaker = sessionmaker
         self._hasher = PasswordHasher()
-        self._fernet = Fernet(secret_key.encode())
 
     async def is_initialized(self) -> bool:
         async with self._sessionmaker() as session:
@@ -44,14 +36,3 @@ class AuthStore:
         except VerifyMismatchError:
             return False
         return True
-
-    def issue_token(self, username: str) -> str:
-        return self._fernet.encrypt(json.dumps({"username": username}).encode()).decode()
-
-    def verify_token(self, token: str) -> str | None:
-        try:
-            data = json.loads(self._fernet.decrypt(token.encode(), ttl=TOKEN_TTL_SECONDS))
-        except (InvalidToken, ValueError):
-            return None
-        username = data.get("username")
-        return username if isinstance(username, str) else None

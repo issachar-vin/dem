@@ -59,12 +59,19 @@ already self-hosted at plane.eroizzy.com — we do **not** bundle Plane either.
    names are custom). Non-invasive, respects existing boards, works on Plane Community edition.
    `plane-init` is dropped.
 
-4. **Streamlit admin UI (separate service).** The user's resume-builder app is Streamlit; we match
-   it. The conductor owns the DB and exposes a management API; Streamlit is a thin client calling it
-   (single writer, SQLite stays viable). The wizard verifies each key with a live connection test,
-   shows completed steps (resumable via the status endpoint), and manages repo↔project + state
-   mappings. Auth: Cloudflare Access (free ≤50 users) for barad-dur, **plus** Streamlit-native login
-   shipped as the portable default so anyone who clones it gets a protected console.
+4. **NiceGUI admin UI mounted inside the conductor (single process).** Originally a separate
+   Streamlit service over an HTTP management API; migrated to **NiceGUI** ([ui/](conductor/src/conductor/ui/)),
+   which is built on FastAPI and mounts *into* the conductor's app via `ui.run_with(app)`. UI +
+   webhooks + DB now run in one process/container: the pages call the stores in-process
+   (`ConfigStore`/`MappingStore`/`AuthStore`/`verify.py`) with no HTTP hop, so the whole `/api/*`
+   management layer was deleted (only `/webhooks/*`, `/health`, `/metrics` remain as plain FastAPI
+   routes, matched before NiceGUI's root mount). The wizard verifies each key with a live connection
+   test, shows completed steps, and manages repo↔project + state mappings. Because NiceGUI's mounted
+   sub-app does **not** share the parent `app.state`, the UI reaches the stores through a
+   module-level `ui.context` singleton populated in the FastAPI lifespan. Auth: Cloudflare Access
+   (free ≤50 users) fronts barad-dur, **plus** an app-native login gate (argon2 creds in the DB;
+   session held in NiceGUI's `storage_secret`-signed cookie keyed by `DEM_SECRET_KEY`) so anyone who
+   clones it gets a protected console. A single `dem-conductor` image serves everything on 8420.
 
 5. **Connection-test + status endpoints** ([verify.py](conductor/src/conductor/verify.py)) power the
    wizard. Claude test uses the cheapest model (`claude-haiku-4-5`, `max_tokens=4`); auth header
