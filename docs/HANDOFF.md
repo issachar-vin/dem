@@ -3,16 +3,66 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 2 is code-complete AND deployed on barad-dur.** 7a (GHCR image CI, PR #7)
-merged; 7b (Portainer stack + Caddy) is live and verified reachable. The remaining gate is a **human
-step**: the user runs the console setup wizard, after which we run the **Phase 2 end-to-end acceptance
-test** (the long-pending live Plane check). Then Phase 3 begins — its design (pipeline intake/ordering/
-concurrency) is now specified in `docs/PLAN.md` (PR #9). See "▶ resume here". Cut a fresh branch off `main`.
+**Last updated:** Phase 2 is built through step 7 and **deployed on barad-dur** (7a GHCR CI, PR #7; 7b
+Portainer stack + Caddy, live & verified). Two Phase 2 steps remain:
+- **Step 8 — NiceGUI console migration (NEXT).** Replace the Streamlit console with a NiceGUI UI
+  mounted inside the conductor (single process, single container, drops the whole `/api/*` layer).
+- **Step 9 — verification.** The user runs the setup wizard against the **NiceGUI** console, then we run
+  the live Plane acceptance test.
+
+**Do not test the current Streamlit wizard** — it's being replaced in step 8. Phase 3 design
+(pipeline intake/ordering/concurrency) is already spec'd in `docs/PLAN.md` (PR #9) and waits behind
+step 9. See "▶ NEXT" below. Cut a fresh branch off `main`.
 **Active branch:** none.
 
-> **RESUME: first ask the user — "Have you finished the console setup wizard at https://dem.eroizzy.com
-> yet?"** Their answer routes you: **not yet** → help them complete it (checklist below); **done** →
-> run the Phase 2 acceptance test (below); **moving on** → start Phase 3 per `docs/PLAN.md`.
+> **RESUME: the next task is Phase 2 step 8, the NiceGUI console migration (section "▶ NEXT" below),
+> NOT the wizard test.** After it's built and deployed, step 9 is the user testing the wizard on it,
+> then the live Plane acceptance test.
+
+## ▶ NEXT — Phase 2 step 8: migrate the console from Streamlit → NiceGUI (single-process)
+
+**Why (decided this session, so a fresh session doesn't relitigate it):** Streamlit forced a second
+service — it's its own server runtime, can't host the webhook receiver (needs raw-body HTTP for HMAC),
+and can't share the conductor's process. That split is the sole reason the `/api/*` management layer
+exists: a separate container can't touch the conductor-owned SQLite DB directly without breaking
+single-writer, so the console talks to it over HTTP. **NiceGUI removes the split**: it's built on
+FastAPI and mounts *into* the conductor's app (`ui.run_with(app)`), so UI + webhooks + DB run in one
+process/container, the UI calls the stores in-process, and the `/api/*` layer can be deleted. It also
+looks like a real admin dashboard (Quasar/Material), which Streamlit did not. Reverses **CLAUDE.md
+deviation #4** (update that file when this lands — until then it still describes the built Streamlit
+state, which is accurate).
+
+**Scope / plan (verify NiceGUI's mounting + auth APIs against current docs — don't code them from
+memory):**
+1. **Add** `nicegui` to `conductor/pyproject.toml`. Build UI under `conductor/src/conductor/ui/`
+   (pages: auth-gate, wizard, config, projects, states) — port the five `console/src/console/views/*`
+   screens. Each view currently calls `ConductorClient.<method>`; swap those for **direct in-process
+   calls** to `app.state.store` (ConfigStore), `app.state.mappings` (MappingStore), `AuthStore`, and
+   `verify.py` (live Claude/Plane/GitHub tests). No HTTP hop.
+2. **Mount into FastAPI** in `main.py::create_app`: NiceGUI pages at `/` (+ subpaths); keep
+   `/webhooks/*`, `/health`, `/metrics` as plain FastAPI routes (confirm route coexistence — NiceGUI
+   takes root, our webhook/ops routes stay). Auth: reuse `AuthStore` (argon2 + Fernet token); gate
+   pages via NiceGUI session storage (needs a `storage_secret` — reuse `DEM_SECRET_KEY`).
+3. **Delete** the `console/` package entirely (Dockerfile, pyproject, uv.lock, `views/`,
+   `api_client.py`, tests) and the `/api/config`, `/api/mappings`, `/api/auth` routers **iff** nothing
+   else consumes them (webhooks don't; export/import become in-process UI actions). *Keep-or-cut
+   decision:* the `/api/config` export-bundle/import-bundle + export.env were the only non-UI value
+   (IaC). If you want to keep a programmatic surface, retain just those; otherwise cut the whole
+   `api/` package. Lean: **cut**, since env/YAML seeding already covers IaC.
+4. **Compose / images / CI:** drop the `console` service from `docker-compose.yml`; conductor serves
+   the UI on 8420. `release.yml` matrix collapses to the single `dem-conductor` image (remove
+   `dem-console`). CI drops the parallel `console` job. Remove `CONDUCTOR_API_URL`.
+5. **barad-dur (user step after merge):** stack drops the `dem-console` service; **Caddy** simplifies
+   to `dem.eroizzy.com → 192.168.88.204:8440` for everything (root UI + `/webhooks/*`); the `:8441`
+   console route is removed. (Caddy + compose live in the `eroizzy-env` repo, per the 7b record below.)
+6. **Tests:** conductor store/verify/auth tests already cover the logic the views now call directly.
+   Add a thin NiceGUI render/smoke check (`nicegui.testing`) for the wizard gate. Drop the console
+   `test_api_client.py` with the package.
+
+**Acceptance:** `dem.eroizzy.com` serves the NiceGUI console from the **single** conductor container;
+create-admin → wizard (config + live Test-connection + project/state mappings) all work in-process;
+webhooks/health/metrics unaffected. Then the user runs the wizard for real → proceed to the Phase 2
+live Plane acceptance test (kept in "resume here" below).
 
 ## Done & merged (durable detail lives in the code; summaries only here)
 - **Phase 1** (PR #1) — conductor skeleton: `Job`/`Ticket` models, async engine, Alembic, FastAPI
@@ -131,9 +181,10 @@ deviation #4's "Streamlit-native login" wording.
 (defense-in-depth) — that's infra wiring, part of step 7, not app code. No console `AppTest` gate test
 (the client-level auth is covered by `test_api_client.py`; the Streamlit gate is thin glue).
 
-## ▶ resume here — wizard check, then Phase 2 acceptance test
-**Step 0: ask the user whether they've completed the setup wizard** at https://dem.eroizzy.com. Route
-on the answer:
+## Phase 2 step 9 — verification (wizard run + live Plane acceptance test)
+**(Deferred until step 8, the NiceGUI console migration, ships — the wizard is tested on the NiceGUI
+console, not the current Streamlit one.)** Then ask whether the user has completed the setup wizard at
+https://dem.eroizzy.com and route on the answer:
 
 ### If the wizard is NOT done yet — help finish it
 The console gates first-run behind create-admin, then the wizard drives config. Checklist (each item
