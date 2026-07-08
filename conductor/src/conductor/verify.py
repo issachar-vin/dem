@@ -6,6 +6,19 @@ import httpx
 # Cheapest current model; the connection test only needs a 200, not a useful answer.
 CLAUDE_TEST_MODEL = "claude-haiku-4-5"
 ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models"
+
+
+def _claude_headers(oauth_token: str | None, api_key: str | None) -> dict[str, str]:
+    """Anthropic auth headers. OAuth subscription token → Authorization: Bearer + beta header;
+    API key → x-api-key."""
+    headers = {"anthropic-version": "2023-06-01"}
+    if oauth_token:
+        headers["authorization"] = f"Bearer {oauth_token}"
+        headers["anthropic-beta"] = "oauth-2025-04-20"
+    else:
+        headers["x-api-key"] = api_key or ""
+    return headers
 
 
 @dataclass(frozen=True)
@@ -38,14 +51,8 @@ async def verify_claude(
     if bool(oauth_token) == bool(api_key):
         return VerifyResult(False, "Set exactly one of subscription token or API key.")
 
-    headers = {"anthropic-version": "2023-06-01", "content-type": "application/json"}
-    if oauth_token:
-        headers["authorization"] = f"Bearer {oauth_token}"
-        headers["anthropic-beta"] = "oauth-2025-04-20"
-        mode = "subscription"
-    else:
-        headers["x-api-key"] = api_key or ""
-        mode = "api key"
+    headers = {**_claude_headers(oauth_token, api_key), "content-type": "application/json"}
+    mode = "subscription" if oauth_token else "api key"
 
     body = {
         "model": CLAUDE_TEST_MODEL,
@@ -59,6 +66,34 @@ async def verify_claude(
         json=body,
         ok_detail=f"Authenticated via {mode}.",
     )
+
+
+async def list_claude_models(
+    *,
+    oauth_token: str | None,
+    api_key: str | None,
+    client: httpx.AsyncClient | None = None,
+) -> list[str]:
+    """Live model IDs for the configured Claude credential. Empty list on any failure — the UI
+    falls back to whatever value is already stored."""
+    if bool(oauth_token) == bool(api_key):
+        return []
+    headers = _claude_headers(oauth_token, api_key)
+
+    async def fetch(c: httpx.AsyncClient) -> list[str]:
+        try:
+            response = await c.get(ANTHROPIC_MODELS_URL, headers=headers, params={"limit": 100})
+        except httpx.HTTPError:
+            return []
+        if response.status_code != 200:
+            return []
+        data = response.json().get("data", [])
+        return [str(m["id"]) for m in data if isinstance(m, dict) and "id" in m]
+
+    if client is not None:
+        return await fetch(client)
+    async with httpx.AsyncClient(timeout=20) as owned:
+        return await fetch(owned)
 
 
 async def verify_plane(

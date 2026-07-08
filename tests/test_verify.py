@@ -33,7 +33,9 @@ async def test_verify_claude_api_key_uses_x_api_key() -> None:
         return httpx.Response(200, json={})
 
     async with _client(handler) as client:
-        result = await verify.verify_claude(oauth_token=None, api_key="sk", client=client)
+        result = await verify.verify_claude(
+            oauth_token=None, api_key="sk", client=client
+        )
     assert result.ok
     assert seen["x-api-key"] == "sk"
     assert "authorization" not in seen
@@ -43,6 +45,35 @@ async def test_verify_claude_requires_exactly_one_credential() -> None:
     result = await verify.verify_claude(oauth_token="a", api_key="b")
     assert not result.ok
     assert "exactly one" in result.detail
+
+
+async def test_list_claude_models_returns_ids() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/models"
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"id": "claude-opus-4-8"},
+                    {"id": "claude-haiku-4-5"},
+                    {"nope": 1},
+                ]
+            },
+        )
+
+    async with _client(handler) as client:
+        models = await verify.list_claude_models(
+            oauth_token="tok", api_key=None, client=client
+        )
+    assert models == ["claude-opus-4-8", "claude-haiku-4-5"]
+
+
+async def test_list_claude_models_empty_on_error() -> None:
+    async with _client(lambda r: httpx.Response(401, json={})) as client:
+        models = await verify.list_claude_models(
+            oauth_token=None, api_key="sk", client=client
+        )
+    assert models == []
 
 
 async def test_verify_plane_ok() -> None:
@@ -57,9 +88,14 @@ async def test_verify_plane_ok() -> None:
 
 
 async def test_verify_plane_unauthorized() -> None:
-    async with _client(lambda r: httpx.Response(401, json={"error": "bad key"})) as client:
+    async with _client(
+        lambda r: httpx.Response(401, json={"error": "bad key"})
+    ) as client:
         result = await verify.verify_plane(
-            base_url="https://plane.example.com", api_key="k", workspace_slug="dem", client=client
+            base_url="https://plane.example.com",
+            api_key="k",
+            workspace_slug="dem",
+            client=client,
         )
     assert not result.ok
     assert "401" in result.detail
@@ -68,7 +104,10 @@ async def test_verify_plane_unauthorized() -> None:
 async def test_verify_plane_workspace_not_found() -> None:
     async with _client(lambda r: httpx.Response(404, json={})) as client:
         result = await verify.verify_plane(
-            base_url="https://plane.example.com", api_key="k", workspace_slug="nope", client=client
+            base_url="https://plane.example.com",
+            api_key="k",
+            workspace_slug="nope",
+            client=client,
         )
     assert not result.ok
     assert "nope" in result.detail
@@ -81,7 +120,9 @@ async def test_verify_github_ok() -> None:
 
 
 async def test_verify_github_bad_token() -> None:
-    async with _client(lambda r: httpx.Response(401, json={"message": "Bad credentials"})) as client:
+    async with _client(
+        lambda r: httpx.Response(401, json={"message": "Bad credentials"})
+    ) as client:
         result = await verify.verify_github(token="g", client=client)
     assert not result.ok
     assert "401" in result.detail

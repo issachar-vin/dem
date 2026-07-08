@@ -3,6 +3,7 @@ from __future__ import annotations
 import binascii
 import json
 from collections import defaultdict
+from collections.abc import Callable
 from typing import Any
 
 from cryptography.fernet import InvalidToken
@@ -20,12 +21,17 @@ from conductor.ui.context import get_context
 # Reachable without a session; everything else routes through the login gate.
 UNRESTRICTED = {"/login", "/favicon.ico"}
 
+# label, path, Material icon
 NAV = (
-    ("Wizard", "/"),
-    ("Configuration", "/config"),
-    ("Projects", "/projects"),
-    ("States", "/states"),
+    ("Wizard", "/", "auto_fix_high"),
+    ("Configuration", "/config", "tune"),
+    ("Projects", "/projects", "hub"),
+    ("States", "/states", "account_tree"),
 )
+
+STEP_ORDER = ("claude", "plane", "github", "notifications", "advanced")
+
+OnSaved = Callable[[], Any]
 
 
 @app.add_middleware
@@ -45,67 +51,141 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return RedirectResponse(f"/login?redirect_to={path}")
 
 
-# ── shared layout ──────────────────────────────────────────────────────────────
-def _header() -> None:
-    with ui.header().classes("items-center justify-between"):
-        ui.label("DEM Console").classes("text-lg font-bold")
-        with ui.row():
-            for label, path in NAV:
-                ui.button(label, on_click=lambda p=path: ui.navigate.to(p)).props(
-                    "flat color=white"
-                )
+# ── theme (dark grey surfaces, orange accent) ───────────────────────────────────
+ORANGE = "#F97316"
+HEADER_BG = "#161619"  # darker grey than the page/surfaces
 
-        def logout() -> None:
-            app.storage.user.clear()
-            ui.navigate.to("/login")
 
-        ui.button("Sign out", on_click=logout).props("flat color=white")
+def _theme() -> None:
+    ui.dark_mode(True)
+    ui.colors(
+        primary=ORANGE,
+        secondary=ORANGE,
+        accent=ORANGE,
+        dark="#2A2A2E",  # cards, drawer, panels
+        dark_page="#1E1E22",  # page background
+    )
+
+
+# ── shell (header + collapsible drawer) ─────────────────────────────────────────
+def _logout() -> None:
+    app.storage.user.clear()
+    ui.navigate.to("/login")
+
+
+def _toggle_nav(drawer: ui.left_drawer) -> None:
+    collapsed = not bool(app.storage.user.get("nav_collapsed", False))
+    app.storage.user["nav_collapsed"] = collapsed
+    drawer.props(remove="mini")
+    if collapsed:
+        drawer.props("mini")
+
+
+def _layout(active: str) -> None:
+    _theme()
+    collapsed = bool(app.storage.user.get("nav_collapsed", False))
+    drawer = ui.left_drawer(value=True, bordered=True).props("mini-width=72")
+    if collapsed:
+        drawer.props("mini")
+    with drawer, ui.list().props("padding").classes("w-full"):
+        for label, path, icon in NAV:
+            item = ui.item(on_click=lambda p=path: ui.navigate.to(p)).props("clickable")
+            if path == active:
+                item.classes("bg-primary text-white")
+            with item:
+                with ui.item_section().props("avatar"):
+                    ui.icon(icon)
+                with ui.item_section():
+                    ui.item_label(label)
+
+    with ui.header().classes("items-center justify-between").style(f"background-color:{HEADER_BG}"):
+        with ui.row().classes("items-center gap-2"):
+            ui.button(icon="menu", on_click=lambda: _toggle_nav(drawer)).props(
+                "flat round color=white"
+            )
+            ui.label("D.E.M. Console").classes("text-lg font-bold")
+        username = str(app.storage.user.get("username", "user"))
+        with ui.button(icon="account_circle").props("flat color=white no-caps"):
+            ui.label(username).classes("ml-2")
+            with ui.menu():
+                ui.menu_item("Sign out", on_click=_logout)
 
 
 def _page() -> ui.column:
     return ui.column().classes("p-4 w-full max-w-3xl mx-auto")
 
 
-# ── field rendering (secrets + settings) ───────────────────────────────────────
-def _field_row(field: dict[str, Any]) -> None:
+# ── field helpers ───────────────────────────────────────────────────────────────
+def _is_set(field: dict[str, Any]) -> bool:
+    return bool(field["set"]) if field["secret"] else bool(field["value"])
+
+
+def _input(field: dict[str, Any]) -> ValueElement[Any]:
+    """Render one field's editor (no save button). Secrets show a masked placeholder and stay
+    empty until a new value is typed."""
     name: str = field["name"]
     box: ValueElement[Any]
-    with ui.row().classes("items-center w-full gap-2"):
-        if field["secret"]:
-            placeholder = (
-                f"set — ...{field['last_four']} (source: {field['source']})"
-                if field["set"]
-                else "not set"
-            )
-            box = ui.input(
-                label=name, password=True, password_toggle_button=True, placeholder=placeholder
-            ).classes("grow")
-
-            async def save_secret() -> None:
-                if box.value:
-                    await get_context().store.set_secret(name, box.value)
-                    ui.navigate.reload()
-
-            ui.button("Save", on_click=save_secret)
+    if field["secret"]:
+        placeholder = (
+            f"set — ...{field['last_four']} (source: {field['source']})"
+            if field["set"]
+            else "not set"
+        )
+        box = ui.input(
+            label=name, password=True, password_toggle_button=True, placeholder=placeholder
+        ).classes("w-full")
+    else:
+        choices: list[str] = list(field["choices"])
+        current: str = field["value"] or ""
+        if choices:
+            box = ui.select(
+                options=choices, value=current if current in choices else choices[0], label=name
+            ).classes("w-full")
         else:
-            choices: list[str] = list(field["choices"])
-            current: str = field["value"] or ""
-            if choices:
-                box = ui.select(
-                    options=choices,
-                    value=current if current in choices else choices[0],
-                    label=name,
-                ).classes("grow")
-            else:
-                box = ui.input(label=name, value=current).classes("grow")
-
-            async def save_setting() -> None:
-                await get_context().store.set_setting(name, str(box.value or ""))
-                ui.navigate.reload()
-
-            ui.button("Save", on_click=save_setting)
+            box = ui.input(label=name, value=current).classes("w-full")
     if field["help"]:
         ui.label(field["help"]).classes("text-xs text-gray-500")
+    return box
+
+
+def _model_input(field: dict[str, Any], models: list[str]) -> ValueElement[Any]:
+    name: str = field["name"]
+    current: str = field["value"] or ""
+    options = list(dict.fromkeys([*models, *([current] if current else [])]))
+    return ui.select(
+        options=options,
+        value=current if current in options else (options[0] if options else None),
+        label=name,
+        with_input=True,
+    ).classes("w-full")
+
+
+class _Section:
+    """A group of fields saved together by one button. Secrets are only written when a new value
+    is typed; settings are always written (upsert)."""
+
+    def __init__(self) -> None:
+        self._items: list[tuple[dict[str, Any], ValueElement[Any]]] = []
+
+    def field(self, field: dict[str, Any]) -> None:
+        self._items.append((field, _input(field)))
+
+    def model(self, field: dict[str, Any], models: list[str]) -> None:
+        self._items.append((field, _model_input(field, models)))
+
+    def save_button(self, on_saved: OnSaved, *, label: str = "Save") -> None:
+        async def save() -> None:
+            store = get_context().store
+            for field, box in self._items:
+                if field["secret"]:
+                    if box.value:
+                        await store.set_secret(field["name"], box.value)
+                else:
+                    await store.set_setting(field["name"], str(box.value or ""))
+            ui.notify("Saved")
+            on_saved()
+
+        ui.button(label, icon="save", on_click=save).props("color=primary")
 
 
 async def _run_test(service: str) -> verify.VerifyResult:
@@ -124,64 +204,297 @@ async def _run_test(service: str) -> verify.VerifyResult:
     return await verify.verify_github(token=resolved.get("github_token", ""))
 
 
-def _test_button(service: str) -> None:
+def _test_row(service: str) -> None:
     result = ui.label().classes("text-sm")
 
     async def run() -> None:
-        result.text = f"Testing {service}..."
+        result.text = f"Testing {service}…"
         res = await _run_test(service)
         result.text = res.detail
         result.classes(replace="text-sm " + ("text-green-600" if res.ok else "text-red-600"))
 
-    ui.button("Test connection", on_click=run)
+    ui.button("Test connection", icon="bolt", on_click=run).props("outline")
+
+
+def _next_step(step: str) -> str | None:
+    index = STEP_ORDER.index(step)
+    return STEP_ORDER[index + 1] if index + 1 < len(STEP_ORDER) else None
+
+
+def _step_footer(tabs: ui.tabs, step_status: dict[str, Any]) -> None:
+    ui.separator()
+    step = step_status["step"]
+    if step_status["complete"]:
+        ui.label("This step is set up.").classes("text-green-600")
+        nxt = _next_step(step)
+        if nxt is not None:
+            ui.button(f"Next: {nxt.title()} →", on_click=lambda: tabs.set_value(nxt)).props(
+                "color=primary"
+            )
+    else:
+        missing = ", ".join(step_status["missing"]) or "the fields above"
+        ui.label(f"Still needed: {missing}").classes("text-orange-600")
+
+
+async def _load() -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    store = get_context().store
+    config = {f["name"]: f for f in await store.list_config()}
+    steps = {s["step"]: s for s in (await store.status())["steps"]}
+    return config, steps
+
+
+# ── wizard panels ────────────────────────────────────────────────────────────────
+@ui.refreshable
+async def _claude_panel(tabs: ui.tabs) -> None:
+    config, steps = await _load()
+    ui.markdown(
+        "**Step 1 — Claude credential.** Set exactly one: a Pro/Max **subscription token** or an "
+        "**API key**."
+    )
+    with ui.expansion("How do I get these?", icon="help_outline").classes("w-full"):
+        ui.markdown(
+            "- **Subscription token** (Pro/Max): run `claude setup-token` in a terminal with the "
+            "Claude Code CLI installed — it opens a browser, then prints a token starting with "
+            "`sk-ant-oat01-…`.\n"
+            "- **API key** (metered): create one at console.anthropic.com → API keys.\n"
+            "- Set one **or** the other — not both."
+        )
+    creds = _Section()
+    creds.field(config["claude_code_oauth_token"])
+    creds.field(config["anthropic_api_key"])
+    creds.save_button(_claude_panel.refresh)
+    _test_row("claude")
+
+    if not (_is_set(config["claude_code_oauth_token"]) or _is_set(config["anthropic_api_key"])):
+        ui.separator()
+        ui.label("Set a credential above to choose models.").classes("text-sm text-gray-500")
+        return
+
+    ui.separator()
+    ui.markdown("**Step 2 — Models.** Choose the model for each agent role.")
+    resolved = await get_context().store.resolved()
+    models = await verify.list_claude_models(
+        oauth_token=resolved.get("claude_code_oauth_token") or None,
+        api_key=resolved.get("anthropic_api_key") or None,
+    )
+    if models:
+        ui.label("Models loaded live from your account.").classes("text-xs text-gray-500")
+    else:
+        ui.label(
+            "Couldn't load models from the API (check the credential above); showing stored values."
+        ).classes("text-xs text-orange-600")
+    model_section = _Section()
+    for role in (
+        "claude_model_engineer",
+        "claude_model_planner",
+        "claude_model_reviewer",
+        "claude_model_qa",
+    ):
+        model_section.model(config[role], models)
+    model_section.save_button(_claude_panel.refresh)
+
+    _step_footer(tabs, steps["claude"])
+
+
+@ui.refreshable
+async def _plane_panel(tabs: ui.tabs) -> None:
+    config, steps = await _load()
+    ui.markdown("**Step 1 — Connect to Plane.** Enter all three, then Test.")
+    with ui.expansion("How do I get these?", icon="help_outline").classes("w-full"):
+        ui.markdown(
+            "- **Base URL** — your Plane root, e.g. `https://plane.eroizzy.com` "
+            "(Plane Cloud: `https://api.plane.so`).\n"
+            "- **API key** — in Plane, open your profile → **Personal Access Tokens** → *Add "
+            "personal access token* → copy it. Sent as the `X-API-Key` header.\n"
+            "- **Workspace slug** — the segment in your Plane URL right after the domain: "
+            "`plane.eroizzy.com/<slug>/…`. It's the lowercased workspace name (workspace *DEM* → "
+            "slug `dem`). Plane's API can't list it, so enter it here; Test verifies it."
+        )
+    connection = _Section()
+    connection.field(config["plane_base_url"])
+    connection.field(config["plane_api_key"])
+    connection.field(config["plane_workspace_slug"])
+    connection.save_button(_plane_panel.refresh)
+    _test_row("plane")
+
+    trio = ("plane_base_url", "plane_api_key", "plane_workspace_slug")
+    if not all(_is_set(config[n]) for n in trio):
+        ui.separator()
+        ui.label("Fill in and test the connection above to continue.").classes(
+            "text-sm text-gray-500"
+        )
+        return
+
+    ui.separator()
+    ui.markdown("**Step 2 — Webhook secret.**")
+    resolved = await get_context().store.resolved()
+    public = (resolved.get("conductor_public_url") or "http://localhost:8420").rstrip("/")
+    payload_url = f"{public}/webhooks/plane"
+    ui.markdown(
+        "1. In Plane → **Workspace Settings → Webhooks → Add webhook**.\n"
+        f"2. **Payload URL:** `{payload_url}`\n"
+        "3. Enable it, select **Issue** events, Save.\n"
+        "4. Plane shows a **Secret key once** — copy it and paste below. The two must match, or "
+        "every delivery returns 401."
+    )
+    ui.label("Payload URL (from your configured public URL — set it on the Advanced step):")
+    ui.input(value=payload_url).props("readonly").classes("w-full font-mono")
+    webhook = _Section()
+    webhook.field(config["plane_webhook_secret"])
+    webhook.save_button(_plane_panel.refresh)
+
+    ui.separator()
+    ui.markdown("**Step 3 — Epic detection.** How the conductor recognizes an epic (the trigger).")
+    ui.markdown(
+        "- **label** (recommended, works on Community): an issue is an epic if it carries a label "
+        "named `epic`. Create that label in the project and tag the issues you want built.\n"
+        "- **type**: for a Plane *Epic* work-item type — Community has none, so this falls back to "
+        "the label behavior.\n"
+        "- **parentless**: any issue with no parent becomes an epic (broad; usually too much)."
+    )
+    epic = _Section()
+    epic.field(config["plane_epic_signal"])
+    epic.save_button(_plane_panel.refresh)
+
+    ui.separator()
+    with ui.expansion("Plane Agents & bot token — under construction", icon="construction").classes(
+        "w-full"
+    ):
+        ui.label(
+            "These will configure native Plane bot comments in a later phase. Leave blank for "
+            "now — they have no effect yet."
+        )
+    _step_footer(tabs, steps["plane"])
+
+
+@ui.refreshable
+async def _github_panel(tabs: ui.tabs) -> None:
+    config, steps = await _load()
+    ui.markdown("**Step 1 — GitHub token.**")
+    with ui.expansion("How do I create this?", icon="help_outline").classes("w-full"):
+        ui.markdown(
+            "GitHub → **Settings → Developer settings → Fine-grained tokens → Generate new "
+            "token**. Grant it access to the target repos with **Contents: Read and write** and "
+            "**Pull requests: Read and write**. A dedicated machine account is recommended so PRs "
+            "aren't attributed to you."
+        )
+    token_section = _Section()
+    token_section.field(config["github_token"])
+    token_section.save_button(_github_panel.refresh)
+    _test_row("github")
+
+    if not _is_set(config["github_token"]):
+        ui.separator()
+        ui.label("Set and test the token above to continue.").classes("text-sm text-gray-500")
+        return
+
+    ui.separator()
+    ui.markdown("**Step 2 — Delivery & branch.**")
+    delivery = _Section()
+    delivery.field(config["github_base_branch"])
+    delivery.field(config["github_event_mode"])
+    if (config["github_event_mode"]["value"] or "poll") == "webhook":
+        ui.label("Webhook mode: set a secret matching the GitHub webhook you create.").classes(
+            "text-xs text-gray-500"
+        )
+        delivery.field(config["github_webhook_secret"])
+    else:
+        delivery.field(config["github_poll_interval_seconds"])
+    delivery.save_button(_github_panel.refresh)
+
+    _step_footer(tabs, steps["github"])
+
+
+@ui.refreshable
+async def _notifications_panel(tabs: ui.tabs) -> None:
+    config, steps = await _load()
+    ui.markdown("**Notifications** — where the conductor sends alerts (optional).")
+    section = _Section()
+    section.field(config["notify_mode"])
+    mode = config["notify_mode"]["value"] or "none"
+    url_field = {
+        "ntfy": "notify_ntfy_url",
+        "slack": "notify_slack_webhook_url",
+        "webhook": "notify_webhook_url",
+    }.get(mode)
+    if url_field is not None:
+        ui.label(
+            {
+                "ntfy": "Your ntfy topic URL, e.g. https://ntfy.sh/your-topic.",
+                "slack": "A Slack Incoming Webhook URL.",
+                "webhook": "Any URL to receive a JSON POST per notification.",
+            }[mode]
+        ).classes("text-xs text-gray-500")
+        section.field(config[url_field])
+    else:
+        ui.label("No notifications configured.").classes("text-sm text-gray-500")
+    section.save_button(_notifications_panel.refresh)
+
+    _step_footer(tabs, steps["notifications"])
+
+
+@ui.refreshable
+async def _advanced_panel(tabs: ui.tabs) -> None:
+    config, steps = await _load()
+    ui.markdown("**Advanced** — sensible defaults; change only if you know why.")
+    section = _Section()
+    for field in config.values():
+        if field["step"] == "advanced":
+            section.field(field)
+    section.save_button(_advanced_panel.refresh)
+    ui.separator()
+    if all(s["complete"] for s in steps.values()):
+        ui.label("Configuration is complete across every step.").classes("text-green-600")
+    else:
+        ui.label("Some earlier steps are still incomplete — see their tabs.").classes(
+            "text-orange-600"
+        )
 
 
 # ── pages ──────────────────────────────────────────────────────────────────────
 @ui.page("/")
 async def wizard_page() -> None:
-    _header()
-    ctx = get_context()
-    status = await ctx.store.status()
-    by_step: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for field in await ctx.store.list_config():
-        by_step[field["step"]].append(field)
+    _layout("/")
+    status = await get_context().store.status()
+    step_complete = {s["step"]: s["complete"] for s in status["steps"]}
+    start = next((s["step"] for s in status["steps"] if not s["complete"]), "claude")
 
     with _page():
         ui.label("Setup wizard").classes("text-2xl font-bold")
-        ui.label("Configure each step in any order; badges reflect what the conductor still needs.")
-        for step in status["steps"]:
-            badge = "Complete" if step["complete"] else "Incomplete"
-            with ui.expansion(
-                f"{step['step'].title()} — {badge}", value=not step["complete"]
-            ).classes("w-full"):
-                if step["step"] == "claude":
-                    ui.label("Set exactly one Claude credential: subscription token OR API key.")
-                if step["missing"]:
-                    ui.label("Missing: " + ", ".join(step["missing"])).classes("text-orange-600")
-                for field in by_step.get(step["step"], []):
-                    _field_row(field)
-                if step["verifiable"]:
-                    _test_button(step["step"])
-        if status["complete"]:
-            ui.label("Configuration is complete.").classes("text-green-600")
-        else:
-            ui.label("Outstanding: " + "; ".join(status["issues"])).classes("text-orange-600")
+        ui.label("Work through each tab; fields unlock as you complete the one before.")
+        with ui.tabs().classes("w-full") as tabs:
+            for step in STEP_ORDER:
+                icon = "check_circle" if step_complete.get(step) else "radio_button_unchecked"
+                ui.tab(step, label=step.title(), icon=icon)
+        with ui.tab_panels(tabs, value=start).classes("w-full"):
+            with ui.tab_panel("claude"):
+                await _claude_panel(tabs)
+            with ui.tab_panel("plane"):
+                await _plane_panel(tabs)
+            with ui.tab_panel("github"):
+                await _github_panel(tabs)
+            with ui.tab_panel("notifications"):
+                await _notifications_panel(tabs)
+            with ui.tab_panel("advanced"):
+                await _advanced_panel(tabs)
 
 
 @ui.page("/config")
 async def config_page() -> None:
-    _header()
-    ctx = get_context()
+    _layout("/config")
     by_step: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for field in await ctx.store.list_config():
+    for field in await get_context().store.list_config():
         by_step[field["step"]].append(field)
 
     with _page():
         ui.label("Configuration").classes("text-2xl font-bold")
+        ui.label("Every field in one place. The wizard is the guided version of this page.")
         for step, fields in by_step.items():
             ui.label(step.title()).classes("text-lg font-semibold mt-2")
+            section = _Section()
             for field in fields:
-                _field_row(field)
+                section.field(field)
+            section.save_button(ui.navigate.reload)
         ui.separator()
         _export_import()
 
@@ -228,7 +541,7 @@ def _export_import() -> None:
 
 @ui.page("/projects")
 async def projects_page() -> None:
-    _header()
+    _layout("/projects")
     ctx = get_context()
     projects = await ctx.mappings.list_projects()
 
@@ -275,7 +588,7 @@ async def projects_page() -> None:
 
 @ui.page("/states")
 async def states_page() -> None:
-    _header()
+    _layout("/states")
     ctx = get_context()
     status = await ctx.store.status()
     plane_step = next((s for s in status["steps"] if s["step"] == "plane"), None)
@@ -354,6 +667,7 @@ async def _scan_states(project_id: str) -> list[dict[str, Any]]:
 
 @ui.page("/login")
 async def login_page(redirect_to: str = "/") -> RedirectResponse | None:
+    _theme()
     ctx = get_context()
     if app.storage.user.get("authenticated"):
         return RedirectResponse(redirect_to)
