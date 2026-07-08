@@ -52,10 +52,17 @@ class ConductorClient:
     """Typed, synchronous wrapper over the conductor management API. Streamlit is sync, so this is
     too; pass an injectable `client=` (e.g. an httpx.MockTransport client) in tests."""
 
-    def __init__(self, base_url: str, *, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self, base_url: str, *, client: httpx.Client | None = None, token: str | None = None
+    ) -> None:
         self._client = client or httpx.Client(base_url=base_url, timeout=DEFAULT_TIMEOUT)
+        self.token = token
 
     def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        if self.token:
+            headers = dict(kwargs.pop("headers", {}))
+            headers["Authorization"] = f"Bearer {self.token}"
+            kwargs["headers"] = headers
         try:
             response = self._client.request(method, path, **kwargs)
         except httpx.RequestError as exc:
@@ -63,6 +70,23 @@ class ConductorClient:
         if response.status_code >= 400:
             raise ConductorError(response.status_code, _detail(response))
         return response
+
+    # ── auth ─────────────────────────────────────────────────────────────────
+    def auth_status(self) -> bool:
+        data = self._request("GET", "/api/auth/status").json()
+        return bool(data["initialized"])
+
+    def register(self, username: str, password: str) -> str:
+        data = self._request(
+            "POST", "/api/auth/register", json={"username": username, "password": password}
+        ).json()
+        return str(data["token"])
+
+    def login(self, username: str, password: str) -> str:
+        data = self._request(
+            "POST", "/api/auth/login", json={"username": username, "password": password}
+        ).json()
+        return str(data["token"])
 
     # ── config ───────────────────────────────────────────────────────────────
     def list_config(self) -> list[dict[str, Any]]:

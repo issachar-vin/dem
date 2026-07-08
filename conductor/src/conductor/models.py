@@ -51,6 +51,19 @@ class Job(Base):
     )
 
 
+class User(Base):
+    """Console operator. Single admin today (created on first spin-up), but the table already
+    supports more rows so multi-user is a later add with no rewrite. Passwords are one-way
+    hashed (argon2) — unlike the reversible Fernet Secret store."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    password_hash: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Secret(Base):
     """A credential stored encrypted at rest (Fernet, keyed by DEM_SECRET_KEY)."""
 

@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from conductor import plane
 from conductor.api import mappings as mappings_api
+from conductor.auth import AuthStore
 from conductor.mappings import MappingStore
 from conductor.models import WorkflowState
 from conductor.store import ConfigStore
@@ -25,6 +26,13 @@ async def test_set_get_and_delete_project(mappings: MappingStore) -> None:
     assert await mappings.delete_project("p1") is False
 
 
+async def test_delete_project_cascades_state_mappings(mappings: MappingStore) -> None:
+    await mappings.set_project("p1", repo="izzy/chess")
+    await mappings.set_state("p1", WorkflowState.IN_REVIEW, "s1")
+    assert await mappings.delete_project("p1") is True
+    assert await mappings.list_states("p1") == []
+
+
 async def test_set_project_updates_existing(mappings: MappingStore) -> None:
     await mappings.set_project("p1", repo="izzy/a")
     await mappings.set_project("p1", repo="izzy/b")
@@ -33,14 +41,18 @@ async def test_set_project_updates_existing(mappings: MappingStore) -> None:
     assert rows[0]["repo"] == "izzy/b"
 
 
-async def test_state_mapping_upserts_by_project_and_state(mappings: MappingStore) -> None:
+async def test_state_mapping_upserts_by_project_and_state(
+    mappings: MappingStore,
+) -> None:
     await mappings.set_state("p1", WorkflowState.IN_REVIEW, "s1")
     await mappings.set_state("p1", WorkflowState.IN_REVIEW, "s2")
     states = await mappings.list_states("p1")
     assert states == [{"workflow_state": "in_review", "plane_state_id": "s2"}]
 
 
-async def test_import_targets_seeds_once(mappings: MappingStore, tmp_path: Path) -> None:
+async def test_import_targets_seeds_once(
+    mappings: MappingStore, tmp_path: Path
+) -> None:
     f = tmp_path / "targets.yml"
     f.write_text(
         "targets:\n"
@@ -63,14 +75,19 @@ async def test_import_targets_seeds_once(mappings: MappingStore, tmp_path: Path)
 # ── API ──────────────────────────────────────────────────────────────────────
 @pytest_asyncio.fixture
 async def api(
-    mappings: MappingStore, store: ConfigStore
+    mappings: MappingStore, store: ConfigStore, auth: AuthStore, auth_token: str
 ) -> AsyncIterator[httpx.AsyncClient]:
     app = FastAPI()
     app.state.mappings = mappings
     app.state.store = store
+    app.state.auth = auth
     app.include_router(mappings_api.router)
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {auth_token}"},
+    ) as client:
         yield client
 
 
@@ -90,6 +107,20 @@ async def test_put_project_ok_then_listed(api: httpx.AsyncClient) -> None:
 async def test_put_project_bad_repo_422(api: httpx.AsyncClient) -> None:
     resp = await api.put("/api/mappings/projects/p1", json={"repo": "not-a-repo"})
     assert resp.status_code == 422
+
+
+async def test_mappings_require_auth(
+    mappings: MappingStore, store: ConfigStore, auth: AuthStore
+) -> None:
+    app = FastAPI()
+    app.state.mappings = mappings
+    app.state.store = store
+    app.state.auth = auth
+    app.include_router(mappings_api.router)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as anon:
+        resp = await anon.get("/api/mappings/projects")
+    assert resp.status_code == 401
 
 
 async def test_delete_missing_project_404(api: httpx.AsyncClient) -> None:
@@ -118,7 +149,9 @@ async def test_state_scan_calls_plane(
     real = plane.client_from_resolved
 
     def fake_from_resolved(resolved: dict[str, str], **_: object) -> plane.PlaneClient:
-        return real(resolved, client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+        return real(
+            resolved, client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        )
 
     monkeypatch.setattr(mappings_api.plane, "client_from_resolved", fake_from_resolved)
     resp = await api.get("/api/mappings/projects/p1/state-scan")

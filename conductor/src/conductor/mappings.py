@@ -49,6 +49,9 @@ class MappingStore:
             row = await session.get(ProjectMapping, project_id)
             if row is None:
                 return False
+            await session.execute(
+                delete(StateMapping).where(StateMapping.plane_project_id == project_id)
+            )
             await session.delete(row)
             await session.commit()
             return True

@@ -18,9 +18,50 @@ def _record(response: httpx.Response) -> tuple[dict[str, object], Callable[..., 
         seen["method"] = request.method
         seen["path"] = request.url.path
         seen["body"] = request.content.decode() if request.content else ""
+        seen["authorization"] = request.headers.get("Authorization")
         return response
 
     return seen, handler
+
+
+# ── auth ───────────────────────────────────────────────────────────────────────
+def test_auth_status(make_client: MakeClient) -> None:
+    _, handler = _record(httpx.Response(200, json={"initialized": True}))
+    assert make_client(handler).auth_status() is True
+
+
+def test_register_returns_token(make_client: MakeClient) -> None:
+    seen, handler = _record(httpx.Response(200, json={"token": "t0k", "username": "admin"}))
+    assert make_client(handler).register("admin", "pw") == "t0k"
+    assert seen["path"] == "/api/auth/register"
+    assert json.loads(str(seen["body"])) == {"username": "admin", "password": "pw"}
+
+
+def test_login_returns_token(make_client: MakeClient) -> None:
+    seen, handler = _record(httpx.Response(200, json={"token": "t0k", "username": "admin"}))
+    assert make_client(handler).login("admin", "pw") == "t0k"
+    assert seen["path"] == "/api/auth/login"
+
+
+def test_token_is_sent_as_bearer_header(make_client: MakeClient) -> None:
+    seen, handler = _record(httpx.Response(200, json=[]))
+    client = make_client(handler)
+    client.token = "t0k"
+    client.list_config()
+    assert seen["authorization"] == "Bearer t0k"
+
+
+def test_no_token_sends_no_auth_header(make_client: MakeClient) -> None:
+    seen, handler = _record(httpx.Response(200, json={"initialized": False}))
+    make_client(handler).auth_status()
+    assert seen["authorization"] is None
+
+
+def test_unauthenticated_write_raises_401(make_client: MakeClient) -> None:
+    _, handler = _record(httpx.Response(401, json={"detail": "Authentication required."}))
+    with pytest.raises(ConductorError) as excinfo:
+        make_client(handler).set_secret("plane_api_key", "x")
+    assert excinfo.value.status_code == 401
 
 
 def test_list_config(make_client: MakeClient) -> None:

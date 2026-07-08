@@ -6,13 +6,21 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from conductor.auth import AuthStore
 from conductor.crypto import SecretBox, generate_key
 from conductor.db import Base, create_sessionmaker
 from conductor.mappings import MappingStore
 from conductor.store import ConfigStore
 
 # Env vars that could leak in from the host and make config tests non-deterministic.
-_MANAGED_ENV_PREFIXES = ("CLAUDE_", "ANTHROPIC_", "PLANE_", "GITHUB_", "OTEL_", "NOTIFY_")
+_MANAGED_ENV_PREFIXES = (
+    "CLAUDE_",
+    "ANTHROPIC_",
+    "PLANE_",
+    "GITHUB_",
+    "OTEL_",
+    "NOTIFY_",
+)
 _MANAGED_ENV_EXACT = (
     "DATABASE_URL",
     "TARGETS_FILE",
@@ -44,9 +52,7 @@ def box(secret_key: str) -> SecretBox:
 @pytest_asyncio.fixture
 async def sessionmaker() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     # StaticPool keeps a single shared connection so the in-memory DB survives across sessions.
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:", poolclass=StaticPool
-    )
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=StaticPool)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield create_sessionmaker(engine)
@@ -65,6 +71,19 @@ async def mappings(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> MappingStore:
     return MappingStore(sessionmaker)
+
+
+@pytest_asyncio.fixture
+async def auth(
+    sessionmaker: async_sessionmaker[AsyncSession], secret_key: str
+) -> AuthStore:
+    return AuthStore(sessionmaker, secret_key)
+
+
+@pytest_asyncio.fixture
+async def auth_token(auth: AuthStore) -> str:
+    await auth.create_admin("admin", "pw")
+    return auth.issue_token("admin")
 
 
 @pytest.fixture

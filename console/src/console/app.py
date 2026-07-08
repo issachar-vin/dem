@@ -6,7 +6,7 @@ from collections.abc import Callable
 import streamlit as st
 
 from console.api_client import ConductorClient
-from console.views import config, projects, states, wizard
+from console.views import auth, config, projects, states, wizard
 
 PAGES: dict[str, Callable[[ConductorClient], None]] = {
     "Setup wizard": wizard.render,
@@ -23,9 +23,21 @@ def get_client() -> ConductorClient:
 
 def main() -> None:
     st.set_page_config(page_title="DEM Console", layout="wide")
+    client = get_client()
+
+    token = st.session_state.get("auth_token")
+    if not token:
+        client.token = None
+        auth.render_gate(client)
+        return
+    client.token = token
+
     st.sidebar.title("DEM Console")
     choice = st.sidebar.radio("Navigate", list(PAGES))
-    PAGES[choice](get_client())
+    if st.sidebar.button("Sign out"):
+        del st.session_state["auth_token"]
+        st.rerun()
+    PAGES[choice](client)
 
 
 main()
