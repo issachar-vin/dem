@@ -115,6 +115,16 @@ def _page() -> ui.column:
     return ui.column().classes("p-4 w-full max-w-3xl mx-auto")
 
 
+def _origin(request: Request) -> str:
+    """Public origin of this page as the browser reached it. Reads proxy headers (Caddy sets
+    X-Forwarded-* and preserves Host) rather than request.url, which carries the internal bind."""
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = (
+        request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    )
+    return f"{proto}://{host}"
+
+
 # ── field helpers ───────────────────────────────────────────────────────────────
 def _is_set(field: dict[str, Any]) -> bool:
     return bool(field["set"]) if field["secret"] else bool(field["value"])
@@ -297,7 +307,7 @@ async def _claude_panel(tabs: ui.tabs) -> None:
 
 
 @ui.refreshable
-async def _plane_panel(tabs: ui.tabs) -> None:
+async def _plane_panel(tabs: ui.tabs, origin: str) -> None:
     config, steps = await _load()
     ui.markdown("**Step 1 — Connect to Plane.** Enter all three, then Test.")
     with ui.expansion("How do I get these?", icon="help_outline").classes("w-full"):
@@ -328,8 +338,7 @@ async def _plane_panel(tabs: ui.tabs) -> None:
     ui.separator()
     ui.markdown("**Step 2 — Webhook secret.**")
     resolved = await get_context().store.resolved()
-    public = (resolved.get("conductor_public_url") or "http://localhost:8420").rstrip("/")
-    payload_url = f"{public}/webhooks/plane"
+    payload_url = f"{origin.rstrip('/')}/webhooks/plane"
     ui.markdown(
         "1. In Plane → **Workspace Settings → Webhooks → Add webhook**.\n"
         f"2. **Payload URL:** `{payload_url}`\n"
@@ -337,8 +346,21 @@ async def _plane_panel(tabs: ui.tabs) -> None:
         "4. Plane shows a **Secret key once** — copy it and paste below. The two must match, or "
         "every delivery returns 401."
     )
-    ui.label("Payload URL (from your configured public URL — set it on the Advanced step):")
+    ui.label("Payload URL (detected from this page's address):")
     ui.input(value=payload_url).props("readonly").classes("w-full font-mono")
+    stored_public = (resolved.get("conductor_public_url") or "").rstrip("/")
+    if origin.rstrip("/") != stored_public:
+
+        async def save_public() -> None:
+            await get_context().store.set_setting("conductor_public_url", origin.rstrip("/"))
+            ui.notify("Saved public URL")
+            _plane_panel.refresh()
+
+        ui.button(
+            f"Save {origin.rstrip('/')} as the conductor's public URL",
+            icon="save",
+            on_click=save_public,
+        ).props("flat color=primary")
     webhook = _Section()
     webhook.field(config["plane_webhook_secret"])
     webhook.save_button(_plane_panel.refresh)
@@ -453,8 +475,9 @@ async def _advanced_panel(tabs: ui.tabs) -> None:
 
 # ── pages ──────────────────────────────────────────────────────────────────────
 @ui.page("/")
-async def wizard_page() -> None:
+async def wizard_page(request: Request) -> None:
     _layout("/")
+    origin = _origin(request)
     status = await get_context().store.status()
     step_complete = {s["step"]: s["complete"] for s in status["steps"]}
     start = next((s["step"] for s in status["steps"] if not s["complete"]), "claude")
@@ -470,7 +493,7 @@ async def wizard_page() -> None:
             with ui.tab_panel("claude"):
                 await _claude_panel(tabs)
             with ui.tab_panel("plane"):
-                await _plane_panel(tabs)
+                await _plane_panel(tabs, origin)
             with ui.tab_panel("github"):
                 await _github_panel(tabs)
             with ui.tab_panel("notifications"):

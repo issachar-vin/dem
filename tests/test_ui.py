@@ -1,8 +1,38 @@
+from starlette.requests import Request
 from starlette.routing import Mount
 
 from conductor.config import BootstrapSettings
 from conductor.crypto import generate_key
 from conductor.main import create_app
+from conductor.ui.views import _origin
+
+
+def _request(headers: dict[str, str], *, scheme: str = "http") -> Request:
+    return Request(
+        {
+            "type": "http",
+            "scheme": scheme,
+            "server": ("internal", 8420),
+            "path": "/",
+            "query_string": b"",
+            "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()],
+        }
+    )
+
+
+def test_origin_prefers_forwarded_headers() -> None:
+    request = _request(
+        {
+            "host": "internal:8420",
+            "x-forwarded-host": "dem.eroizzy.com",
+            "x-forwarded-proto": "https",
+        }
+    )
+    assert _origin(request) == "https://dem.eroizzy.com"
+
+
+def test_origin_falls_back_to_host_and_scheme() -> None:
+    assert _origin(_request({"host": "localhost:8420"})) == "http://localhost:8420"
 
 
 def _settings() -> BootstrapSettings:
