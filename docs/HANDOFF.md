@@ -3,9 +3,11 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** Phase 2 step 6 **Auth** built on branch `feat/phase-2-auth` (PR open). Next:
-step 7 **barad-dur deploy** (needs barad-dur access). See "▶ resume here" below.
-**Active branch:** `feat/phase-2-auth` (off `main` @ `3a11342`).
+**Last updated:** Phase 2 step 6 **Auth** — **complete with the merge of PR #5**. Phase 2's only
+remaining work is step 7 — split into **(a) an image-publish GitHub Actions workflow** (pure CI, do it
+next in a fresh session) and **(b) the barad-dur instance** (the user's manual step, unblocked by (a)).
+See "▶ resume here" below. Cut a fresh branch off `main`.
+**Active branch:** none.
 
 ## Done & merged (durable detail lives in the code; summaries only here)
 - **Phase 1** (PR #1) — conductor skeleton: `Job`/`Ticket` models, async engine, Alembic, FastAPI
@@ -93,7 +95,7 @@ image's build context → hatchling failed `uv sync` in Docker (conductor image 
 Dropped the `readme` field from both. Verified: `make restart` brings both containers up healthy
 and the console reaches the conductor over the compose network.
 
-## Phase 2 step 6 — Auth DONE (branch `feat/phase-2-auth`, PR open)
+## Phase 2 step 6 — Auth DONE (PR #5)
 **DB-backed, conductor-enforced, single admin** (the DB is conductor-owned and the console is a thin
 client, so auth lives in the conductor; the console is just a login UI). Supersedes CLAUDE.md
 deviation #4's "Streamlit-native login" wording.
@@ -125,12 +127,29 @@ deviation #4's "Streamlit-native login" wording.
 (the client-level auth is covered by `test_api_client.py`; the Streamlit gate is thin glue).
 
 ## ▶ Finish Phase 2 — resume here
-Step 6 is on `feat/phase-2-auth` (PR open). One chunk remains.
+Step 6 is complete (PR #5). One chunk remains, split into a CI half you can build now and a deploy
+half the user drives.
 
-**7. barad-dur deploy (needs barad-dur access):**
-- Add the console to the **Portainer stack** + a **Caddy route** (own subpath/host) alongside the
-  conductor. Local `docker-compose.yml` already has both services; this is the production wiring.
-- Keep observability external per CLAUDE.md (point at the existing barad-dur otel-collector).
+**7a. Image-publish GitHub Actions workflow (NEXT — pure CI, no barad-dur access needed).**
+On push to `main`, build **both** images and publish them to **GitHub Container Registry (GHCR)** so
+the user can pull versioned images on barad-dur:
+- New workflow (e.g. `.github/workflows/release.yml`, or extend `ci.yml` with a post-merge job gated
+  on `github.ref == 'refs/heads/main'`). Two images from the existing Dockerfiles:
+  `conductor/Dockerfile` → `ghcr.io/issachar-vin/dem-conductor`, `console/Dockerfile` →
+  `ghcr.io/issachar-vin/dem-console` (GHCR names must be lowercase).
+- Tag each with `latest` **and** the commit SHA (immutable pin for rollbacks). Use
+  `docker/build-push-action` with `docker/login-action` against `ghcr.io`.
+- Auth: the built-in `GITHUB_TOKEN` with `permissions: packages: write` — **no extra secrets**. First
+  publish creates the packages; set them public (or grant barad-dur a read token) so the host can pull.
+- Verify: the workflow run pushes both tags and they appear under the repo's Packages.
+
+**7b. barad-dur instance (the user's step, unblocked by 7a).**
+With images on GHCR, the user creates the **Portainer stack** from `docker-compose.yml` — swapping the
+local `build: ./conductor` / `build: ./console` for the published `image: ghcr.io/...:<sha>` refs, and
+dropping the `src` bind-mounts + `--reload`/`--server.runOnSave` (dev-only) — plus a **Caddy route**
+(own subpath/host). Keep observability external per CLAUDE.md (point at the existing barad-dur
+otel-collector; its host:port is still Pending from the user). A fresh session can pre-write a
+`docker-compose.prod.yml` (or an override) with the GHCR image refs to hand the user.
 
 **Optional cleanup still open (fold into step 7 or drop):**
 - **`targets.yml` import endpoint** — seeding is boot-only via `TARGETS_FILE`. For a UI "import
