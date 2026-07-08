@@ -13,7 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
 
-from conductor import plane, verify
+from conductor import __version__, plane, verify
 from conductor.models import WorkflowState
 from conductor.plane import PlaneError
 from conductor.ui.context import get_context
@@ -87,16 +87,19 @@ def _layout(active: str) -> None:
     drawer = ui.left_drawer(value=True, bordered=True).props("mini-width=72")
     if collapsed:
         drawer.props("mini")
-    with drawer, ui.list().props("padding").classes("w-full"):
-        for label, path, icon in NAV:
-            item = ui.item(on_click=lambda p=path: ui.navigate.to(p)).props("clickable")
-            if path == active:
-                item.classes("bg-primary text-white")
-            with item:
-                with ui.item_section().props("avatar"):
-                    ui.icon(icon)
-                with ui.item_section():
-                    ui.item_label(label)
+    with drawer, ui.column().classes("h-full w-full gap-0"):
+        with ui.list().props("padding").classes("w-full"):
+            for label, path, icon in NAV:
+                item = ui.item(on_click=lambda p=path: ui.navigate.to(p)).props("clickable")
+                if path == active:
+                    item.classes("bg-primary text-white")
+                with item:
+                    with ui.item_section().props("avatar"):
+                        ui.icon(icon)
+                    with ui.item_section():
+                        ui.item_label(label)
+        ui.space()
+        ui.label(f"v{__version__}").classes("text-xs opacity-60 w-full text-center pb-3")
 
     with ui.header().classes("items-center justify-between").style(f"background-color:{HEADER_BG}"):
         with ui.row().classes("items-center gap-2"):

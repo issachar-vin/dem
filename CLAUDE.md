@@ -24,8 +24,9 @@ file records how the *actual build* diverges from that spec and where the build 
   `0.<phase>.<patch>`: run `make bump-minor` when the PR starts work on a **new phase**, or
   `make bump-patch` for changes **within the current phase**. `make bump-major` (→ `1.0.0`) is
   reserved for launch and only when the user says the app is ready — never bump major on your own.
-  The bump keeps `conductor` `__init__.py`/`pyproject.toml` in sync with `VERSION`, which drives the
-  published Docker image tag (`release.yml`).
+  The bump keeps `conductor/pyproject.toml` in sync with `VERSION`, which drives the published
+  Docker image tag (`release.yml`). `conductor.__version__` reads `VERSION` directly when running
+  from source and falls back to the installed package metadata inside the image.
 - `.claude/` is gitignored (holds local machine paths).
 
 ## Deployment target (barad-dur)
