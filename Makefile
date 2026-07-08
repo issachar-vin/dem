@@ -1,4 +1,4 @@
-.PHONY: setup restart dev up down lint format typecheck test migrate clean
+.PHONY: setup restart dev up down lint format typecheck test migrate clean version bump-major bump-minor bump-patch
 
 CONDUCTOR = uv --directory conductor
 
@@ -42,3 +42,17 @@ clean:
 	docker compose down
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type d -name .venv -exec rm -rf {} +
+
+# Versioning (root VERSION file drives the Docker image tag). Pre-launch scheme:
+# major stays 0, minor = the phase, patch = changes within a phase. Bump by hand.
+version:
+	@cat VERSION
+
+bump-major:
+	@python3 scripts/bump_version.py major
+
+bump-minor:
+	@python3 scripts/bump_version.py minor
+
+bump-patch:
+	@python3 scripts/bump_version.py patch
