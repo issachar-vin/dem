@@ -3,9 +3,9 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** Phase 2-UI core (steps 1–5) built on branch `feat/phase-2-ui` (PR open). Auth
-(step 6) and deploy wiring (step 7) intentionally deferred to a follow-up.
-**Active branch:** `feat/phase-2-ui` (off `main` @ `8050992`).
+**Last updated:** Phase 2 step 6 **Auth** built on branch `feat/phase-2-auth` (PR open). Next:
+step 7 **barad-dur deploy** (needs barad-dur access). See "▶ resume here" below.
+**Active branch:** `feat/phase-2-auth` (off `main` @ `3a11342`).
 
 ## Done & merged (durable detail lives in the code; summaries only here)
 - **Phase 1** (PR #1) — conductor skeleton: `Job`/`Ticket` models, async engine, Alembic, FastAPI
@@ -54,7 +54,7 @@
 6. **`targets.yml` demoted, not deleted** — still the parser; now feeds
    `MappingStore.import_targets` (seed-once, DB wins) on boot via the new `TARGETS_FILE` setting.
 
-## ▶ Phase 2-UI — steps 1–5 DONE (branch `feat/phase-2-ui`, PR open)
+## Phase 2-UI — steps 1–5 + local Docker wiring MERGED (PR #4)
 A `console/` Streamlit service (separate uv package, thin sync client over the management API).
 Single writer stays the conductor (SQLite-safe). See `docs/PLAN.md` Phase 2 + CLAUDE.md deviation #4.
 
@@ -93,18 +93,50 @@ image's build context → hatchling failed `uv sync` in Docker (conductor image 
 Dropped the `readme` field from both. Verified: `make restart` brings both containers up healthy
 and the console reaches the conductor over the compose network.
 
-**Still deferred to a follow-up:**
-6. **Auth** — Streamlit-native login as the portable default (shipped, so a clone is protected);
-   Cloudflare Access in front on barad-dur (infra-level; trust the header, no app logic).
-7. **barad-dur deploy** — add the console to the Portainer stack + a Caddy route (own subpath/host);
-   keep observability external per CLAUDE.md. (Local compose is done, above.)
+## Phase 2 step 6 — Auth DONE (branch `feat/phase-2-auth`, PR open)
+**DB-backed, conductor-enforced, single admin** (the DB is conductor-owned and the console is a thin
+client, so auth lives in the conductor; the console is just a login UI). Supersedes CLAUDE.md
+deviation #4's "Streamlit-native login" wording.
 
-**Known gaps to decide during 2-UI (surfaced by 2b, intentionally deferred):**
-- **No `targets.yml` import endpoint** — seeding is boot-only via `TARGETS_FILE`. If the UI wants an
-  "import targets.yml" button, add `POST /api/mappings/import-targets` calling
-  `MappingStore.import_targets`; else drop the yml-import UI and create mappings one by one.
-- **Project delete doesn't cascade state mappings** — `MappingStore.delete_states` exists but isn't
-  called on `delete_project`. Wire a cascade (API or store) when the UI exposes delete.
+**Built:**
+- **Conductor:** `User` model (`id`/`username` unique/`password_hash`/`created_at`) + migration
+  `9ff29322a03f`. `auth.py` `AuthStore` — **argon2** (`argon2-cffi`) hashing; stateless session
+  tokens via **Fernet keyed by `DEM_SECRET_KEY`** (no new token dep, Fernet's timestamp gives a 7-day
+  TTL). `api/auth.py`: `GET /api/auth/status` (open), `POST /register` (409 once initialized),
+  `POST /login` (401 on bad creds), plus the `require_user` dependency (Bearer token → username / 401).
+- **Enforcement decision:** gated the **entire** `/api/config` and `/api/mappings` routers at the
+  router level, not just writes — `GET /api/config/export.env` returns plaintext secrets, so a
+  writes-only gate would leak. Open surface is now only `/api/auth/*`, `/health`, `/metrics`,
+  `/webhooks/*` (webhooks keep their own HMAC). Writes thread the authed username as `source=`
+  (`set_secret`/`set_setting`/`set_project` → `source=<username>`; verified `source=izzy` live).
+- **Console:** `ConductorClient` gained a mutable `token` (injected as `Authorization: Bearer`) +
+  `auth_status`/`register`/`login`. `views/auth.py` = create-admin (first run) vs login gate, token in
+  `st.session_state`; `app.py` gates all pages + a Sign out button.
+- **Also folded in** the 2b cleanup: `delete_project` now cascades `delete_states` (UI exposes delete).
+- **Tests:** conductor `test_auth.py` (store + API: register-once→409, login good/bad, token round-trip,
+  password hashed) + `test_api.py`/`test_mappings.py` gained authed fixtures, 401-without-token, and a
+  `source=<user>` assertion. Console `test_api_client.py` gained auth methods, Bearer-header, 401 path.
+  84 conductor + 26 console tests green; ruff + mypy --strict clean. **Verified live**: booted the
+  conductor, ran the full flow via curl (status→register→409→authed write→source recorded→login
+  good/bad→bad-token 401→export.env 401→mappings 401) — all as expected.
+
+**Deferred / not done here:** Cloudflare Access still fronts barad-dur as an outer infra layer
+(defense-in-depth) — that's infra wiring, part of step 7, not app code. No console `AppTest` gate test
+(the client-level auth is covered by `test_api_client.py`; the Streamlit gate is thin glue).
+
+## ▶ Finish Phase 2 — resume here
+Step 6 is on `feat/phase-2-auth` (PR open). One chunk remains.
+
+**7. barad-dur deploy (needs barad-dur access):**
+- Add the console to the **Portainer stack** + a **Caddy route** (own subpath/host) alongside the
+  conductor. Local `docker-compose.yml` already has both services; this is the production wiring.
+- Keep observability external per CLAUDE.md (point at the existing barad-dur otel-collector).
+
+**Optional cleanup still open (fold into step 7 or drop):**
+- **`targets.yml` import endpoint** — seeding is boot-only via `TARGETS_FILE`. For a UI "import
+  targets.yml" button, add `POST /api/mappings/import-targets` calling `MappingStore.import_targets`;
+  else leave mappings created one-by-one and drop the idea.
+- ~~Project delete cascade~~ — **done** in the step-6 PR (`delete_project` now cascades `delete_states`).
 
 ## Phases 3–7 (per docs/PLAN.md, adjusted per CLAUDE.md deviations)
 GitHub client + webhook → agent image & dispatcher → four agent roles + review loop/state machine →

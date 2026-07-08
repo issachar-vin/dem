@@ -3,13 +3,14 @@ import binascii
 import json
 
 from cryptography.fernet import InvalidToken
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from conductor import catalog, verify
+from conductor.api.auth import require_user
 from conductor.store import ConfigStore
 
-router = APIRouter(prefix="/api/config", tags=["config"])
+router = APIRouter(prefix="/api/config", tags=["config"], dependencies=[Depends(require_user)])
 
 
 class SecretBody(BaseModel):
@@ -45,15 +46,19 @@ async def config_status(request: Request) -> dict[str, object]:
 
 
 @router.put("/secret/{name}")
-async def set_secret(name: str, body: SecretBody, request: Request) -> dict[str, str]:
+async def set_secret(
+    name: str, body: SecretBody, request: Request, user: str = Depends(require_user)
+) -> dict[str, str]:
     if name not in catalog.SECRET_NAMES:
         raise HTTPException(status_code=404, detail=f"Unknown secret: {name}")
-    await _store(request).set_secret(name, body.value)
+    await _store(request).set_secret(name, body.value, source=user)
     return {"name": name, "status": "set"}
 
 
 @router.put("/setting/{name}")
-async def set_setting(name: str, body: SettingBody, request: Request) -> dict[str, str]:
+async def set_setting(
+    name: str, body: SettingBody, request: Request, user: str = Depends(require_user)
+) -> dict[str, str]:
     field = catalog.BY_NAME.get(name)
     if field is None or field.secret:
         raise HTTPException(status_code=404, detail=f"Unknown setting: {name}")
@@ -62,7 +67,7 @@ async def set_setting(name: str, body: SettingBody, request: Request) -> dict[st
             status_code=422,
             detail=f"{name} must be one of {list(field.choices)}, got {body.value!r}",
         )
-    await _store(request).set_setting(name, body.value)
+    await _store(request).set_setting(name, body.value, source=user)
     return {"name": name, "status": "set"}
 
 

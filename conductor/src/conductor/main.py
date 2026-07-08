@@ -8,9 +8,11 @@ import yaml
 from fastapi import FastAPI
 
 from conductor import __version__, telemetry
+from conductor.api import auth as auth_api
 from conductor.api import config as config_api
 from conductor.api import mappings as mappings_api
 from conductor.api import webhooks as webhooks_api
+from conductor.auth import AuthStore
 from conductor.config import BootstrapSettings, get_settings
 from conductor.crypto import SecretBox
 from conductor.db import create_engine, create_sessionmaker
@@ -45,6 +47,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     logger.info("Seeded %d config value(s) from env/seed file", seeded)
 
+    app.state.auth = AuthStore(sessionmaker, settings.dem_secret_key)
+
     mappings = MappingStore(sessionmaker)
     app.state.mappings = mappings
     if settings.targets_file:
@@ -70,6 +74,7 @@ def create_app(settings: BootstrapSettings | None = None) -> FastAPI:
     app = FastAPI(title="conductor", version=__version__, lifespan=lifespan)
     app.state.settings = settings
     app.include_router(telemetry.router)
+    app.include_router(auth_api.router)
     app.include_router(config_api.router)
     app.include_router(mappings_api.router)
     app.include_router(webhooks_api.router)

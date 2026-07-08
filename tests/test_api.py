@@ -7,20 +7,60 @@ from fastapi import FastAPI
 
 from conductor import verify
 from conductor.api import config as config_api
+from conductor.auth import AuthStore
 from conductor.store import ConfigStore
 from conductor.verify import VerifyResult
 
 EnvFactory = Callable[..., dict[str, str]]
 
 
-@pytest_asyncio.fixture
-async def api(store: ConfigStore) -> AsyncIterator[httpx.AsyncClient]:
+def _config_app(store: ConfigStore, auth: AuthStore) -> FastAPI:
     app = FastAPI()
     app.state.store = store
+    app.state.auth = auth
     app.include_router(config_api.router)
-    transport = httpx.ASGITransport(app=app)
+    return app
+
+
+@pytest_asyncio.fixture
+async def api(
+    store: ConfigStore, auth: AuthStore, auth_token: str
+) -> AsyncIterator[httpx.AsyncClient]:
+    transport = httpx.ASGITransport(app=_config_app(store, auth))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {auth_token}"},
+    ) as client:
+        yield client
+
+
+@pytest_asyncio.fixture
+async def anon_api(
+    store: ConfigStore, auth: AuthStore
+) -> AsyncIterator[httpx.AsyncClient]:
+    transport = httpx.ASGITransport(app=_config_app(store, auth))
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+
+async def test_write_without_token_401(anon_api: httpx.AsyncClient) -> None:
+    resp = await anon_api.put("/api/config/secret/plane_api_key", json={"value": "abc"})
+    assert resp.status_code == 401
+
+
+async def test_export_env_without_token_401(anon_api: httpx.AsyncClient) -> None:
+    resp = await anon_api.get("/api/config/export.env")
+    assert resp.status_code == 401
+
+
+async def test_write_records_authenticated_user_as_source(
+    api: httpx.AsyncClient, store: ConfigStore
+) -> None:
+    await api.put("/api/config/secret/plane_api_key", json={"value": "abc"})
+    config = (await api.get("/api/config")).json()
+    entry = next(f for f in config if f["name"] == "plane_api_key")
+    assert entry["source"] == "admin"
 
 
 async def test_list_config_masks_secrets(
@@ -54,7 +94,9 @@ async def test_put_secret_unknown_name_404(api: httpx.AsyncClient) -> None:
 
 
 async def test_put_setting_rejects_bad_choice(api: httpx.AsyncClient) -> None:
-    resp = await api.put("/api/config/setting/github_event_mode", json={"value": "carrier-pigeon"})
+    resp = await api.put(
+        "/api/config/setting/github_event_mode", json={"value": "carrier-pigeon"}
+    )
     assert resp.status_code == 422
 
 

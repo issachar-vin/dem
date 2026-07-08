@@ -1,15 +1,16 @@
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from conductor import plane
+from conductor.api.auth import require_user
 from conductor.mappings import MappingStore
 from conductor.models import WorkflowState
 from conductor.plane import PlaneError
 from conductor.store import ConfigStore
 
-router = APIRouter(prefix="/api/mappings", tags=["mappings"])
+router = APIRouter(prefix="/api/mappings", tags=["mappings"], dependencies=[Depends(require_user)])
 
 
 class ProjectBody(BaseModel):
@@ -38,10 +39,14 @@ async def list_projects(request: Request) -> list[dict[str, Any]]:
 
 
 @router.put("/projects/{project_id}")
-async def set_project(project_id: str, body: ProjectBody, request: Request) -> dict[str, str]:
+async def set_project(
+    project_id: str, body: ProjectBody, request: Request, user: str = Depends(require_user)
+) -> dict[str, str]:
     if body.repo.count("/") != 1 or body.repo.startswith("/") or body.repo.endswith("/"):
         raise HTTPException(status_code=422, detail="repo must be in 'owner/name' form.")
-    await _mappings(request).set_project(project_id, repo=body.repo, base_branch=body.base_branch)
+    await _mappings(request).set_project(
+        project_id, repo=body.repo, base_branch=body.base_branch, source=user
+    )
     return {"plane_project_id": project_id, "status": "set"}
 
 
