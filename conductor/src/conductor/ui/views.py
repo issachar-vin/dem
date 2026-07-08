@@ -73,7 +73,12 @@ def _logout() -> None:
     ui.navigate.to("/login")
 
 
-def _toggle_nav(drawer: ui.left_drawer) -> None:
+async def _toggle_nav(drawer: ui.left_drawer) -> None:
+    # Below Quasar's drawer breakpoint the drawer is a hidden overlay where `mini` is
+    # ignored, so on mobile the button must toggle visibility, not the mini state.
+    if await ui.run_javascript("window.innerWidth <= 1023"):
+        drawer.toggle()
+        return
     collapsed = not bool(app.storage.user.get("nav_collapsed", False))
     app.storage.user["nav_collapsed"] = collapsed
     drawer.props(remove="mini")
@@ -84,7 +89,7 @@ def _toggle_nav(drawer: ui.left_drawer) -> None:
 def _layout(active: str) -> None:
     _theme()
     collapsed = bool(app.storage.user.get("nav_collapsed", False))
-    drawer = ui.left_drawer(value=True, bordered=True).props("mini-width=72")
+    drawer = ui.left_drawer(value=False, bordered=True).props("show-if-above mini-width=72")
     if collapsed:
         drawer.props("mini")
     with drawer, ui.column().classes("h-full w-full gap-0"):
@@ -139,14 +144,14 @@ def _input(field: dict[str, Any]) -> ValueElement[Any]:
     name: str = field["name"]
     box: ValueElement[Any]
     if field["secret"]:
-        placeholder = (
-            f"set — ...{field['last_four']} (source: {field['source']})"
-            if field["set"]
-            else "not set"
+        placeholder = ("•" * 6 + field["last_four"]) if field["set"] else "not set"
+        box = (
+            ui.input(
+                label=name, password=True, password_toggle_button=True, placeholder=placeholder
+            )
+            .props("stack-label")
+            .classes("w-full")
         )
-        box = ui.input(
-            label=name, password=True, password_toggle_button=True, placeholder=placeholder
-        ).classes("w-full")
     else:
         choices: list[str] = list(field["choices"])
         current: str = field["value"] or ""
@@ -158,6 +163,10 @@ def _input(field: dict[str, Any]) -> ValueElement[Any]:
             box = ui.input(label=name, value=current).classes("w-full")
     if field["help"]:
         ui.label(field["help"]).classes("text-xs text-gray-500")
+    if field["secret"] and field["set"]:
+        ui.label(f"A value is stored (source: {field['source']}); type to replace it.").classes(
+            "text-xs text-gray-500"
+        )
     return box
 
 
@@ -180,8 +189,10 @@ class _Section:
     def __init__(self) -> None:
         self._items: list[tuple[dict[str, Any], ValueElement[Any]]] = []
 
-    def field(self, field: dict[str, Any]) -> None:
-        self._items.append((field, _input(field)))
+    def field(self, field: dict[str, Any]) -> ValueElement[Any]:
+        box = _input(field)
+        self._items.append((field, box))
+        return box
 
     def model(self, field: dict[str, Any], models: list[str]) -> None:
         self._items.append((field, _model_input(field, models)))
@@ -234,9 +245,22 @@ def _next_step(step: str) -> str | None:
     return STEP_ORDER[index + 1] if index + 1 < len(STEP_ORDER) else None
 
 
+def _step_icon(complete: bool) -> str:
+    return "check_circle" if complete else "radio_button_unchecked"
+
+
+def _set_tab_icon(tabs: ui.tabs, step: str, complete: bool) -> None:
+    # The tab bar is built once at page load; after an in-session save we update the
+    # completed step's icon in place so the check appears without a full refresh.
+    tab = tabs.default_slot.children[STEP_ORDER.index(step)]
+    if isinstance(tab, ui.tab):
+        tab.set_icon(_step_icon(complete))
+
+
 def _step_footer(tabs: ui.tabs, step_status: dict[str, Any]) -> None:
     ui.separator()
     step = step_status["step"]
+    _set_tab_icon(tabs, step, step_status["complete"])
     if step_status["complete"]:
         ui.label("This step is set up.").classes("text-green-600")
         nxt = _next_step(step)
@@ -393,7 +417,7 @@ async def _plane_panel(tabs: ui.tabs, origin: str) -> None:
 
 
 @ui.refreshable
-async def _github_panel(tabs: ui.tabs) -> None:
+async def _github_panel(tabs: ui.tabs, origin: str) -> None:
     config, steps = await _load()
     ui.markdown("**Step 1 — GitHub token.**")
     with ui.expansion("How do I create this?", icon="help_outline").classes("w-full"):
@@ -414,16 +438,36 @@ async def _github_panel(tabs: ui.tabs) -> None:
         return
 
     ui.separator()
-    ui.markdown("**Step 2 — Delivery & branch.**")
+    ui.markdown(
+        "**Step 2 — Delivery & branch.** How PRs are targeted and how GitHub events reach "
+        "the conductor."
+    )
+    with ui.expansion("What do these mean?", icon="help_outline").classes("w-full"):
+        ui.markdown(
+            "- **Base branch** — the branch each PR is opened against (usually `main`).\n"
+            "- **Event mode** — how PR review/merge events reach the conductor:\n"
+            "  - **webhook** (recommended, needs a public URL): GitHub pushes events instantly. "
+            "Choose it below to reveal the payload URL and secret, then in the repo → **Settings → "
+            "Webhooks → Add webhook** use that payload URL, content type **application/json**, and "
+            "a **secret** matching the one you save here.\n"
+            "  - **poll**: the conductor periodically asks GitHub for changes — no webhook needed, "
+            "but slower. Set the interval in seconds."
+        )
     delivery = _Section()
     delivery.field(config["github_base_branch"])
-    delivery.field(config["github_event_mode"])
-    if (config["github_event_mode"]["value"] or "poll") == "webhook":
-        ui.label("Webhook mode: set a secret matching the GitHub webhook you create.").classes(
+    mode_box = delivery.field(config["github_event_mode"])
+
+    payload_url = f"{origin.rstrip('/')}/webhooks/github"
+    with (
+        ui.column().classes("w-full gap-2").bind_visibility_from(mode_box, "value", value="webhook")
+    ):
+        ui.label("Payload URL (detected from this page's address):")
+        ui.input(value=payload_url).props("readonly").classes("w-full font-mono")
+        ui.label("Set a secret below matching the one on the GitHub webhook.").classes(
             "text-xs text-gray-500"
         )
         delivery.field(config["github_webhook_secret"])
-    else:
+    with ui.column().classes("w-full gap-2").bind_visibility_from(mode_box, "value", value="poll"):
         delivery.field(config["github_poll_interval_seconds"])
     delivery.save_button(_github_panel.refresh)
 
@@ -467,6 +511,7 @@ async def _advanced_panel(tabs: ui.tabs) -> None:
         if field["step"] == "advanced":
             section.field(field)
     section.save_button(_advanced_panel.refresh)
+    _set_tab_icon(tabs, "advanced", steps["advanced"]["complete"])
     ui.separator()
     if all(s["complete"] for s in steps.values()):
         ui.label("Configuration is complete across every step.").classes("text-green-600")
@@ -490,15 +535,14 @@ async def wizard_page(request: Request) -> None:
         ui.label("Work through each tab; fields unlock as you complete the one before.")
         with ui.tabs().classes("w-full") as tabs:
             for step in STEP_ORDER:
-                icon = "check_circle" if step_complete.get(step) else "radio_button_unchecked"
-                ui.tab(step, label=step.title(), icon=icon)
+                ui.tab(step, label=step.title(), icon=_step_icon(bool(step_complete.get(step))))
         with ui.tab_panels(tabs, value=start).classes("w-full"):
             with ui.tab_panel("claude"):
                 await _claude_panel(tabs)
             with ui.tab_panel("plane"):
                 await _plane_panel(tabs, origin)
             with ui.tab_panel("github"):
-                await _github_panel(tabs)
+                await _github_panel(tabs, origin)
             with ui.tab_panel("notifications"):
                 await _notifications_panel(tabs)
             with ui.tab_panel("advanced"):

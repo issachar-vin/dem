@@ -19,7 +19,8 @@ def _resolved(**overrides: str) -> dict[str, str]:
 
 
 def test_complete_config_has_no_issues() -> None:
-    assert catalog.validate_config(_resolved()) == []
+    # webhook is the default event mode, so a complete config includes the webhook secret.
+    assert catalog.validate_config(_resolved(github_webhook_secret="w")) == []
 
 
 def test_both_claude_credentials_flagged() -> None:
@@ -57,6 +58,8 @@ def test_step_status_flags_incomplete_plane() -> None:
 
 def test_step_status_claude_needs_exactly_one_credential() -> None:
     resolved = _resolved(claude_code_oauth_token="", anthropic_api_key="")
-    claude = next(s for s in catalog.step_status(resolved) if s.step is ConfigStep.CLAUDE)
+    claude = next(
+        s for s in catalog.step_status(resolved) if s.step is ConfigStep.CLAUDE
+    )
     assert claude.complete is False
     assert claude.missing
