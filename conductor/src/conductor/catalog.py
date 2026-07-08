@@ -88,7 +88,7 @@ CATALOG: tuple[ConfigField, ...] = (
     ),
     ConfigField("github_base_branch", ConfigStep.GITHUB, default="main"),
     ConfigField(
-        "github_event_mode", ConfigStep.GITHUB, default="poll", choices=("poll", "webhook")
+        "github_event_mode", ConfigStep.GITHUB, default="webhook", choices=("webhook", "poll")
     ),
     ConfigField(
         "github_webhook_secret",
