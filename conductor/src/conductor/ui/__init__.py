@@ -14,7 +14,8 @@ def setup(app: FastAPI, *, storage_secret: str) -> None:
     app's own routes are registered so they take precedence over NiceGUI's root mount."""
     ui.run_with(
         app,
-        title="DEM Console",
+        title="D.E.M. Console",
+        favicon="🤖",
         storage_secret=storage_secret,
         show_welcome_message=False,
     )
