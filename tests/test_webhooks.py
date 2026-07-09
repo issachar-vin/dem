@@ -379,3 +379,52 @@ async def test_github_non_json_body_400_not_500(api: httpx.AsyncClient) -> None:
     resp = await api.post("/webhooks/github", content=body, headers=_gh_headers(body))
     assert resp.status_code == 400
     assert "application/json" in resp.json()["detail"]
+
+
+async def test_plane_delivery_logged_with_identifiers(
+    api: httpx.AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import logging
+
+    _stub_epic_labels(monkeypatch)
+    body = _issue_body(labels=["L-epic"])
+    with caplog.at_level(logging.INFO, logger="conductor"):
+        await api.post(
+            "/webhooks/plane", content=body, headers=_headers(body, delivery="dlog")
+        )
+    assert "plane webhook received: delivery=dlog" in caplog.text
+    assert "issue=i1" in caplog.text
+
+
+async def test_plane_raw_payload_logged_at_debug(
+    api: httpx.AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import logging
+
+    _stub_epic_labels(monkeypatch)
+    body = _issue_body(labels=["L-epic"])
+    with caplog.at_level(logging.DEBUG, logger="conductor"):
+        await api.post("/webhooks/plane", content=body, headers=_headers(body))
+    # The full raw payload is available at DEBUG for byte-level comparison of two deliveries.
+    assert "raw payload" in caplog.text
+    assert "L-epic" in caplog.text
+
+
+async def test_github_delivery_logged_with_identifiers(
+    api: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    import logging
+
+    body = _gh_body()
+    with caplog.at_level(logging.INFO, logger="conductor"):
+        await api.post(
+            "/webhooks/github",
+            content=body,
+            headers=_gh_headers(body, delivery="ghlog"),
+        )
+    assert "github webhook received: delivery=ghlog" in caplog.text
+    assert f"repo={GH_REPO}" in caplog.text

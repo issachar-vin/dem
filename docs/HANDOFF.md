@@ -379,6 +379,12 @@ the live progress tracker; check steps off as PRs land.
         Same PR also drops the **vestigial global `github_base_branch`** field (wizard step 2) — the
         per-repo `RepoMapping.base_branch` (step 3, seeded from each repo's live default branch) is
         the real source of truth; the global one was never read by any operation.
+      - **Follow-up (PR #34), observability:** every accepted webhook delivery now logs identifying
+        fields at INFO (`delivery`, `event`, `action`, `issue`/`repo`, `project`, `state`) and the
+        full raw body at DEBUG (`_log_delivery`), so two deliveries for one action can be told apart.
+        `LOG_LEVEL` (default INFO) raises **only the conductor logger** — DEBUG surfaces payloads
+        without aiosqlite/sqlalchemy flooding the logs. (Ordered after PR #33's note; both touch this
+        block, so a merge may need a trivial reconciliation depending on merge order.)
 
 **DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
 spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if
