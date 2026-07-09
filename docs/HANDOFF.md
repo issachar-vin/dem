@@ -3,8 +3,8 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 3 step 3 (live repo/project listing) is done.**
-Next up is **step 4 — wizard UI** (see the RESUME box). Phase 2 was fully accepted
+**Last updated:** **Phase 3 step 4 (wizard UI: project enable + per-project GitHub sections) is done.**
+Next up is **step 5 — structured export/import** (see the RESUME box). Phase 2 was fully accepted
 (user confirmed, 2026-07-09). Since the step-8 NiceGUI migration (PR #11, merged),
 the console shipped several rounds of wizard polish, all merged and not previously logged here:
 - **PR #12** — guided tabbed wizard, icon nav, dark theme (console redesign).
@@ -22,13 +22,12 @@ webhook secret (CLAUDE.md deviations #1, #7). Phase 3 is broken into 7 PR-sized 
 request/response-model pass was inserted as step 2) — see `docs/PLAN.md` for the authoritative
 deliverables/acceptance text; the box below tracks live progress.
 
-> **RESUME: start Phase 3 step 4 — wizard UI.** Wire the step-3 listers into the console. Plane
-> step: a checkbox per workspace project (from `PlaneClient.list_projects()`), backed by
-> `ProjectMapping.enabled`. GitHub step: one section per enabled project — live repo picker (from
-> `verify.list_github_repos()`; 1 slot default + "Add another repo"), project-scoped secret field +
-> Generate button (pattern from PR #17), shared payload URL with the copy control (PR #17), and the
-> 4-events + SSL-verification instructions (drafted in PR #17) repeated per repo. Full spec:
-> `docs/PLAN.md` → Phase 3 step 4. Steps 1–3 are **done** — see "Phase 3 — steps" below.
+> **RESUME: start Phase 3 step 5 — structured export/import.** Make `targets.yml` bidirectional:
+> add an **export** counterpart to `MappingStore.import_targets` so the full project→repos(+secrets)
+> mapping round-trips through one YAML file (reuse the existing `targets.py` loader/format; same
+> "plaintext secrets, handle carefully" caveat as the `.env` export). The flat `.env` export stays
+> scalar-only/unchanged. Wire the export into the Config page's export/import section. Full spec:
+> `docs/PLAN.md` → Phase 3 step 5. Steps 1–4 are **done** — see "Phase 3 — steps" below.
 >
 > **Note for a new session:** the console UI is no longer one `ui/views.py`. PR #21 split it into
 > `ui/{shell,widgets,wizard,pages,auth}.py` (shell = theme/nav/layout/`_origin`; widgets = field
@@ -270,11 +269,17 @@ the live progress tracker; check steps off as PRs land.
       wired into the UI (step 4). Note for SETUP_GITHUB.md: fine-grained PATs only list repos
       explicitly granted at token creation, so a missing repo = the token's GitHub-side grant needs
       editing, not a conductor bug.
-- [ ] **Step 4 — Wizard UI.** Plane step: checkbox per workspace project (backed by `enabled`). GitHub
-      step: one section per enabled project — live repo picker (1 slot default + "Add another repo"),
-      project-scoped secret field + Generate button (pattern from PR #17), shared payload URL with the
-      copy control (PR #17), instructions for the 4 events + SSL verification (already drafted, PR #17)
-      repeated per repo under that project.
+- [x] **Step 4 — Wizard UI.** Plane panel gained a "Projects to manage" sub-step (checkbox per
+      workspace project from `PlaneClient.list_projects()`, backed by `ProjectMapping.enabled`).
+      GitHub panel: dropped the flat global `github_webhook_secret` (catalog field + its
+      `_conditionally_required` gate removed — secrets are project-scoped now), and added one
+      section per **enabled** project: repo picker fed by `verify.list_github_repos()` (live select
+      with typeable fallback; 1 slot + "Add another repo"; existing repos removable), project-scoped
+      webhook secret field + Generate button (`set_project(webhook_secret=…)`), and the shared
+      `/webhooks/github` payload URL + copy control + 4-events/SSL instructions (webhook mode only).
+      `_is_owner_name` moved pages.py → widgets.py (shared). `.env.example` drops
+      `GITHUB_WEBHOOK_SECRET`. Verified live: app boots against the migrated DB, `/health` 200,
+      `/` unauth 307→`/login`, `/login` 200, no startup errors.
 - [ ] **Step 5 — Structured export/import.** `targets.yml` becomes bidirectional (export added, not
       just import) so the full project→repos(+secrets) mapping round-trips through one YAML file. `.env`
       export stays flat/unchanged.

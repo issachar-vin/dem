@@ -92,12 +92,6 @@ CATALOG: tuple[ConfigField, ...] = (
     ConfigField(
         "github_event_mode", ConfigStep.GITHUB, default="webhook", choices=("webhook", "poll")
     ),
-    ConfigField(
-        "github_webhook_secret",
-        ConfigStep.GITHUB,
-        secret=True,
-        help="Required when github_event_mode is webhook.",
-    ),
     ConfigField("github_poll_interval_seconds", ConfigStep.GITHUB, default="60"),
     # ── Notifications ──
     ConfigField(
@@ -132,8 +126,6 @@ def defaults() -> dict[str, str]:
 
 def _conditionally_required(resolved: dict[str, str]) -> set[str]:
     req = {f.name for f in CATALOG if f.required}
-    if resolved.get("github_event_mode", "poll") == "webhook":
-        req.add("github_webhook_secret")
     notify_url = {
         "ntfy": "notify_ntfy_url",
         "slack": "notify_slack_webhook_url",

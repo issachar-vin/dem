@@ -1,22 +1,63 @@
 from __future__ import annotations
 
 import secrets
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
 from nicegui import ui
 from starlette.requests import Request
 
-from conductor import catalog, verify
+from conductor import catalog, plane, verify
+from conductor.mappings import RepoMappingView
+from conductor.plane import PlaneError
 from conductor.store import ConfigFieldView
 from conductor.ui.context import get_context
 from conductor.ui.shell import _layout, _origin, _page
-from conductor.ui.widgets import _is_set, _payload_url_field, _Section, _test_row
+from conductor.ui.widgets import _is_owner_name, _is_set, _payload_url_field, _Section, _test_row
 
 STEP_ORDER = ("claude", "plane", "github", "notifications", "advanced")
+
+
+async def _plane_projects() -> list[dict[str, str]]:
+    """Workspace projects (id + name) for the wizard's project pickers. Empty on any failure —
+    the caller degrades to the manually-managed /projects page."""
+    client = plane.client_from_resolved(await get_context().store.resolved())
+    try:
+        projects = await client.list_projects()
+    except PlaneError:
+        return []
+    return [
+        {"id": str(p["id"]), "name": str(p.get("name") or p["id"])} for p in projects if p.get("id")
+    ]
 
 
 def _next_step(step: str) -> str | None:
     index = STEP_ORDER.index(step)
     return STEP_ORDER[index + 1] if index + 1 < len(STEP_ORDER) else None
+
+
+def _prev_step(step: str) -> str | None:
+    index = STEP_ORDER.index(step)
+    return STEP_ORDER[index - 1] if index > 0 else None
+
+
+def _nav_row(tabs: ui.tabs, step: str, *, allow_next: bool) -> None:
+    """Previous button pinned bottom-left, Next bottom-right. Empty flex children hold the ends so
+    a missing button doesn't drag the other off its side."""
+    prev, nxt = _prev_step(step), _next_step(step)
+    with ui.row().classes("w-full justify-between mt-2"):
+        if prev is not None:
+            ui.button(f"← Previous: {prev.title()}", on_click=lambda: tabs.set_value(prev)).props(
+                "flat"
+            )
+        else:
+            ui.element()
+        if nxt is not None and allow_next:
+            ui.button(f"Next: {nxt.title()} →", on_click=lambda: tabs.set_value(nxt)).props(
+                "color=primary"
+            )
+        else:
+            ui.element()
 
 
 def _step_icon(complete: bool) -> str:
@@ -37,14 +78,10 @@ def _step_footer(tabs: ui.tabs, step_status: catalog.StepStatus) -> None:
     _set_tab_icon(tabs, step, step_status.complete)
     if step_status.complete:
         ui.label("This step is set up.").classes("text-green-600")
-        nxt = _next_step(step)
-        if nxt is not None:
-            ui.button(f"Next: {nxt.title()} →", on_click=lambda: tabs.set_value(nxt)).props(
-                "color=primary"
-            )
     else:
         missing = ", ".join(step_status.missing) or "the fields above"
         ui.label(f"Still needed: {missing}").classes("text-orange-600")
+    _nav_row(tabs, step, allow_next=step_status.complete)
 
 
 async def _load() -> tuple[dict[str, ConfigFieldView], dict[str, catalog.StepStatus]]:
@@ -179,6 +216,13 @@ async def _plane_panel(tabs: ui.tabs, origin: str) -> None:
     epic.save_button(_plane_panel.refresh)
 
     ui.separator()
+    ui.markdown(
+        "**Step 4 — Projects to manage.** Tick each Plane project the conductor should build. "
+        "Enabling one reveals its repo mapping on the GitHub tab."
+    )
+    await _project_checklist()
+
+    ui.separator()
     with ui.expansion("Plane Agents & bot token — under construction", icon="construction").classes(
         "w-full"
     ):
@@ -187,6 +231,28 @@ async def _plane_panel(tabs: ui.tabs, origin: str) -> None:
             "now — they have no effect yet."
         )
     _step_footer(tabs, steps["plane"])
+
+
+async def _project_checklist() -> None:
+    mappings = get_context().mappings
+    projects = await _plane_projects()
+    if not projects:
+        ui.label(
+            "Couldn't list projects from Plane (check the connection above); manage them on the "
+            "Projects page instead."
+        ).classes("text-xs text-orange-600")
+        return
+    enabled = {p.plane_project_id for p in await mappings.list_projects() if p.enabled}
+    for project in projects:
+        pid, name = project["id"], project["name"]
+
+        async def toggle(event: object, project_id: str = pid, label: str = name) -> None:
+            checked = bool(getattr(event, "value", False))
+            await get_context().mappings.set_project(project_id, enabled=checked)
+            ui.notify(f"{'Enabled' if checked else 'Disabled'} {label}")
+            _github_panel.refresh()
+
+        ui.checkbox(name, value=pid in enabled, on_change=toggle)
 
 
 @ui.refreshable
@@ -232,36 +298,185 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
     delivery = _Section()
     delivery.field(config["github_base_branch"])
     mode_box = delivery.field(config["github_event_mode"])
-
-    payload_url = f"{origin.rstrip('/')}/webhooks/github"
-    with (
-        ui.column().classes("w-full gap-2").bind_visibility_from(mode_box, "value", value="webhook")
-    ):
-        _payload_url_field(payload_url)
-        ui.markdown(
-            "On the GitHub webhook, set **content type** to `application/json`, keep **SSL "
-            "verification enabled** (the public URL has a valid certificate), and under **Which "
-            "events would you like to trigger this webhook?** choose *Let me select individual "
-            "events* and tick **Pull requests**, **Pull request reviews**, **Pull request review "
-            "comments**, and **Pull request review threads**."
-        ).classes("text-xs text-gray-500")
-        secret_box = delivery.field(config["github_webhook_secret"])
-        ui.label(
-            "Use the same secret on both sides — save it here and paste it on GitHub."
-        ).classes("text-xs text-gray-500")
-
-        def generate_secret() -> None:
-            secret_box.value = secrets.token_hex(32)
-            ui.notify("Secret generated — reveal it to copy onto the GitHub webhook, then Save.")
-
-        ui.button("Generate secret", icon="casino", on_click=generate_secret).props(
-            "flat color=primary"
-        )
     with ui.column().classes("w-full gap-2").bind_visibility_from(mode_box, "value", value="poll"):
         delivery.field(config["github_poll_interval_seconds"])
     delivery.save_button(_github_panel.refresh)
 
+    ui.separator()
+    ui.markdown(
+        "**Step 3 — Repositories per project.** Map the GitHub repos each enabled project owns. "
+        "The planner assigns every ticket exactly one of them."
+    )
+    projects = [p for p in await get_context().mappings.list_projects() if p.enabled]
+    if not projects:
+        ui.label("Enable at least one project on the Plane tab first.").classes(
+            "text-sm text-orange-600"
+        )
+        _step_footer(tabs, steps["github"])
+        return
+
+    resolved = await get_context().store.resolved()
+    repo_options = await verify.list_github_repos(token=resolved.get("github_token", ""))
+    names = {p["id"]: p["name"] for p in await _plane_projects()}
+    payload_url = f"{origin.rstrip('/')}/webhooks/github"
+    default_branch = config["github_base_branch"].value or "main"
+    webhook_mode = mode_box.value == "webhook"
+    if webhook_mode:
+        _payload_url_field(payload_url)
+        ui.markdown(
+            "One payload URL serves every repo below; routing is resolved per delivery. Add it to "
+            "**each** repo's **Settings → Webhooks → Add webhook** with content type "
+            "`application/json`, **SSL verification enabled**, this project's secret, and *Let me "
+            "select individual events* → **Pull requests**, **Pull request reviews**, **Pull "
+            "request review comments**, **Pull request review threads**."
+        ).classes("text-xs text-gray-500")
+
+    savers = [
+        _project_section(
+            project.plane_project_id,
+            names.get(project.plane_project_id, project.plane_project_id),
+            project.repos,
+            project.has_webhook_secret,
+            repo_options,
+            default_branch,
+            webhook_mode,
+        )
+        for project in projects
+    ]
+
+    async def save_all() -> None:
+        for saver in savers:
+            if not await saver():
+                return
+        ui.notify("Saved.")
+        _github_panel.refresh()
+
+    ui.button("Save", icon="save", on_click=save_all).props("color=primary")
+
     _step_footer(tabs, steps["github"])
+
+
+ROLE_CHOICES = ("frontend", "backend", "other")
+
+
+@dataclass
+class _RepoRow:
+    exp: ui.expansion
+    role: ui.select
+    repo: ui.select | ui.input
+    branch: ui.input
+
+
+def _repo_field(options: list[str], value: str = "") -> ui.select | ui.input:
+    """Repo picker: a live-fetched select (typeable) when the token could list repos, else a
+    free-typed owner/name input as the documented fallback."""
+    if options:
+        opts = list(dict.fromkeys([*options, *([value] if value else [])]))
+        return ui.select(
+            options=opts, value=value or None, label="Repository (owner/name)", with_input=True
+        ).classes("w-full")
+    return ui.input(label="Repository (owner/name)", value=value).classes("w-full")
+
+
+def _project_section(
+    project_id: str,
+    name: str,
+    repos: list[RepoMappingView],
+    has_secret: bool,
+    repo_options: list[str],
+    default_branch: str,
+    webhook_mode: bool,
+) -> Callable[[], Awaitable[bool]]:
+    """Render one project's editable repo list (add/remove rows in place, nothing persisted) plus
+    its webhook secret, and return an async save() reconciling the DB with the on-screen state."""
+    rows: list[_RepoRow] = []
+
+    with ui.card().classes("w-full gap-2"):
+        ui.label(name).classes("font-semibold")
+        repo_col = ui.column().classes("w-full gap-2")
+
+        def add_row(
+            role: str = "frontend", repo: str = "", branch: str = "", *, opened: bool
+        ) -> None:
+            title = f"{role.title()} — {repo}" if repo else "New repository"
+            with (
+                repo_col,
+                ui.expansion(title, icon="folder", value=opened).classes("w-full") as exp,
+            ):
+                role_in = ui.select(options=list(ROLE_CHOICES), value=role, label="Role").classes(
+                    "w-full"
+                )
+                repo_in = _repo_field(repo_options, repo)
+                branch_in = ui.input(label="Base branch", value=branch or default_branch).classes(
+                    "w-full"
+                )
+
+                def remove() -> None:
+                    repo_col.remove(exp)
+                    rows[:] = [r for r in rows if r.exp is not exp]
+
+                ui.button("Remove", icon="delete", on_click=remove).props("flat color=negative")
+            rows.append(_RepoRow(exp=exp, role=role_in, repo=repo_in, branch=branch_in))
+
+        for r in repos:
+            add_row(r.key, r.github_repo, r.base_branch, opened=False)
+        ui.button("Add repository", icon="add", on_click=lambda: add_row(opened=True)).props(
+            "flat color=primary"
+        )
+
+        secret_box = _project_secret_input(has_secret) if webhook_mode else None
+
+    original_keys = {r.key for r in repos}
+
+    async def save() -> bool:
+        desired: list[tuple[str, str, str]] = []
+        for row in rows:
+            repo = (row.repo.value or "").strip()
+            if not repo:
+                continue
+            if not _is_owner_name(repo):
+                ui.notify(f"'{repo}' must be in owner/name form.", color="negative")
+                return False
+            desired.append((str(row.role.value), repo, str(row.branch.value or "main")))
+
+        roles = [d[0] for d in desired]
+        dupes = {r for r in roles if r != "other" and roles.count(r) > 1}
+        if dupes:
+            ui.notify(f"{name}: duplicate role(s) {', '.join(sorted(dupes))}.", color="negative")
+            return False
+
+        mappings = get_context().mappings
+        for role, repo, branch in desired:
+            await mappings.set_repo(project_id, role, github_repo=repo, base_branch=branch)
+        for key in original_keys - {d[0] for d in desired}:
+            await mappings.delete_repo(project_id, key)
+        if secret_box is not None and secret_box.value:
+            await mappings.set_project(project_id, enabled=True, webhook_secret=secret_box.value)
+        return True
+
+    return save
+
+
+def _project_secret_input(has_secret: bool) -> ui.input:
+    """Webhook-secret field + Generate button (no save — persisted by Step 3's catch-all Save)."""
+    ui.separator()
+    ui.label("Webhook secret (shared by this project's repos):").classes("text-xs text-gray-500")
+    placeholder = "•" * 12 if has_secret else "not set"
+    with ui.row().classes("items-end w-full gap-2"):
+        box = (
+            ui.input(
+                label="Secret", password=True, password_toggle_button=True, placeholder=placeholder
+            )
+            .props("stack-label")
+            .classes("grow")
+        )
+
+        def generate() -> None:
+            box.value = secrets.token_hex(32)
+            ui.notify("Secret generated — reveal it to copy onto each repo's webhook, then Save.")
+
+        ui.button("Generate", icon="casino", on_click=generate).props("flat color=primary")
+    return box
 
 
 @ui.refreshable
@@ -309,6 +524,7 @@ async def _advanced_panel(tabs: ui.tabs) -> None:
         ui.label("Some earlier steps are still incomplete — see their tabs.").classes(
             "text-orange-600"
         )
+    _nav_row(tabs, "advanced", allow_next=False)
 
 
 @ui.page("/")
