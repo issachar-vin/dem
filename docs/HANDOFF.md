@@ -4,47 +4,51 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.4.0):** **Phases 1–3 are DONE & merged; Phase 4 is IN PROGRESS.** The conductor
-receives Plane/GitHub webhooks (or polls GitHub), verifies them, and turns the right triggers into
-deduped `Job`s visible in the console's **Jobs** page. **Nothing consumes those Jobs yet — that is
-the rest of Phase 4.** Phase 3 was exercised **live** against the real Plane workspace + chess UI/API
-repos: webhook verify/reject, per-project-secret HMAC, semantic dedupe, the state-transition trigger,
-and the Jobs page all confirmed working. The one Phase-3 acceptance item that can't finish yet —
-"merged PR → cleanup job *runs*" — needs a Job consumer (later in Phase 4).
+**Status (VERSION 0.4.1):** **Phases 1–3 DONE & merged. Phase 4 IN PROGRESS — Part 1 (agent image)
+DONE & merged (PR #39); Part 2 (dispatcher + volumes + contracts) DONE, PR #40 open; Part 3
+(scheduler) remains.** The conductor turns Plane/GitHub webhooks (or GitHub polls) into deduped
+`Job`s on the console's **Jobs** page; **nothing consumes those Jobs yet — that is Part 3.** The
+Phase-3 acceptance item still open ("merged PR → cleanup job *runs*") needs the Job consumer built
+in Part 3.
 
-Phase 4 **Part 1 (agent image)** is built and **fully accepted live**: `agent/Dockerfile` +
-`entrypoint.sh` + `seed-claude.json` + `make agent-smoke`. `make agent-smoke` passes end-to-end —
-containerized `claude -p` (subscription auth), a second run **resumes the same `session_id`** off the
-state volume, and kill-on-timeout. Also verified: toolchain (Python 3.12, pytest, git, gh, Claude
-Code CLI, node 22) and the entrypoint auth-guard (both/neither auth var → loud exit 78; one → seeds
-`~/.claude.json` + execs). **Gotcha fixed & pinned for Part 2:** a fresh named volume mounts
-**root-owned**, so the non-root `agent` couldn't persist sessions and `--resume` found nothing — the
-image now pre-creates `/home/agent/.claude` as `agent` so the per-ticket `psa-claude-<id>` volume
-inherits agent ownership. The dispatcher's clone volume `psa-repo-<id>` at `/work` will need the same
-treatment.
+**Part 1 delivered** the `agent/` image (`Dockerfile` + `entrypoint.sh` + `seed-claude.json`) and
+`make agent-smoke`, accepted live (containerized `claude -p`, same-`session_id` resume off the state
+volume, kill-on-timeout).
+
+**Part 2 delivered** the `conductor/agents/` package (PR #40): `dockerctl.py` (whole Docker surface
+behind Protocols + `run_container` with `ContainerFailed`/`ContainerTimeout`→kill), `dispatcher.py`
+(`docker run` construction, per-role `asyncio.Semaphore`, envelope parse), `volumes.py`
+(`VolumeManager.prepare/destroy` — clone + `ticket/<id>` branch + git identity + **the carry-in
+chown fix** + token stripped from the stored remote), `contracts.py` (Pydantic plan/result/verdict +
+`MalformedAgentOutput`), `roles.py`; plus `github.get_user()` for derive-from-token authorship. Not
+wired into the app lifespan yet — Part 3 constructs and drives these. No runtime-observable change on
+its own. Optional pre-Part-3 confidence check: a `make dispatch-smoke` (real Docker socket +
+`prepare` → `Dispatcher.run` → `destroy`) — not built; add if wanted.
 
 ---
 
-## ▶ RESUME: Phase 4 Part 2 — dispatcher & volume lifecycle
+## ▶ RESUME: Phase 4 Part 3 — scheduler & Job consumer
 
 Authoritative spec: `docs/PLAN.md` → **Phase 4**, plus the scheduler folded in from **"Work intake,
-ordering & concurrency"**. This is where the intake Jobs finally get consumed. **Part 1 is done
-(above); do Parts 2–3 next:**
+ordering & concurrency"**. This is where the intake Jobs finally get consumed. **Part 2 (below) is
+done — its dispatcher/volumes/contracts are the building blocks Part 3 wires up.**
 
-1. ~~**Agent image**~~ — DONE & accepted live (Part-1 PR). `agent/Dockerfile` (node:22-slim + Claude
-   Code CLI + git + gh + Python 3.12 via uv + pytest, non-root `agent` user, pre-created
-   agent-owned `~/.claude`); `entrypoint.sh` (exit loudly if both auth vars set; seed `~/.claude.json`
-   from `seed-claude.json` when absent; exec the passed `claude -p`); `make agent-smoke` passes
-   (`claude -p` + same-session resume + kill-on-timeout).
-2. **Dispatcher + volume lifecycle** — build `docker run` (per-ticket volumes `psa-repo-<id>` /
-   `psa-claude-<id>`, role env incl. OTel attrs, mem/CPU limits, `--rm`, named container, hard
-   timeout → kill); volume lifecycle (create + `git clone --depth 50` + `ticket/<id>` branch;
-   destroy on cleanup); agent output contracts as Pydantic (planner plan JSON; engineer result +
-   session_id; reviewer/QA verdict) with a malformed-output re-prompt-once policy.
 3. **Scheduler / state machine** (deferred out of Phase 3 step 6) — selects work from the Job queue:
    **in-flight-first** (`in_progress`/`in_review`/`changes_requested`) then **oldest-created**
    `ready_for_dev`; **Plane blocking-relationship** eligibility gate (skip a ticket blocked by a
    not-yet-`done` issue); **`MAX_CONCURRENT_AGENTS=1`** per-role semaphore; **no auto-merge**.
+   Construct `Dispatcher` + `VolumeManager` in the app lifespan (docker factory from `docker_host`),
+   add a queue-worker loop mirroring `poller.py`'s start/stop pattern, and drive
+   `VolumeManager.prepare` → `Dispatcher.run` → contract parse → `VolumeManager.destroy`. Actual role
+   prompts and the review loop are Phase 5; Part 3 can dispatch the engineer with a placeholder
+   prompt to prove the consumer end-to-end.
+
+**Part 2 (DONE, PR #40) — dispatcher + volume lifecycle + contracts.** `docker run` construction
+(per-ticket volumes `psa-repo-<id>` / `psa-claude-<id>`, role env incl. OTel attrs, mem/CPU limits,
+named container, hard timeout → kill), volume lifecycle (create + `git clone --depth 50` +
+`ticket/<id>` branch; destroy on cleanup), and agent output contracts as Pydantic (plan JSON;
+engineer result + session_id; reviewer/QA verdict) with the malformed-output re-prompt-once policy
+signalled via `MalformedAgentOutput`.
 
 **Decided for Phase 4 — git commit authorship (do NOT add manual name/email fields).** Derive
 `user.name`/`user.email` from `GET /user` on the existing `github_token` (returns `login`, `name`,

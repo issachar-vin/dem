@@ -33,3 +33,26 @@ async def test_error_status_raises() -> None:
     with pytest.raises(GitHubError) as exc:
         await _client(httpx.MockTransport(handler)).list_pull_requests("o/r")
     assert exc.value.status_code == 404
+
+
+async def test_get_user_public_email() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/user"
+        return httpx.Response(
+            200, json={"login": "bot", "id": 7, "name": "Bot", "email": "b@x.io"}
+        )
+
+    user = await _client(httpx.MockTransport(handler)).get_user()
+    assert user.git_name == "Bot"
+    assert user.git_email == "b@x.io"
+
+
+async def test_get_user_falls_back_to_noreply() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"login": "bot", "id": 7, "name": None, "email": None}
+        )
+
+    user = await _client(httpx.MockTransport(handler)).get_user()
+    assert user.git_name == "bot"
+    assert user.git_email == "7+bot@users.noreply.github.com"

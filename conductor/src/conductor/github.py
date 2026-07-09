@@ -3,8 +3,30 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from pydantic import BaseModel, ConfigDict
 
 GITHUB_API_BASE = "https://api.github.com"
+
+
+class GitHubUser(BaseModel):
+    """The account behind `github_token`, used to author the engineer's commits without any manual
+    name/email config (see docs/HANDOFF.md → Phase 4 authorship decision)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    login: str
+    id: int
+    name: str | None = None
+    email: str | None = None
+
+    @property
+    def git_name(self) -> str:
+        return self.name or self.login
+
+    @property
+    def git_email(self) -> str:
+        # Private accounts return email: null; the noreply address is what GitHub attributes.
+        return self.email or f"{self.id}+{self.login}@users.noreply.github.com"
 
 
 def github_headers(token: str) -> dict[str, str]:
@@ -44,6 +66,13 @@ class GitHubClient:
             )
         )
         return result if isinstance(result, list) else []
+
+    async def get_user(self) -> GitHubUser:
+        """The token's own account. Powers derive-from-token git authorship in the dispatcher."""
+        result = await self._json(
+            lambda c: c.get(f"{GITHUB_API_BASE}/user", headers=github_headers(self.token))
+        )
+        return GitHubUser.model_validate(result)
 
     async def _json(self, send: Callable[[httpx.AsyncClient], Awaitable[httpx.Response]]) -> Any:
         async def run(c: httpx.AsyncClient) -> Any:
