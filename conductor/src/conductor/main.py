@@ -51,7 +51,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     mappings = MappingStore(sessionmaker, box)
     app.state.mappings = mappings
 
-    ui.configure(store=store, mappings=mappings, auth=auth, settings=settings)
+    ui.configure(
+        store=store, mappings=mappings, auth=auth, settings=settings, sessionmaker=sessionmaker
+    )
     if settings.targets_file:
         imported = await mappings.import_targets(
             settings.targets_file, reseed=settings.reseed_from_env

@@ -11,6 +11,7 @@ NAV = (
     ("Configuration", "/config", "tune"),
     ("Projects", "/projects", "hub"),
     ("States", "/states", "account_tree"),
+    ("Jobs", "/jobs", "list_alt"),
 )
 
 # ── theme (dark grey surfaces, orange accent) ───────────────────────────────────
