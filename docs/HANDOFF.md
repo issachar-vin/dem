@@ -363,6 +363,13 @@ the live progress tracker; check steps off as PRs land.
         that returns **400** with an actionable "set content type to application/json" message. (Live
         acceptance confirmed otherwise: reject paths 401/400, and a correctly-configured repo's signed
         `ping` returns 200 — verify-after-lookup works end to end.)
+      - **Follow-up fix (PR #31), from the live acceptance run:** the console's `targets.yml` and
+        encrypted-bundle importers used NiceGUI 2.x's `event.content.read()`; NiceGUI 3.x replaced it
+        with `event.file` (async `.read()`/`.text()`), so uploads died on an uncaught `AttributeError`
+        with no toast and imported nothing. Extracted testable `_apply_targets_upload`/
+        `_apply_bundle_upload` adapters (correct API) + a catch-all so an upload can never fail
+        silently again. Same PR refactors `/config` into per-step tabs + a Migration tab
+        (Export / Import sections).
 
 **DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
 spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if
