@@ -82,8 +82,11 @@ def _layout(active: str) -> None:
                 ui.menu_item("Sign out", on_click=_logout)
 
 
-def _page() -> ui.column:
-    return ui.column().classes("p-4 w-full max-w-3xl mx-auto")
+def _page(*, wide: bool = False) -> ui.column:
+    """Page content container. Default caps width for readable forms (wizard/config); `wide=True`
+    fills the viewport for data-dense screens like the jobs table."""
+    width = "w-full" if wide else "w-full max-w-3xl mx-auto"
+    return ui.column().classes(f"p-4 {width}")
 
 
 def _origin(request: Request) -> str:

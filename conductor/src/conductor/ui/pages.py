@@ -335,7 +335,7 @@ _JOB_COLUMNS: list[dict[str, Any]] = [
 async def jobs_page() -> None:
     _layout("/jobs")
     jobs = await jobs_mod.list_jobs(get_context().sessionmaker)
-    with _page():
+    with _page(wide=True):
         ui.label("Jobs").classes("text-2xl font-bold")
         ui.label(
             "Intake queue — webhook/poll deliveries turned into work. Nothing consumes these yet "
