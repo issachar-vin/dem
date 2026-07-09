@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import binascii
 import json
+import secrets
 from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
@@ -134,6 +135,24 @@ def _origin(request: Request) -> str:
 
 
 # ── field helpers ───────────────────────────────────────────────────────────────
+_ACRONYMS = {
+    "url": "URL",
+    "api": "API",
+    "qa": "QA",
+    "cpu": "CPU",
+    "id": "ID",
+    "oauth": "OAuth",
+    "otel": "OTel",
+    "otlp": "OTLP",
+    "github": "GitHub",
+}
+
+
+def _label(name: str) -> str:
+    """Human label for a config key: `plane_base_url` → `Plane Base URL`."""
+    return " ".join(_ACRONYMS.get(w, w.capitalize()) for w in name.split("_"))
+
+
 def _is_set(field: dict[str, Any]) -> bool:
     return bool(field["set"]) if field["secret"] else bool(field["value"])
 
@@ -141,13 +160,13 @@ def _is_set(field: dict[str, Any]) -> bool:
 def _input(field: dict[str, Any]) -> ValueElement[Any]:
     """Render one field's editor (no save button). Secrets show a masked placeholder and stay
     empty until a new value is typed."""
-    name: str = field["name"]
+    label = _label(field["name"])
     box: ValueElement[Any]
     if field["secret"]:
         placeholder = ("•" * 6 + field["last_four"]) if field["set"] else "not set"
         box = (
             ui.input(
-                label=name, password=True, password_toggle_button=True, placeholder=placeholder
+                label=label, password=True, password_toggle_button=True, placeholder=placeholder
             )
             .props("stack-label")
             .classes("w-full")
@@ -157,10 +176,10 @@ def _input(field: dict[str, Any]) -> ValueElement[Any]:
         current: str = field["value"] or ""
         if choices:
             box = ui.select(
-                options=choices, value=current if current in choices else choices[0], label=name
+                options=choices, value=current if current in choices else choices[0], label=label
             ).classes("w-full")
         else:
-            box = ui.input(label=name, value=current).classes("w-full")
+            box = ui.input(label=label, value=current).classes("w-full")
     if field["help"]:
         ui.label(field["help"]).classes("text-xs text-gray-500")
     if field["secret"] and field["set"]:
@@ -170,14 +189,28 @@ def _input(field: dict[str, Any]) -> ValueElement[Any]:
     return box
 
 
+def _payload_url_field(url: str) -> None:
+    """Read-only payload URL input with a copy-to-clipboard button in its append slot."""
+
+    def copy() -> None:
+        ui.run_javascript(f"navigator.clipboard.writeText({json.dumps(url)})")
+        ui.notify("Copied to clipboard")
+
+    ui.label("Payload URL (detected from this page's address):")
+    with (
+        ui.input(value=url).props("readonly").classes("w-full font-mono") as box,
+        box.add_slot("append"),
+    ):
+        ui.button(icon="content_copy", on_click=copy).props("flat dense round").tooltip("Copy")
+
+
 def _model_input(field: dict[str, Any], models: list[str]) -> ValueElement[Any]:
-    name: str = field["name"]
     current: str = field["value"] or ""
     options = list(dict.fromkeys([*models, *([current] if current else [])]))
     return ui.select(
         options=options,
         value=current if current in options else (options[0] if options else None),
-        label=name,
+        label=_label(field["name"]),
         with_input=True,
     ).classes("w-full")
 
@@ -373,8 +406,7 @@ async def _plane_panel(tabs: ui.tabs, origin: str) -> None:
         "4. Plane shows a **Secret key once** — copy it and paste below. The two must match, or "
         "every delivery returns 401."
     )
-    ui.label("Payload URL (detected from this page's address):")
-    ui.input(value=payload_url).props("readonly").classes("w-full font-mono")
+    _payload_url_field(payload_url)
     stored_public = (resolved.get("conductor_public_url") or "").rstrip("/")
     if origin.rstrip("/") != stored_public:
 
@@ -448,8 +480,11 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
             "- **Event mode** — how PR review/merge events reach the conductor:\n"
             "  - **webhook** (recommended, needs a public URL): GitHub pushes events instantly. "
             "Choose it below to reveal the payload URL and secret, then in the repo → **Settings → "
-            "Webhooks → Add webhook** use that payload URL, content type **application/json**, and "
-            "a **secret** matching the one you save here.\n"
+            "Webhooks → Add webhook** use that payload URL, content type **application/json**, "
+            "a **secret** matching the one you save here, keep **SSL verification enabled**, and "
+            "under **Which events?** pick *Let me select individual events* → **Pull requests**, "
+            "**Pull request reviews**, **Pull request review comments**, and **Pull request review "
+            "threads**.\n"
             "  - **poll**: the conductor periodically asks GitHub for changes — no webhook needed, "
             "but slower. Set the interval in seconds."
         )
@@ -461,12 +496,26 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
     with (
         ui.column().classes("w-full gap-2").bind_visibility_from(mode_box, "value", value="webhook")
     ):
-        ui.label("Payload URL (detected from this page's address):")
-        ui.input(value=payload_url).props("readonly").classes("w-full font-mono")
-        ui.label("Set a secret below matching the one on the GitHub webhook.").classes(
-            "text-xs text-gray-500"
+        _payload_url_field(payload_url)
+        ui.markdown(
+            "On the GitHub webhook, set **content type** to `application/json`, keep **SSL "
+            "verification enabled** (the public URL has a valid certificate), and under **Which "
+            "events would you like to trigger this webhook?** choose *Let me select individual "
+            "events* and tick **Pull requests**, **Pull request reviews**, **Pull request review "
+            "comments**, and **Pull request review threads**."
+        ).classes("text-xs text-gray-500")
+        secret_box = delivery.field(config["github_webhook_secret"])
+        ui.label(
+            "Use the same secret on both sides — save it here and paste it on GitHub."
+        ).classes("text-xs text-gray-500")
+
+        def generate_secret() -> None:
+            secret_box.value = secrets.token_hex(32)
+            ui.notify("Secret generated — reveal it to copy onto the GitHub webhook, then Save.")
+
+        ui.button("Generate secret", icon="casino", on_click=generate_secret).props(
+            "flat color=primary"
         )
-        delivery.field(config["github_webhook_secret"])
     with ui.column().classes("w-full gap-2").bind_visibility_from(mode_box, "value", value="poll"):
         delivery.field(config["github_poll_interval_seconds"])
     delivery.save_button(_github_panel.refresh)

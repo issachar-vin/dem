@@ -278,9 +278,9 @@ Acceptance: creating an issue in Plane produces a verified, deduplicated event r
 
 ## Phase 3 — GitHub integration
 
-Deliverables: GitHub client (branch push via git in dispatcher, PR create/read via REST, PR review-state read); poll mode (interval loop comparing PR states for tracked tickets) and webhook mode (HMAC-verified endpoint) behind `GITHUB_EVENT_MODE`; docs/SETUP_GITHUB.md: machine account creation, fine-grained PAT scopes, branch protection walkthrough, tunnel guidance for webhook mode (Cloudflare Tunnel / Tailscale Funnel), and why branch protection — not prompts — is the human-approval guarantee.
+Deliverables: GitHub client (branch push via git in dispatcher, PR create/read via REST, PR review-state read); poll mode (interval loop comparing PR states for tracked tickets) and webhook mode (HMAC-verified endpoint) behind `GITHUB_EVENT_MODE`; the webhook handler subscribes to and parses these four GitHub events: **`pull_request`** (opened/closed/merged/synchronize — drives the merge-cleanup and ready-for-review transitions), **`pull_request_review`** (submitted approved/changes_requested/commented — drives the review-loop verdict), **`pull_request_review_comment`** (inline diff comments — fed to the engineer as review feedback), and **`pull_request_review_thread`** (thread resolved/unresolved — tracks which feedback is outstanding); each is HMAC-verified and deduped by `X-GitHub-Delivery`, and any other delivered event type is acknowledged and ignored; docs/SETUP_GITHUB.md: machine account creation, fine-grained PAT scopes, branch protection walkthrough, the four webhook events to select (individual events, SSL verification enabled, `application/json` content type), tunnel guidance for webhook mode (Cloudflare Tunnel / Tailscale Funnel), and why branch protection — not prompts — is the human-approval guarantee.
 
-Acceptance: with poll mode and a manually opened PR on a tracked branch, the conductor notices state changes within one interval; merged PR triggers the cleanup job.
+Acceptance: with poll mode and a manually opened PR on a tracked branch, the conductor notices state changes within one interval; in webhook mode, deliveries of all four subscribed event types are HMAC-verified, deduped, and routed (unsigned deliveries rejected 401); merged PR triggers the cleanup job.
 
 ## Phase 4 — Agent image & dispatcher
 
