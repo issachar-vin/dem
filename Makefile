@@ -1,4 +1,4 @@
-.PHONY: setup restart dev up down lint format typecheck test migrate clean version bump-major bump-minor bump-patch
+.PHONY: setup restart dev up down lint format typecheck test migrate clean version bump-major bump-minor bump-patch agent-build agent-smoke
 
 CONDUCTOR = uv --directory conductor
 
@@ -37,6 +37,14 @@ typecheck:
 
 test:
 	$(CONDUCTOR) run pytest
+
+# Build the agent image (Claude Code CLI + toolchain) used by the dispatcher.
+agent-build:
+	docker build -t dem-agent:latest agent
+
+# Phase 4 acceptance: containerized claude -p, session resume, and kill-on-timeout.
+agent-smoke:
+	bash scripts/agent-smoke.sh
 
 clean:
 	docker compose down
