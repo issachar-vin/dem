@@ -169,3 +169,9 @@ async def test_non_issue_event_ignored(api: httpx.AsyncClient) -> None:
     headers["X-Plane-Event"] = "cycle"
     resp = await api.post("/webhooks/plane", content=body, headers=headers)
     assert resp.json()["status"] == "ignored"
+
+
+async def test_malformed_payload_400(api: httpx.AsyncClient) -> None:
+    body = json.dumps({"event": "issue", "data": "not-an-object"}).encode()
+    resp = await api.post("/webhooks/plane", content=body, headers=_headers(body))
+    assert resp.status_code == 400

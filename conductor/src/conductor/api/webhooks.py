@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -15,6 +16,26 @@ from conductor.store import ConfigStore
 logger = logging.getLogger("conductor")
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+
+
+class PlaneIssueData(BaseModel):
+    """The `data` block of a Plane issue webhook. IDs and labels arrive as UUID strings; every
+    field is optional because Plane omits them on some actions (see docs/HANDOFF.md, Phase 2b)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = ""
+    project: str = ""
+    labels: list[str] = Field(default_factory=list)
+    parent: str | None = None
+
+
+class PlaneWebhook(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    event: str = ""
+    action: str = ""
+    data: PlaneIssueData = Field(default_factory=PlaneIssueData)
 
 
 def verify_signature(body: bytes, signature: str | None, secret: str) -> bool:
@@ -39,15 +60,18 @@ async def plane_webhook(request: Request) -> dict[str, str]:
     ):
         raise HTTPException(status_code=401, detail="Invalid or missing webhook signature.")
 
-    payload = await request.json()
-    event = request.headers.get("X-Plane-Event") or payload.get("event")
+    try:
+        payload = PlaneWebhook.model_validate(await request.json())
+    except ValidationError:
+        raise HTTPException(status_code=400, detail="Malformed webhook payload.") from None
+
+    event = request.headers.get("X-Plane-Event") or payload.event
     if event != "issue":
         return {"status": "ignored", "reason": f"event {event!r} not handled"}
 
-    action = payload.get("action", "")
-    data = payload.get("data") or {}
-    project_id = str(data.get("project", ""))
-    issue_id = str(data.get("id", ""))
+    data = payload.data
+    project_id = data.project
+    issue_id = data.id
 
     mappings: MappingStore = request.app.state.mappings
     mapping = await mappings.get_project(project_id)
@@ -64,7 +88,7 @@ async def plane_webhook(request: Request) -> dict[str, str]:
     created = await _create_job(
         sessionmaker,
         delivery_id=delivery_id,
-        event_type=f"issue.{action}",
+        event_type=f"issue.{payload.action}",
         payload={"project_id": project_id, "issue_id": issue_id},
     )
     if not created:
@@ -73,16 +97,16 @@ async def plane_webhook(request: Request) -> dict[str, str]:
     return {"status": "queued", "issue_id": issue_id}
 
 
-async def _is_epic(resolved: dict[str, str], data: dict[str, Any]) -> bool:
+async def _is_epic(resolved: dict[str, str], data: PlaneIssueData) -> bool:
     signal = resolved.get("plane_epic_signal", "label")
     if signal == "parentless":
-        return data.get("parent") in (None, "")
+        return data.parent in (None, "")
     # "label" (and "type", which Plane Community lacks — fall back to the epic label).
-    label_ids = {str(x) for x in data.get("labels") or []}
+    label_ids = set(data.labels)
     if not label_ids:
         return False
     client = plane.client_from_resolved(resolved)
-    labels = await client.list_labels(str(data.get("project", "")))
+    labels = await client.list_labels(data.project)
     epic_ids = {str(x["id"]) for x in labels if str(x.get("name", "")).lower() == "epic"}
     return bool(epic_ids & label_ids)
 

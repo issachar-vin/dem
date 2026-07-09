@@ -16,6 +16,11 @@ class RepoMappingView(BaseModel):
     source: str
 
 
+class StateMappingView(BaseModel):
+    workflow_state: str
+    plane_state_id: str
+
+
 class ProjectMappingView(BaseModel):
     """Read model for a project mapping. Exposes only whether a webhook secret is set, never the
     secret itself — the plaintext is reachable through get_webhook_secret for internal use only."""
@@ -177,7 +182,7 @@ class MappingStore:
             return True
 
     # ── state mappings ───────────────────────────────────────────────────────
-    async def list_states(self, project_id: str) -> list[dict[str, str]]:
+    async def list_states(self, project_id: str) -> list[StateMappingView]:
         async with self._sessionmaker() as session:
             rows = (
                 await session.execute(
@@ -185,7 +190,7 @@ class MappingStore:
                 )
             ).scalars()
             return [
-                {"workflow_state": r.workflow_state, "plane_state_id": r.plane_state_id}
+                StateMappingView(workflow_state=r.workflow_state, plane_state_id=r.plane_state_id)
                 for r in rows
             ]
 

@@ -1,12 +1,34 @@
 from collections.abc import Mapping
-from typing import Any
 
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from conductor import catalog
 from conductor.crypto import SecretBox, decrypt_bundle, encrypt_bundle
 from conductor.models import Secret, Setting
+
+
+class ConfigFieldView(BaseModel):
+    """UI-facing view of one config field: its catalog metadata plus stored state. Secrets never
+    carry their plaintext — only whether one is set, the last four chars, and the source."""
+
+    name: str
+    step: catalog.ConfigStep
+    secret: bool
+    required: bool
+    help: str
+    choices: list[str]
+    is_set: bool = False
+    last_four: str | None = None
+    value: str | None = None
+    source: str | None = None
+
+
+class ConfigStatus(BaseModel):
+    steps: list[catalog.StepStatus]
+    issues: list[str]
+    complete: bool
 
 
 def _last_four(value: str) -> str:
@@ -103,45 +125,40 @@ class ConfigStore:
         return seeded
 
     # ── UI-facing (masked) listings + status ─────────────────────────────────
-    async def list_config(self) -> list[dict[str, Any]]:
+    async def list_config(self) -> list[ConfigFieldView]:
         async with self._sessionmaker() as session:
             secrets = {s.name: s for s in (await session.execute(select(Secret))).scalars()}
             settings = {s.name: s for s in (await session.execute(select(Setting))).scalars()}
-        out: list[dict[str, Any]] = []
+        out: list[ConfigFieldView] = []
         for field in catalog.CATALOG:
-            entry: dict[str, Any] = {
-                "name": field.name,
-                "step": field.step.value,
-                "secret": field.secret,
-                "required": field.required,
-                "help": field.help,
-                "choices": list(field.choices),
-            }
+            view = ConfigFieldView(
+                name=field.name,
+                step=field.step,
+                secret=field.secret,
+                required=field.required,
+                help=field.help,
+                choices=list(field.choices),
+            )
             if field.secret:
                 stored = secrets.get(field.name)
-                entry["set"] = stored is not None
-                entry["last_four"] = stored.last_four if stored else None
-                entry["source"] = stored.source if stored else None
+                view.is_set = stored is not None
+                view.last_four = stored.last_four if stored else None
+                view.source = stored.source if stored else None
             else:
                 stored_setting = settings.get(field.name)
-                entry["value"] = stored_setting.value if stored_setting else field.default
-                entry["source"] = stored_setting.source if stored_setting else "default"
-            out.append(entry)
+                view.value = stored_setting.value if stored_setting else field.default
+                view.source = stored_setting.source if stored_setting else "default"
+            out.append(view)
         return out
 
-    async def status(self) -> dict[str, Any]:
+    async def status(self) -> ConfigStatus:
         resolved = await self.resolved()
-        steps = [
-            {
-                "step": s.step.value,
-                "complete": s.complete,
-                "missing": s.missing,
-                "verifiable": s.verifiable,
-            }
-            for s in catalog.step_status(resolved)
-        ]
         issues = catalog.validate_config(resolved)
-        return {"steps": steps, "issues": issues, "complete": not issues}
+        return ConfigStatus(
+            steps=catalog.step_status(resolved),
+            issues=issues,
+            complete=not issues,
+        )
 
     # ── import / export ──────────────────────────────────────────────────────
     async def export_env(self) -> str:

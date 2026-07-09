@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from pydantic import BaseModel
+
 
 class ConfigStep(StrEnum):
     CLAUDE = "claude"
@@ -169,8 +171,7 @@ def validate_config(resolved: dict[str, str]) -> list[str]:
     return issues
 
 
-@dataclass(frozen=True)
-class StepStatus:
+class StepStatus(BaseModel):
     step: ConfigStep
     complete: bool
     missing: list[str]

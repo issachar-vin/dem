@@ -1,7 +1,7 @@
 import base64
 from collections.abc import Callable
 
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from conductor.crypto import SecretBox
@@ -46,23 +46,27 @@ async def test_reseed_overwrites(store: ConfigStore, make_env: EnvFactory) -> No
     assert await store.get_secret("plane_api_key") == "plane_api_test"
 
 
-async def test_list_config_masks_secrets(store: ConfigStore, make_env: EnvFactory) -> None:
+async def test_list_config_masks_secrets(
+    store: ConfigStore, make_env: EnvFactory
+) -> None:
     await store.seed_from_env(make_env(), reseed=False)
-    by_name = {e["name"]: e for e in await store.list_config()}
+    by_name = {e.name: e for e in await store.list_config()}
     api_key = by_name["plane_api_key"]
-    assert api_key["set"] is True
-    assert api_key["last_four"] == "test"
-    assert "value" not in api_key
+    assert api_key.is_set is True
+    assert api_key.last_four == "test"
+    assert api_key.value is None
     assert "plane_api_test" not in str(api_key)
 
 
-async def test_status_reports_completeness(store: ConfigStore, make_env: EnvFactory) -> None:
+async def test_status_reports_completeness(
+    store: ConfigStore, make_env: EnvFactory
+) -> None:
     before = await store.status()
-    assert before["complete"] is False
+    assert before.complete is False
     await store.seed_from_env(make_env(), reseed=False)
     after = await store.status()
-    assert after["complete"] is True
-    assert after["issues"] == []
+    assert after.complete is True
+    assert after.issues == []
 
 
 async def test_export_import_bundle_round_trip(
