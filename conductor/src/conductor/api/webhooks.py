@@ -2,10 +2,10 @@ import hashlib
 import hmac
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from conductor import plane
 from conductor.jobs import enqueue_job
@@ -23,14 +23,28 @@ _NOT_JSON_DETAIL = (
 )
 
 
-async def _parse_json(request: Request) -> Any:
+def _reject(webhook: str, detail: str, *, status_code: int = 400) -> NoReturn:
+    """Log why a webhook was rejected and return it in the response body. The access log only shows
+    the status code; the reason belongs both in our logs and in the body the sender's delivery log
+    records, so a misconfiguration is diagnosable from either side."""
+    logger.warning("%s webhook rejected (%d): %s", webhook, status_code, detail)
+    raise HTTPException(status_code=status_code, detail=detail)
+
+
+def _validation_detail(exc: ValidationError) -> str:
+    """Turn a pydantic error into a field-level message (loc + msg, never the raw input value)."""
+    problems = "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors())
+    return f"Malformed webhook payload — {problems}"
+
+
+async def _parse_json(request: Request, webhook: str) -> Any:
     """Read the body as JSON or 400. Split from schema validation so a wrong content type (a
     form-encoded webhook) gets an actionable message instead of a generic 'malformed' 400 — or,
     before this guard, an uncaught JSONDecodeError 500."""
     try:
         return await request.json()
     except ValueError:
-        raise HTTPException(status_code=400, detail=_NOT_JSON_DETAIL) from None
+        _reject(webhook, _NOT_JSON_DETAIL)
 
 
 # ── Plane ────────────────────────────────────────────────────────────────────
@@ -45,6 +59,16 @@ class PlaneIssueData(BaseModel):
     labels: list[str] = Field(default_factory=list)
     parent: str | None = None
     state: str = ""
+
+    @field_validator("state", mode="before")
+    @classmethod
+    def _coerce_state(cls, value: Any) -> str:
+        """Plane sends the state as a UUID string on most actions, but as a nested object on some;
+        normalise both (and a null) to the id string we compare against, so this field never
+        rejects an otherwise-valid payload."""
+        if isinstance(value, dict):
+            return str(value.get("id", ""))
+        return "" if value is None else str(value)
 
 
 class PlaneWebhook(BaseModel):
@@ -75,12 +99,12 @@ async def plane_webhook(request: Request) -> dict[str, str]:
         request.headers.get("X-Plane-Signature"),
         resolved.get("plane_webhook_secret", ""),
     ):
-        raise HTTPException(status_code=401, detail="Invalid or missing webhook signature.")
+        _reject("plane", "Invalid or missing webhook signature.", status_code=401)
 
     try:
-        payload = PlaneWebhook.model_validate(await _parse_json(request))
-    except ValidationError:
-        raise HTTPException(status_code=400, detail="Malformed webhook payload.") from None
+        payload = PlaneWebhook.model_validate(await _parse_json(request, "plane"))
+    except ValidationError as exc:
+        _reject("plane", _validation_detail(exc))
 
     event = request.headers.get("X-Plane-Event") or payload.event
     if event != "issue":
@@ -213,9 +237,9 @@ def _github_signature_ok(body: bytes, header: str | None, secret: str) -> bool:
 async def github_webhook(request: Request) -> dict[str, str]:
     body = await request.body()
     try:
-        payload = GitHubWebhook.model_validate(await _parse_json(request))
-    except ValidationError:
-        raise HTTPException(status_code=400, detail="Malformed webhook payload.") from None
+        payload = GitHubWebhook.model_validate(await _parse_json(request, "github"))
+    except ValidationError as exc:
+        _reject("github", _validation_detail(exc))
 
     # Verify-after-lookup: the repo name in an unverified body is trusted only far enough to find
     # whose secret to check the signature against (the multi-tenant-webhook pattern). Secrets are
@@ -224,7 +248,7 @@ async def github_webhook(request: Request) -> dict[str, str]:
     project_id = await mappings.get_project_for_repo(payload.repository.full_name)
     secret = await mappings.get_webhook_secret(project_id) if project_id else None
     if not _github_signature_ok(body, request.headers.get("X-Hub-Signature-256"), secret or ""):
-        raise HTTPException(status_code=401, detail="Invalid or missing webhook signature.")
+        _reject("github", "Invalid or missing webhook signature.", status_code=401)
 
     event = request.headers.get("X-GitHub-Event", "")
     build = GITHUB_EVENT_PAYLOADS.get(event)

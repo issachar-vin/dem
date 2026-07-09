@@ -88,7 +88,6 @@ CATALOG: tuple[ConfigField, ...] = (
         required=True,
         help="Machine-account fine-grained PAT with access to all target repos.",
     ),
-    ConfigField("github_base_branch", ConfigStep.GITHUB, default="main"),
     ConfigField(
         "github_event_mode", ConfigStep.GITHUB, default="webhook", choices=("webhook", "poll")
     ),

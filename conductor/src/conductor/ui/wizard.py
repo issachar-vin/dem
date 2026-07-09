@@ -280,13 +280,9 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
         return
 
     ui.separator()
-    ui.markdown(
-        "**Step 2 — Delivery & branch.** How PRs are targeted and how GitHub events reach "
-        "the conductor."
-    )
+    ui.markdown("**Step 2 — Event delivery.** How GitHub events reach the conductor.")
     with ui.expansion("What do these mean?", icon="help_outline").classes("w-full"):
         ui.markdown(
-            "- **Base branch** — the branch each PR is opened against (usually `main`).\n"
             "- **Event mode** — how PR review/merge events reach the conductor:\n"
             "  - **webhook** (recommended, needs a public URL): GitHub pushes events instantly. "
             "Choose it below to reveal the payload URL and secret, then in the repo → **Settings → "
@@ -299,7 +295,6 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
             "but slower. Set the interval in seconds."
         )
     delivery = _Section()
-    delivery.field(config["github_base_branch"])
     mode_box = delivery.field(config["github_event_mode"])
     with ui.column().classes("w-full gap-2").bind_visibility_from(mode_box, "value", value="poll"):
         delivery.field(config["github_poll_interval_seconds"])
@@ -322,7 +317,8 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
     repo_defaults = await verify.list_github_repos(token=resolved.get("github_token", ""))
     names = {p["id"]: p["name"] for p in await _plane_projects()}
     payload_url = f"{origin.rstrip('/')}/webhooks/github"
-    default_branch = config["github_base_branch"].value or "main"
+    # Fallback only; each repo's base branch is seeded from its live GitHub default branch below.
+    default_branch = "main"
     webhook_mode = mode_box.value == "webhook"
     if webhook_mode:
         _payload_url_field(payload_url)

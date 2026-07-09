@@ -212,9 +212,8 @@ GITHUB_REPO=izzy/my-project
 # Fine-grained PAT for a dedicated MACHINE ACCOUNT (recommended) with
 # Contents:rw, Pull requests:rw, Metadata:r on the target repo.
 GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxx
-# Base branch PRs target. Protect this branch (require review) — that is the
-# hard guarantee a human approves everything.
-GITHUB_BASE_BRANCH=main
+# Each repo's base branch is set per-repo (wizard step 3 / targets.yml), not here.
+# Protect that branch (require review) — it is the hard guarantee a human approves.
 # Event delivery: "poll" (default; no inbound exposure needed, interval below)
 # or "webhook" (requires GITHUB_WEBHOOK_SECRET and a reachable conductor URL).
 GITHUB_EVENT_MODE=poll
