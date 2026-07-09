@@ -3,10 +3,14 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 3 step 5 (structured targets.yml export/import) is done.** Step 4 (wizard
-UI) is done in PR #24 (open at time of writing); this step-5 branch is cut from `main` and is
-independent of it. Next up is **step 6 — GitHub webhook handler + poll mode** (see the RESUME box).
-Phase 2 was fully accepted
+**Last updated:** **Phase 3 step 5 (structured targets.yml export/import) is done & merged (PR #25).**
+⚠️ **Step 4 (wizard UI) is still OPEN in PR #24 and NOT yet on `main`** — step 5 was cut from `main`
+and merged ahead of it, so the wizard's per-project GitHub sections + project-enable checkboxes exist
+only on the `feat/wizard-multirepo-ui` branch. **Merge PR #24 before (or alongside) starting step 6.**
+Step 6's code is independent of #24 (it uses the step-1 mapping layer, already on `main`), but its
+acceptance test needs the step-4 UI to configure webhooks, and #24 vs `main` conflict only on this
+HANDOFF (take `main`'s superset version). Next up is **step 6 — GitHub webhook handler + poll mode**
+(see the RESUME box). Phase 2 was fully accepted
 (user confirmed, 2026-07-09). Since the step-8 NiceGUI migration (PR #11, merged),
 the console shipped several rounds of wizard polish, all merged and not previously logged here:
 - **PR #12** — guided tabbed wizard, icon nav, dark theme (console redesign).
@@ -275,7 +279,7 @@ the live progress tracker; check steps off as PRs land.
       wired into the UI (step 4). Note for SETUP_GITHUB.md: fine-grained PATs only list repos
       explicitly granted at token creation, so a missing repo = the token's GitHub-side grant needs
       editing, not a conductor bug.
-- [x] **Step 4 — Wizard UI (PR #24, open).** Plane panel gained a "Projects to manage" sub-step
+- [~] **Step 4 — Wizard UI (PR #24 — OPEN, code NOT on `main` yet; merge it).** Plane panel gained a "Projects to manage" sub-step
       (checkbox per workspace project from `PlaneClient.list_projects()`, backed by
       `ProjectMapping.enabled`). GitHub panel: dropped the flat global `github_webhook_secret` (catalog
       field + `_conditionally_required` gate removed — secrets are project-scoped now) and added one
