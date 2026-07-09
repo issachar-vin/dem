@@ -357,6 +357,12 @@ the live progress tracker; check steps off as PRs land.
       The wizard's GitHub step links to it and its inline guide was reconciled to match the doc.
       **Acceptance test = a live user step** (real Plane + GitHub + deployment): checklist in
       `docs/SETUP_GITHUB.md` §7 / `docs/PLAN.md` → Phase 3 — not run in this PR.
+      - **Follow-up fix (PR #30), from the live acceptance run:** a repo webhook left on GitHub's
+        default form-encoding delivered a non-JSON body → `request.json()` raised an uncaught
+        `JSONDecodeError` → **500**. Both webhook handlers now parse via a shared `_parse_json` guard
+        that returns **400** with an actionable "set content type to application/json" message. (Live
+        acceptance confirmed otherwise: reject paths 401/400, and a correctly-configured repo's signed
+        `ping` returns 200 — verify-after-lookup works end to end.)
 
 **DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
 spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if
