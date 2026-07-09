@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from conductor.crypto import SecretBox
 from conductor.models import ProjectMapping, RepoMapping, StateMapping, WorkflowState
-from conductor.targets import load_targets
+from conductor.targets import RepoTarget, Target, dump_targets, load_targets, parse_targets
 
 
 class RepoMappingView(BaseModel):
@@ -225,17 +225,26 @@ class MappingStore:
             )
             await session.commit()
 
-    # ── seed import (targets.yml → project + repo mappings, seed-once) ─────────
+    # ── targets.yml import / export (project + repo mappings) ─────────────────
     async def import_targets(self, path: Path, *, reseed: bool = False) -> int:
+        """Seed-once import from a targets.yml file (boot path; DB wins unless reseed)."""
+        return await self._apply_targets(load_targets(path), reseed=reseed, source="seed")
+
+    async def import_targets_text(self, text: str, *, reseed: bool = True) -> int:
+        """Import targets.yml content supplied through the UI. Defaults to reseed so an explicit
+        upload actually applies over existing mappings (unlike the seed-once boot path)."""
+        return await self._apply_targets(parse_targets(text), reseed=reseed, source="import")
+
+    async def _apply_targets(self, targets: dict[str, Target], *, reseed: bool, source: str) -> int:
         imported = 0
-        for project_id, target in load_targets(path).items():
+        for project_id, target in targets.items():
             if not reseed and await self.get_project(project_id) is not None:
                 continue
             await self.set_project(
                 project_id,
                 enabled=target.enabled,
                 webhook_secret=target.webhook_secret,
-                source="seed",
+                source=source,
             )
             for repo in target.repos:
                 await self.set_repo(
@@ -243,7 +252,30 @@ class MappingStore:
                     repo.key,
                     github_repo=repo.github_repo,
                     base_branch=repo.base_branch,
-                    source="seed",
+                    source=source,
                 )
             imported += 1
         return imported
+
+    async def export_targets(self, workspace: str) -> str:
+        """Serialize every project→repos mapping (incl. plaintext webhook secrets) to targets.yml
+        content — the inverse of import_targets. Handle the output carefully."""
+        async with self._sessionmaker() as session:
+            projects = (await session.execute(select(ProjectMapping))).scalars().all()
+            repos = (await session.execute(select(RepoMapping))).scalars().all()
+        by_project: dict[str, list[RepoTarget]] = {}
+        for r in repos:
+            by_project.setdefault(r.plane_project_id, []).append(
+                RepoTarget(key=r.key, github_repo=r.github_repo, base_branch=r.base_branch)
+            )
+        targets = {
+            p.plane_project_id: Target(
+                workspace=workspace,
+                project_id=p.plane_project_id,
+                enabled=p.enabled,
+                webhook_secret=(self._box.decrypt(p.webhook_secret) if p.webhook_secret else None),
+                repos=by_project.get(p.plane_project_id, []),
+            )
+            for p in projects
+        }
+        return dump_targets(targets)
