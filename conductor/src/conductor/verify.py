@@ -7,6 +7,15 @@ from pydantic import BaseModel
 CLAUDE_TEST_MODEL = "claude-haiku-4-5"
 ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models"
+GITHUB_REPOS_URL = "https://api.github.com/user/repos"
+
+
+def _github_headers(token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
 
 
 def _claude_headers(oauth_token: str | None, api_key: str | None) -> dict[str, str]:
@@ -118,11 +127,7 @@ async def verify_github(
     repo: str | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> VerifyResult:
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = _github_headers(token)
     auth = await _get_ok(
         client,
         "https://api.github.com/user",
@@ -139,6 +144,44 @@ async def verify_github(
         ok_detail=f"Token can access {repo}.",
         not_found_detail=f"Token authenticated but cannot access repo '{repo}'.",
     )
+
+
+async def list_github_repos(
+    *,
+    token: str,
+    client: httpx.AsyncClient | None = None,
+) -> list[str]:
+    """Full names (`owner/name`) of every repo the token can access, for the wizard's repo picker.
+    Empty list on any failure — the UI falls back to a free-typed repo field. A fine-grained PAT
+    only lists repos explicitly granted at token creation, so a missing repo means the token's own
+    GitHub-side grant needs editing."""
+    headers = _github_headers(token)
+
+    async def fetch(c: httpx.AsyncClient) -> list[str]:
+        repos: list[str] = []
+        url: str | None = GITHUB_REPOS_URL
+        params: dict[str, str] | None = {"per_page": "100", "sort": "full_name"}
+        while url:
+            try:
+                response = await c.get(url, headers=headers, params=params)
+            except httpx.HTTPError:
+                return []
+            if response.status_code != 200:
+                return []
+            page = response.json()
+            if not isinstance(page, list):
+                return []
+            repos.extend(
+                str(r["full_name"]) for r in page if isinstance(r, dict) and "full_name" in r
+            )
+            url = response.links.get("next", {}).get("url")
+            params = None  # the next-page URL already carries the query string
+        return repos
+
+    if client is not None:
+        return await fetch(client)
+    async with httpx.AsyncClient(timeout=20) as owned:
+        return await fetch(owned)
 
 
 async def _request(

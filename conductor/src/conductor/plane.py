@@ -78,6 +78,9 @@ class PlaneClient:
     async def list_labels(self, project_id: str) -> list[dict[str, Any]]:
         return await self._paginated(f"{self._project_url(project_id)}/labels/")
 
+    async def list_projects(self) -> list[dict[str, Any]]:
+        return await self._paginated(f"{self._workspace_url}/projects/")
+
     # ── internals ────────────────────────────────────────────────────────────
     @property
     def _headers(self) -> dict[str, str]:
