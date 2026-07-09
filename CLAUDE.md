@@ -20,6 +20,10 @@ file records how the *actual build* diverges from that spec and where the build 
 - Source is `conductor/src/conductor/` (src layout, own `conductor/pyproject.toml`). Tests in
   root `tests/`. Migrations in `conductor/migrations/`.
 - Workflow: never push to `main`; branch → PR (the `/make-change` skill). Squash merges only.
+  **After creating the PR, before handing back the link:** update `docs/HANDOFF.md` on the same
+  branch (mark the step done, move the RESUME box forward), commit, and push it into that same PR —
+  *then* present the link. HANDOFF must never lag the PR it describes. This keeps every open PR
+  self-describing so PRs can be reviewed/merged in any order without a stale or out-of-order handoff.
 - **Versioning — bump the root `VERSION` before opening any PR.** Pre-launch scheme is
   `0.<phase>.<patch>`: run `make bump-minor` when the PR starts work on a **new phase**, or
   `make bump-patch` for changes **within the current phase**. `make bump-major` (→ `1.0.0`) is
