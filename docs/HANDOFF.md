@@ -387,6 +387,11 @@ the live progress tracker; check steps off as PRs land.
         IntegrityError (already handled → dropped). Migration `b2c3d4e5f6a7` collapses pre-existing
         duplicate active jobs first. (Also worth checking Plane for a **duplicate webhook
         registration** — the likely reason two deliveries fired at once.)
+      - **Follow-up (PR #34), observability:** every accepted webhook delivery now logs identifying
+        fields at INFO (`delivery`, `event`, `action`, `issue`/`repo`, `project`, `state`) and the
+        full raw body at DEBUG (`_log_delivery`), so two deliveries for one action can be told apart.
+        `LOG_LEVEL` (default INFO) raises **only the conductor logger** — DEBUG surfaces payloads
+        without aiosqlite/sqlalchemy flooding the logs.
 **DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
 spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if
 that ever changes; no phase requires Postgres.

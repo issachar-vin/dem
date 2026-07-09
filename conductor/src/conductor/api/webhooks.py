@@ -37,6 +37,20 @@ def _validation_detail(exc: ValidationError) -> str:
     return f"Malformed webhook payload — {problems}"
 
 
+def _log_delivery(webhook: str, delivery_id: str | None, body: bytes, **fields: object) -> None:
+    """Record every accepted delivery so a duplicate or unexpected one is diagnosable. Identifying
+    fields go to INFO; the full raw payload to DEBUG (LOG_LEVEL=DEBUG) — that is how you tell two
+    same-issue deliveries apart when the provider fires more than one for one action."""
+    summary = " ".join(f"{k}={v}" for k, v in fields.items())
+    logger.info("%s webhook received: delivery=%s %s", webhook, delivery_id, summary)
+    logger.debug(
+        "%s webhook raw payload (delivery=%s): %s",
+        webhook,
+        delivery_id,
+        body.decode("utf-8", "replace"),
+    )
+
+
 async def _parse_json(request: Request, webhook: str) -> Any:
     """Read the body as JSON or 400. Split from schema validation so a wrong content type (a
     form-encoded webhook) gets an actionable message instead of a generic 'malformed' 400 — or,
@@ -106,11 +120,23 @@ async def plane_webhook(request: Request) -> dict[str, str]:
     except ValidationError as exc:
         _reject("plane", _validation_detail(exc))
 
+    delivery_id = request.headers.get("X-Plane-Delivery")
     event = request.headers.get("X-Plane-Event") or payload.event
+    data = payload.data
+    _log_delivery(
+        "plane",
+        delivery_id,
+        body,
+        event=event,
+        action=payload.action,
+        issue=data.id,
+        project=data.project,
+        state=data.state,
+    )
+
     if event != "issue":
         return {"status": "ignored", "reason": f"event {event!r} not handled"}
 
-    data = payload.data
     mappings: MappingStore = request.app.state.mappings
     mapping = await mappings.get_project(data.project)
     if mapping is None or not mapping.enabled:
@@ -128,11 +154,11 @@ async def plane_webhook(request: Request) -> dict[str, str]:
         source="plane",
         event_type=f"issue.{payload.action}",
         payload={"project_id": data.project, "issue_id": data.id, "trigger": trigger},
-        delivery_id=request.headers.get("X-Plane-Delivery"),
+        delivery_id=delivery_id,
         dedupe_key=f"{data.project}:{data.id}",
     )
     if job is None:
-        return {"status": "duplicate", "delivery_id": request.headers.get("X-Plane-Delivery") or ""}
+        return {"status": "duplicate", "delivery_id": delivery_id or ""}
     logger.info("Queued %s job for issue %s (project %s)", trigger, data.id, data.project)
     return {"status": "queued", "issue_id": data.id}
 
@@ -251,6 +277,17 @@ async def github_webhook(request: Request) -> dict[str, str]:
         _reject("github", "Invalid or missing webhook signature.", status_code=401)
 
     event = request.headers.get("X-GitHub-Event", "")
+    delivery_id = request.headers.get("X-GitHub-Delivery")
+    _log_delivery(
+        "github",
+        delivery_id,
+        body,
+        event=event,
+        action=payload.action,
+        repo=payload.repository.full_name,
+        project=project_id,
+    )
+
     build = GITHUB_EVENT_PAYLOADS.get(event)
     if build is None:
         return {"status": "ignored", "reason": f"event {event!r} not handled"}
@@ -265,13 +302,10 @@ async def github_webhook(request: Request) -> dict[str, str]:
             "action": payload.action,
             **build(payload),
         },
-        delivery_id=request.headers.get("X-GitHub-Delivery"),
+        delivery_id=delivery_id,
     )
     if job is None:
-        return {
-            "status": "duplicate",
-            "delivery_id": request.headers.get("X-GitHub-Delivery") or "",
-        }
+        return {"status": "duplicate", "delivery_id": delivery_id or ""}
     logger.info(
         "Queued github %s.%s for %s (project %s)",
         event,

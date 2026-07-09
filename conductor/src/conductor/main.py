@@ -76,6 +76,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app(settings: BootstrapSettings | None = None) -> FastAPI:
     logging.basicConfig(level=logging.INFO)
+    # LOG_LEVEL raises only the conductor logger (e.g. DEBUG surfaces raw webhook payloads via
+    # api/webhooks._log_delivery) — root stays INFO so aiosqlite/sqlalchemy don't flood the logs.
+    logging.getLogger("conductor").setLevel(os.environ.get("LOG_LEVEL", "INFO").upper())
     settings = settings or get_settings()
     app = FastAPI(title="conductor", version=__version__, lifespan=lifespan)
     app.state.settings = settings
