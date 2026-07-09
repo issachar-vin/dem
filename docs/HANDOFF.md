@@ -12,11 +12,16 @@ repos: webhook verify/reject, per-project-secret HMAC, semantic dedupe, the stat
 and the Jobs page all confirmed working. The one Phase-3 acceptance item that can't finish yet —
 "merged PR → cleanup job *runs*" — needs a Job consumer (later in Phase 4).
 
-Phase 4 **Part 1 (agent image)** is built: `agent/Dockerfile` + `entrypoint.sh` + `seed-claude.json`
-+ `make agent-smoke`. Verified locally: image builds, toolchain (Python 3.12, pytest, git, gh,
-Claude Code CLI, node 22), and the entrypoint auth-guard (both/neither auth var → loud exit 78; one
-→ seeds `~/.claude.json` + execs). **Pending:** the live `claude -p` + session-resume leg of
-`make agent-smoke` — needs a `CLAUDE_CODE_OAUTH_TOKEN`; the user runs it (no token in this env).
+Phase 4 **Part 1 (agent image)** is built and **fully accepted live**: `agent/Dockerfile` +
+`entrypoint.sh` + `seed-claude.json` + `make agent-smoke`. `make agent-smoke` passes end-to-end —
+containerized `claude -p` (subscription auth), a second run **resumes the same `session_id`** off the
+state volume, and kill-on-timeout. Also verified: toolchain (Python 3.12, pytest, git, gh, Claude
+Code CLI, node 22) and the entrypoint auth-guard (both/neither auth var → loud exit 78; one → seeds
+`~/.claude.json` + execs). **Gotcha fixed & pinned for Part 2:** a fresh named volume mounts
+**root-owned**, so the non-root `agent` couldn't persist sessions and `--resume` found nothing — the
+image now pre-creates `/home/agent/.claude` as `agent` so the per-ticket `psa-claude-<id>` volume
+inherits agent ownership. The dispatcher's clone volume `psa-repo-<id>` at `/work` will need the same
+treatment.
 
 ---
 
@@ -26,10 +31,11 @@ Authoritative spec: `docs/PLAN.md` → **Phase 4**, plus the scheduler folded in
 ordering & concurrency"**. This is where the intake Jobs finally get consumed. **Part 1 is done
 (above); do Parts 2–3 next:**
 
-1. ~~**Agent image**~~ — DONE (Part-1 PR). `agent/Dockerfile` (node:22-slim + Claude Code CLI + git
-   + gh + Python 3.12 via uv + pytest, non-root `agent` user); `entrypoint.sh` (exit loudly if both
-   auth vars set; seed `~/.claude.json` from `seed-claude.json` when absent; exec the passed
-   `claude -p`); `make agent-smoke`. Live `claude -p`/resume leg still to be run by the user.
+1. ~~**Agent image**~~ — DONE & accepted live (Part-1 PR). `agent/Dockerfile` (node:22-slim + Claude
+   Code CLI + git + gh + Python 3.12 via uv + pytest, non-root `agent` user, pre-created
+   agent-owned `~/.claude`); `entrypoint.sh` (exit loudly if both auth vars set; seed `~/.claude.json`
+   from `seed-claude.json` when absent; exec the passed `claude -p`); `make agent-smoke` passes
+   (`claude -p` + same-session resume + kill-on-timeout).
 2. **Dispatcher + volume lifecycle** — build `docker run` (per-ticket volumes `psa-repo-<id>` /
    `psa-claude-<id>`, role env incl. OTel attrs, mem/CPU limits, `--rm`, named container, hard
    timeout → kill); volume lifecycle (create + `git clone --depth 50` + `ticket/<id>` branch;

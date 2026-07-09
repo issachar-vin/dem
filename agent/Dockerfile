@@ -31,6 +31,11 @@ RUN useradd --create-home --shell /bin/bash agent \
 USER agent
 WORKDIR /work
 
+# Pre-create the state dir so a fresh named volume mounted here inherits agent ownership
+# (Docker seeds an empty volume from the image path; without this it lands root-owned and
+# the non-root agent can't persist sessions, breaking `claude -p --resume`).
+RUN mkdir -p /home/agent/.claude
+
 # uv installs a real Python 3.12 (node:22-slim's system python is 3.11; the spec and the
 # dem repo itself require 3.12). pytest is exposed globally as a baseline test runner;
 # target repos still manage their own deps.
