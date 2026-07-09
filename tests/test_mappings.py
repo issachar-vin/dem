@@ -115,3 +115,46 @@ async def test_import_targets_seeds_project_and_repos_once(
     assert await mappings.import_targets(f, reseed=True) == 1
     row = await mappings.get_project("p1")
     assert row is not None and row.enabled is True
+
+
+async def test_export_targets_round_trips_through_import(
+    mappings: MappingStore,
+) -> None:
+    await mappings.set_project("p1", enabled=True, webhook_secret="whsec_abc")
+    await mappings.set_repo("p1", "backend", github_repo="izzy/api", base_branch="dev")
+    await mappings.set_repo("p1", "ui", github_repo="izzy/web")
+    await mappings.set_project("p2", enabled=False)
+
+    exported = await mappings.export_targets("dem")
+    # Secrets are serialized in plaintext so the mapping can round-trip.
+    assert "whsec_abc" in exported
+
+    for pid in ("p1", "p2"):
+        await mappings.delete_project(pid)
+    assert await mappings.import_targets_text(exported) == 2
+
+    assert await mappings.get_webhook_secret("p1") == "whsec_abc"
+    p1 = await mappings.get_project("p1")
+    assert p1 is not None and p1.enabled is True
+    backend = next(r for r in await mappings.list_repos("p1") if r.key == "backend")
+    assert backend.github_repo == "izzy/api"
+    assert backend.base_branch == "dev"
+    assert {r.key for r in await mappings.list_repos("p1")} == {"backend", "ui"}
+
+
+async def test_import_targets_text_reseeds_over_existing(
+    mappings: MappingStore,
+) -> None:
+    await mappings.set_project("p1", enabled=False)
+    text = (
+        "targets:\n"
+        "  - workspace: dem\n"
+        "    project_id: p1\n"
+        "    enabled: true\n"
+        "    repos:\n"
+        "      - key: backend\n"
+        "        github_repo: izzy/api\n"
+    )
+    assert await mappings.import_targets_text(text) == 1
+    row = await mappings.get_project("p1")
+    assert row is not None and row.enabled is True and row.source == "import"
