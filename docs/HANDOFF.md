@@ -50,6 +50,20 @@ deliverables/acceptance text; the box below tracks live progress.
 > An *optional* manual override field is fine, but the default is derive-from-token, not required
 > input. This supersedes an earlier idea to add `github_bot_name`/`github_bot_email` catalog fields.
 >
+> **Direction for Phase 5 — review feedback is captured conductor-side, not fetched by the agent.**
+> When a ticket enters `changes_requested`, the agent needs the review comments. Firm: the **agent
+> never fetches** them (keeps Plane/GitHub creds out of the container, per the PLAN) — the conductor
+> supplies them in the prompt. *How* the conductor holds them (user leans capture, and it's sound):
+> **capture comment bodies off the webhook events** (`pull_request_review`/`_review_comment`/
+> `_review_thread`, Plane issue-comment events) onto the ticket/job record, so dispatch is a local DB
+> read, not an external API call (fewer API calls — token cost is a non-issue either way). The **cost
+> of capture** is that it only stays correct if we handle the full lifecycle — comment **edited**,
+> **deleted**, thread **resolved/unresolved** — and cover **missed deliveries** (conductor down during
+> a delivery) with a cheap **reconcile fetch at dispatch** as a safety net. So: capture as the primary
+> store + lifecycle handling + a reconcile fetch to close gaps. Raw webhook payloads stay on the Job
+> (`raw_payloads`) for audit; the parsed comment set is the working record. Finalize the mechanism when
+> Phase 5 builds the review loop.
+>
 > **The scheduler deferred from step 6, now Phase 4 (the dispatcher/state machine):** the work **scheduler** —
 > in-flight-first then oldest-created ordering, the Plane blocking-relationship eligibility gate, the
 > `MAX_CONCURRENT_AGENTS` per-role semaphore, and the actual container dispatch. Step 6 only *enqueues*
@@ -406,6 +420,14 @@ the live progress tracker; check steps off as PRs land.
         via `body-cell` slots (info/delete emit → `table.on`), dedupe-key cell truncated with ellipsis +
         hover tooltip. Confirms NiceGUI handles a proper data table — no React needed (drag-resize columns
         is the one thing QTable lacks natively; would be a single embedded JS component, not a rewrite).
+      - **Follow-up fix (PR #37), intake precision:** the engineer trigger fired on *any* `issue.updated`
+        whose current state was `ready_for_dev`, so every incidental edit while a card sat in Ready
+        re-fired it (dedupe then dropped it). Root cause seen in real payloads: Plane fires **one webhook
+        per changed field**, so dragging a card into a column emits both a `state_id` and a `sort_order`
+        event, both carrying the same current `data.state`. Modelled the Plane `activity` block and now
+        trigger only on the **transition** — `activity.field == "state_id"` with `new_value` == the
+        ready state (or an issue *created* directly in it, for planner-created tickets). Precise: the
+        `state_id` event queues, the `sort_order` event is ignored (verified against the live payloads).
 
 **DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
 spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if
