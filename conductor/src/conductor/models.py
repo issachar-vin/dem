@@ -39,6 +39,10 @@ class Job(Base):
     id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
     # Provider delivery id (Plane/GitHub), used to dedupe redelivered webhooks.
     delivery_id: Mapped[str | None] = mapped_column(String(255), unique=True, default=None)
+    # Semantic dedupe key (e.g. "<project_id>:<issue_id>"): at most one *active* job per key, so a
+    # re-fired Plane issue event doesn't stack a second job while one is still queued/running.
+    # Distinct from delivery_id, which only catches a literal duplicate delivery of one event.
+    dedupe_key: Mapped[str | None] = mapped_column(String(255), index=True, default=None)
     source: Mapped[str] = mapped_column(String(32))
     event_type: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

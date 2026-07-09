@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI
 
-from conductor import __version__, telemetry, ui
+from conductor import __version__, poller, telemetry, ui
 from conductor.api import webhooks as webhooks_api
 from conductor.auth import AuthStore
 from conductor.config import BootstrapSettings, get_settings
@@ -62,10 +62,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if issues:
         logger.warning("App config incomplete: %s", "; ".join(issues))
 
+    poll_task = await poller.start_if_enabled(
+        store=store, mappings=mappings, sessionmaker=sessionmaker
+    )
+
     telemetry.build_info.labels(version=__version__).set(1)
     try:
         yield
     finally:
+        await poller.stop(poll_task)
         await engine.dispose()
 
 

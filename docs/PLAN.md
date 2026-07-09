@@ -350,4 +350,19 @@ Subscription mode: Pro limits are shared with claude.ai chat and are the tightes
 
 Human comments on in-flight tickets injected into engineer resumes ("steering"); GitLab/Gitea support; Plane Agents as default once out of beta; egress-restricted agent networks; Kubernetes deployment manifests; a `psa` CLI for local ticket dry-runs.
 
+**Future — user-configurable pipeline (dynamic workflow editor).** Today the pipeline states
+(`WorkflowState`) and their transitions are a fixed code enum + implicit engine logic
+(backlog → ready_for_dev → in_progress → in_review → changes_requested → ready_for_approval →
+done). A future step makes this **data, not code**: promote the states, their execution order, and
+their transitions into DB tables (seeded with today's defaults), and add a **console workflow page**
+that shows the steps as an ordered list of rows the user can reorder / add to / remove — e.g. insert
+a "blocked" or "awaiting-feedback" step — n8n-style but as an ordered/branching state list, not a
+free-form node canvas. Design constraints already baked in so this stays additive: **intake enqueues
+Jobs and never encodes transitions** (see `jobs.py` / `api/webhooks.py`), so pipeline-shape changes
+touch only the state machine, not intake. **Frontend decision:** stay on NiceGUI — the ordered-list
+editor is a sortable list well within its range; a true free-form canvas, *if* ever needed, is a
+single embedded JS-flow island on one page, not a React rewrite of the console (which would
+re-introduce the client/server HTTP split deliberately removed in CLAUDE.md deviation #4). The real
+lift is the backend states-as-data model, not the UI.
+
 **Note:** *Multi-repo routing per ticket* was originally listed here as out of scope; it has been promoted to a **core requirement** — a Plane project maps to one or more repos and the planner assigns each ticket a target repo. See deviation #1 in [`CLAUDE.md`](../CLAUDE.md) and the mapping/planner notes in Phases 3 and 5.
