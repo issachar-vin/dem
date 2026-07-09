@@ -10,7 +10,9 @@ import yaml
 from cryptography.fernet import InvalidToken
 from nicegui import ui
 
+from conductor import jobs as jobs_mod
 from conductor import plane
+from conductor.jobs import JobView
 from conductor.mappings import MappingStore
 from conductor.models import WorkflowState
 from conductor.plane import PlaneError
@@ -298,3 +300,63 @@ async def _scan_states(project_id: str) -> list[dict[str, Any]]:
     client = plane.client_from_resolved(await get_context().store.resolved())
     states = await client.list_states(project_id)
     return [{"id": s.get("id"), "name": s.get("name"), "group": s.get("group")} for s in states]
+
+
+@ui.page("/jobs")
+async def jobs_page() -> None:
+    _layout("/jobs")
+    jobs = await jobs_mod.list_jobs(get_context().sessionmaker)
+    with _page():
+        ui.label("Jobs").classes("text-2xl font-bold")
+        ui.label(
+            "Intake queue — webhook/poll deliveries turned into work. Nothing consumes these yet "
+            "(the dispatcher lands in Phase 4)."
+        )
+        if not jobs:
+            ui.label("No jobs yet.").classes("text-sm text-gray-500")
+            return
+        with ui.row().classes("items-center w-full gap-4 text-xs text-gray-500 font-semibold pt-2"):
+            ui.label("ID").classes("w-12")
+            ui.label("Source").classes("w-16")
+            ui.label("Event").classes("w-48")
+            ui.label("Status").classes("w-24")
+            ui.label("Dedupe key").classes("grow")
+            ui.label("Deliveries").classes("w-20")
+            ui.label("").classes("w-24")
+        for job in jobs:
+            _job_row(job)
+
+
+def _job_row(job: JobView) -> None:
+    with ui.row().classes("items-center w-full gap-4 border-t py-1"):
+        ui.label(str(job.id)).classes("w-12")
+        ui.label(job.source).classes("w-16")
+        ui.label(job.event_type).classes("w-48 truncate")
+        ui.label(job.status).classes("w-24")
+        ui.label(job.dedupe_key or "—").classes("grow truncate")
+        ui.label(str(len(job.raw_payloads))).classes("w-20")
+        with ui.row().classes("w-24 gap-1 justify-end"):
+            ui.button(icon="info", on_click=lambda j=job: _show_payloads(j)).props(
+                "flat round dense"
+            ).tooltip("Raw payloads")
+            ui.button(
+                icon="delete", color="negative", on_click=lambda j=job: _delete_job(j.id)
+            ).props("flat round dense").tooltip("Delete job")
+
+
+def _show_payloads(job: JobView) -> None:
+    with ui.dialog() as dialog, ui.card().classes("w-full max-w-4xl"):
+        ui.label(f"Job {job.id} — raw payloads ({len(job.raw_payloads)})").classes(
+            "text-lg font-bold"
+        )
+        ui.json_editor(
+            {"content": {"json": job.raw_payloads}, "readOnly": True, "mode": "tree"}
+        ).classes("w-full")
+        ui.button("Close", on_click=dialog.close)
+    dialog.open()
+
+
+async def _delete_job(job_id: int) -> None:
+    await jobs_mod.delete_job(get_context().sessionmaker, job_id)
+    ui.notify(f"Deleted job {job_id}.")
+    ui.navigate.reload()

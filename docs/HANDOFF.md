@@ -392,6 +392,15 @@ the live progress tracker; check steps off as PRs land.
         full raw body at DEBUG (`_log_delivery`), so two deliveries for one action can be told apart.
         `LOG_LEVEL` (default INFO) raises **only the conductor logger** — DEBUG surfaces payloads
         without aiosqlite/sqlalchemy flooding the logs.
+      - **Follow-up (PR #35), Jobs page + payload cache:** new `Job.raw_payloads` column (migration
+        `c3d4e5f6a7b8`) — `enqueue_job` gains `raw_payload`, seeding a new job's list and **appending
+        to the existing active job when a delivery is deduped** (so every folded-in delivery is kept,
+        not dropped). New console **`/jobs`** page (nav "Jobs"): a table of jobs with an **info** icon
+        → modal showing the raw payloads in a collapsible `ui.json_editor`, and a **delete** icon per
+        row. `jobs.list_jobs`/`delete_job` + `JobView`; UI `AppContext` gained `sessionmaker`. (Column
+        named `raw_payloads`, not `metadata`, which is reserved on SQLAlchemy declarative models.)
+        First console surface to *see* the intake queue before the Phase 4 dispatcher exists.
+
 **DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
 spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if
 that ever changes; no phase requires Postgres.

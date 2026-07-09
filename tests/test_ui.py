@@ -46,7 +46,7 @@ def test_console_pages_registered() -> None:
     from nicegui import app as core
 
     paths = {getattr(route, "path", None) for route in core.routes}
-    assert {"/", "/login", "/config", "/projects", "/states"} <= paths
+    assert {"/", "/login", "/config", "/projects", "/states", "/jobs"} <= paths
 
 
 def test_create_app_mounts_console_alongside_ops_routes() -> None:

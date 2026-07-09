@@ -104,3 +104,69 @@ async def test_semantic_dedupe_scoped_by_source(
     )
     assert plane_job is not None
     assert github_job is not None
+
+
+async def test_raw_payload_seeded_on_new_job(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    job = await enqueue_job(
+        sessionmaker,
+        source="plane",
+        event_type="issue.updated",
+        payload={},
+        dedupe_key="p:i",
+        raw_payload={"event": "issue", "n": 1},
+    )
+    assert job is not None
+    async with sessionmaker() as session:
+        row = await session.get(Job, job.id)
+        assert row is not None
+        assert row.raw_payloads == [{"event": "issue", "n": 1}]
+
+
+async def test_deduped_delivery_appends_raw_payload(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    first = await enqueue_job(
+        sessionmaker,
+        source="plane",
+        event_type="issue.updated",
+        payload={},
+        dedupe_key="p:i",
+        raw_payload={"delivery": 1},
+    )
+    assert first is not None
+    # A second delivery for the same in-flight issue: no new job, but its payload is recorded.
+    second = await enqueue_job(
+        sessionmaker,
+        source="plane",
+        event_type="issue.updated",
+        payload={},
+        dedupe_key="p:i",
+        raw_payload={"delivery": 2},
+    )
+    assert second is None
+    async with sessionmaker() as session:
+        row = await session.get(Job, first.id)
+        assert row is not None
+        assert row.raw_payloads == [{"delivery": 1}, {"delivery": 2}]
+
+
+async def test_list_and_delete_jobs(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from conductor.jobs import delete_job, list_jobs
+
+    a = await enqueue_job(
+        sessionmaker, source="plane", event_type="e", payload={}, dedupe_key="a"
+    )
+    await enqueue_job(sessionmaker, source="github", event_type="e", payload={})
+    assert a is not None
+
+    jobs = await list_jobs(sessionmaker)
+    assert len(jobs) == 2
+    assert {j.source for j in jobs} == {"plane", "github"}
+
+    assert await delete_job(sessionmaker, a.id) is True
+    assert await delete_job(sessionmaker, a.id) is False
+    assert len(await list_jobs(sessionmaker)) == 1

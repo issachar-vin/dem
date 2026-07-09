@@ -4,8 +4,10 @@ transitions. That keeps adding a pipeline step (e.g. a future "blocked" or "awai
 state) a state-machine concern, never an intake concern."""
 
 import logging
+from datetime import datetime
 from typing import Any
 
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -17,6 +19,18 @@ logger = logging.getLogger("conductor")
 _ACTIVE_STATUSES = (JobStatus.QUEUED, JobStatus.RUNNING)
 
 
+class JobView(BaseModel):
+    id: int
+    source: str
+    event_type: str
+    status: str
+    dedupe_key: str | None
+    delivery_id: str | None
+    payload: dict[str, Any]
+    raw_payloads: list[dict[str, Any]]
+    created_at: datetime
+
+
 async def enqueue_job(
     sessionmaker: async_sessionmaker[AsyncSession],
     *,
@@ -25,6 +39,7 @@ async def enqueue_job(
     payload: dict[str, Any],
     delivery_id: str | None = None,
     dedupe_key: str | None = None,
+    raw_payload: dict[str, Any] | None = None,
 ) -> Job | None:
     """Insert a Job, or return None if it is a duplicate.
 
@@ -37,19 +52,26 @@ async def enqueue_job(
     deliver the same issue event twice, milliseconds apart) both callers may pass the read. The
     `ix_jobs_active_dedupe` partial-unique index is the backstop: the losing insert raises
     IntegrityError and is dropped, so at most one active job per (source, dedupe_key) survives.
+
+    `raw_payload` (the full provider body) is recorded on the job: it seeds a new job's
+    `raw_payloads` and, when a delivery is deduped onto an existing active job, is appended to that
+    job's list — so every delivery that folded into one job is inspectable on the Jobs page.
     """
     async with sessionmaker() as session:
         if dedupe_key is not None:
             existing = (
                 await session.execute(
-                    select(Job.id).where(
+                    select(Job).where(
                         Job.source == source,
                         Job.dedupe_key == dedupe_key,
                         Job.status.in_(_ACTIVE_STATUSES),
                     )
                 )
-            ).first()
+            ).scalar_one_or_none()
             if existing is not None:
+                if raw_payload is not None:
+                    existing.raw_payloads = [*existing.raw_payloads, raw_payload]
+                    await session.commit()
                 return None
 
         job = Job(
@@ -58,6 +80,7 @@ async def enqueue_job(
             source=source,
             event_type=event_type,
             payload=payload,
+            raw_payloads=[raw_payload] if raw_payload is not None else [],
         )
         session.add(job)
         try:
@@ -66,3 +89,38 @@ async def enqueue_job(
             await session.rollback()
             return None
     return job
+
+
+async def list_jobs(
+    sessionmaker: async_sessionmaker[AsyncSession], *, limit: int = 200
+) -> list[JobView]:
+    async with sessionmaker() as session:
+        rows = (
+            (await session.execute(select(Job).order_by(Job.created_at.desc()).limit(limit)))
+            .scalars()
+            .all()
+        )
+        return [
+            JobView(
+                id=r.id,
+                source=r.source,
+                event_type=r.event_type,
+                status=r.status,
+                dedupe_key=r.dedupe_key,
+                delivery_id=r.delivery_id,
+                payload=r.payload,
+                raw_payloads=r.raw_payloads,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ]
+
+
+async def delete_job(sessionmaker: async_sessionmaker[AsyncSession], job_id: int) -> bool:
+    async with sessionmaker() as session:
+        row = await session.get(Job, job_id)
+        if row is None:
+            return False
+        await session.delete(row)
+        await session.commit()
+        return True

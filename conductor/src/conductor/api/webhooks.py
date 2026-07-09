@@ -115,8 +115,9 @@ async def plane_webhook(request: Request) -> dict[str, str]:
     ):
         _reject("plane", "Invalid or missing webhook signature.", status_code=401)
 
+    raw = await _parse_json(request, "plane")
     try:
-        payload = PlaneWebhook.model_validate(await _parse_json(request, "plane"))
+        payload = PlaneWebhook.model_validate(raw)
     except ValidationError as exc:
         _reject("plane", _validation_detail(exc))
 
@@ -156,6 +157,7 @@ async def plane_webhook(request: Request) -> dict[str, str]:
         payload={"project_id": data.project, "issue_id": data.id, "trigger": trigger},
         delivery_id=delivery_id,
         dedupe_key=f"{data.project}:{data.id}",
+        raw_payload=raw,
     )
     if job is None:
         return {"status": "duplicate", "delivery_id": delivery_id or ""}
@@ -262,8 +264,9 @@ def _github_signature_ok(body: bytes, header: str | None, secret: str) -> bool:
 @router.post("/github")
 async def github_webhook(request: Request) -> dict[str, str]:
     body = await request.body()
+    raw = await _parse_json(request, "github")
     try:
-        payload = GitHubWebhook.model_validate(await _parse_json(request, "github"))
+        payload = GitHubWebhook.model_validate(raw)
     except ValidationError as exc:
         _reject("github", _validation_detail(exc))
 
@@ -303,6 +306,7 @@ async def github_webhook(request: Request) -> dict[str, str]:
             **build(payload),
         },
         delivery_id=delivery_id,
+        raw_payload=raw,
     )
     if job is None:
         return {"status": "duplicate", "delivery_id": delivery_id or ""}
