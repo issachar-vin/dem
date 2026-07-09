@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import binascii
 import json
+import secrets
 from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
@@ -168,6 +169,21 @@ def _input(field: dict[str, Any]) -> ValueElement[Any]:
             "text-xs text-gray-500"
         )
     return box
+
+
+def _payload_url_field(url: str) -> None:
+    """Read-only payload URL input with a copy-to-clipboard button in its append slot."""
+
+    def copy() -> None:
+        ui.run_javascript(f"navigator.clipboard.writeText({json.dumps(url)})")
+        ui.notify("Copied to clipboard")
+
+    ui.label("Payload URL (detected from this page's address):")
+    with (
+        ui.input(value=url).props("readonly").classes("w-full font-mono") as box,
+        box.add_slot("append"),
+    ):
+        ui.button(icon="content_copy", on_click=copy).props("flat dense round").tooltip("Copy")
 
 
 def _model_input(field: dict[str, Any], models: list[str]) -> ValueElement[Any]:
@@ -373,8 +389,7 @@ async def _plane_panel(tabs: ui.tabs, origin: str) -> None:
         "4. Plane shows a **Secret key once** — copy it and paste below. The two must match, or "
         "every delivery returns 401."
     )
-    ui.label("Payload URL (detected from this page's address):")
-    ui.input(value=payload_url).props("readonly").classes("w-full font-mono")
+    _payload_url_field(payload_url)
     stored_public = (resolved.get("conductor_public_url") or "").rstrip("/")
     if origin.rstrip("/") != stored_public:
 
@@ -448,8 +463,11 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
             "- **Event mode** — how PR review/merge events reach the conductor:\n"
             "  - **webhook** (recommended, needs a public URL): GitHub pushes events instantly. "
             "Choose it below to reveal the payload URL and secret, then in the repo → **Settings → "
-            "Webhooks → Add webhook** use that payload URL, content type **application/json**, and "
-            "a **secret** matching the one you save here.\n"
+            "Webhooks → Add webhook** use that payload URL, content type **application/json**, "
+            "a **secret** matching the one you save here, keep **SSL verification enabled**, and "
+            "under **Which events?** pick *Let me select individual events* → **Pull requests**, "
+            "**Pull request reviews**, **Pull request review comments**, and **Pull request review "
+            "threads**.\n"
             "  - **poll**: the conductor periodically asks GitHub for changes — no webhook needed, "
             "but slower. Set the interval in seconds."
         )
@@ -461,12 +479,26 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
     with (
         ui.column().classes("w-full gap-2").bind_visibility_from(mode_box, "value", value="webhook")
     ):
-        ui.label("Payload URL (detected from this page's address):")
-        ui.input(value=payload_url).props("readonly").classes("w-full font-mono")
-        ui.label("Set a secret below matching the one on the GitHub webhook.").classes(
-            "text-xs text-gray-500"
+        _payload_url_field(payload_url)
+        ui.markdown(
+            "On the GitHub webhook, set **content type** to `application/json`, keep **SSL "
+            "verification enabled** (the public URL has a valid certificate), and under **Which "
+            "events would you like to trigger this webhook?** choose *Let me select individual "
+            "events* and tick **Pull requests**, **Pull request reviews**, **Pull request review "
+            "comments**, and **Pull request review threads**."
+        ).classes("text-xs text-gray-500")
+        secret_box = delivery.field(config["github_webhook_secret"])
+        ui.label(
+            "Use the same secret on both sides — save it here and paste it on GitHub."
+        ).classes("text-xs text-gray-500")
+
+        def generate_secret() -> None:
+            secret_box.value = secrets.token_hex(32)
+            ui.notify("Secret generated — reveal it to copy onto the GitHub webhook, then Save.")
+
+        ui.button("Generate secret", icon="casino", on_click=generate_secret).props(
+            "flat color=primary"
         )
-        delivery.field(config["github_webhook_secret"])
     with ui.column().classes("w-full gap-2").bind_visibility_from(mode_box, "value", value="poll"):
         delivery.field(config["github_poll_interval_seconds"])
     delivery.save_button(_github_panel.refresh)
