@@ -3,10 +3,10 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 2 is done and accepted** (user confirmed, 2026-07-09) — step 9 verification
-(barad-dur redeploy, wizard run, live Plane acceptance test) is no longer blocking; **work now
-proceeds to Phase 3.** Since the step-8 NiceGUI migration (PR #11, merged), the console shipped
-several rounds of wizard polish, all merged and not previously logged here:
+**Last updated:** **Phase 3 step 1 (multi-repo mapping schema) is done and merged (PR #19).** Next
+up is the newly inserted **step 2 — Pydantic request/response models** (see the RESUME box). Phase 2
+was fully accepted (user confirmed, 2026-07-09). Since the step-8 NiceGUI migration (PR #11, merged),
+the console shipped several rounds of wizard polish, all merged and not previously logged here:
 - **PR #12** — guided tabbed wizard, icon nav, dark theme (console redesign).
 - **PR #13** — Plane webhook payload URL derived from the request origin, not hand-typed.
 - **PR #14** — manual `0.<phase>.<patch>` version scheme + versioned Docker image tag.
@@ -18,13 +18,18 @@ several rounds of wizard polish, all merged and not previously logged here:
 `docs/PLAN.md` Phase 3 is now **"GitHub integration & multi-repo wizard"** — folds in the pipeline
 intake/ordering/concurrency design (originally PR #9) plus a new prerequisite: project↔repo mapping
 widens from one-repo-per-project to **one project → many repos**, with a project-scoped GitHub
-webhook secret (CLAUDE.md deviations #1, #7). Phase 3 is broken into 6 PR-sized steps — see
-`docs/PLAN.md` for the authoritative deliverables/acceptance text; the box below tracks live progress.
+webhook secret (CLAUDE.md deviations #1, #7). Phase 3 is broken into 7 PR-sized steps (a Pydantic
+request/response-model pass was inserted as step 2) — see `docs/PLAN.md` for the authoritative
+deliverables/acceptance text; the box below tracks live progress.
 
-> **RESUME: start Phase 3 step 2 — live repo/project listing.** `PlaneClient.list_projects(workspace_slug)`
-> (powers the wizard's project checklist) + GitHub `list_repos(token)` (paginated `GET /user/repos`,
-> powers a live repo picker instead of free-typed `owner/name`). Full spec: `docs/PLAN.md` → Phase 3
-> step 2. Step 1 (multi-repo schema) is **done** — see "Phase 3 — steps" below.
+> **RESUME: start Phase 3 step 2 — Pydantic request/response models.** Model the Plane `issue`
+> webhook payload (currently `await request.json()` + raw dict access in `api/webhooks.py`;
+> `_is_epic(data: dict)`) as a Pydantic model and parse-then-validate at the boundary, setting the
+> pattern for the GitHub webhook payloads coming in step 6. Convert the remaining `dict[str, Any]`
+> store/config surfaces — `ConfigStore.list_config`/`status`, `MappingStore.list_states`, the
+> `catalog`/`verify` result dicts — to Pydantic read models like step 1's `ProjectMappingView`.
+> Internal typing only; response JSON shapes unchanged. Full spec: `docs/PLAN.md` → Phase 3 step 2.
+> Step 1 (multi-repo schema) is **done** — see "Phase 3 — steps" below.
 
 ## Phase 2 step 8 — NiceGUI console migration DONE (PR #11, merged)
 
@@ -242,19 +247,27 @@ the live progress tracker; check steps off as PRs land.
       (dropped the never-consumed `agent_image`/`model_*` overrides). Migration `8c03955898af` (clean
       cut, no data migration). The Plane epic webhook now gates on `enabled` and no longer pins a repo
       in the Job payload (repo is per-ticket, the planner's job). Projects admin page reworked for the
-      multi-repo model (polished per-project wizard sections are step 3).
-- [ ] **Step 2 — Live repo/project listing.** `PlaneClient.list_projects(workspace_slug)`; GitHub
+      multi-repo model (polished per-project wizard sections are step 4).
+- [ ] **Step 2 — Pydantic request/response models.** Model the Plane `issue` webhook payload as a
+      Pydantic model and parse-then-validate at the boundary (today `api/webhooks.py` does
+      `await request.json()` + raw dict access; `_is_epic(data: dict)`), setting the pattern for the
+      GitHub webhook payloads landing in step 6. Convert the remaining `dict[str, Any]` store/config
+      surfaces — `ConfigStore.list_config`/`status`, `MappingStore.list_states`, the `catalog`/`verify`
+      result dicts — to Pydantic read models like step 1's `ProjectMappingView`. Internal typing only;
+      response JSON shapes unchanged. Lands before step 6 so the larger GitHub payload is written typed,
+      not refactored later.
+- [ ] **Step 3 — Live repo/project listing.** `PlaneClient.list_projects(workspace_slug)`; GitHub
       `list_repos(token)` (paginated `GET /user/repos`). Note for SETUP_GITHUB.md: fine-grained PATs
       only list repos explicitly granted at token creation.
-- [ ] **Step 3 — Wizard UI.** Plane step: checkbox per workspace project (backed by `enabled`). GitHub
+- [ ] **Step 4 — Wizard UI.** Plane step: checkbox per workspace project (backed by `enabled`). GitHub
       step: one section per enabled project — live repo picker (1 slot default + "Add another repo"),
       project-scoped secret field + Generate button (pattern from PR #17), shared payload URL with the
       copy control (PR #17), instructions for the 4 events + SSL verification (already drafted, PR #17)
       repeated per repo under that project.
-- [ ] **Step 4 — Structured export/import.** `targets.yml` becomes bidirectional (export added, not
+- [ ] **Step 5 — Structured export/import.** `targets.yml` becomes bidirectional (export added, not
       just import) so the full project→repos(+secrets) mapping round-trips through one YAML file. `.env`
       export stays flat/unchanged.
-- [ ] **Step 5 — GitHub webhook handler + poll mode.** `/webhooks/github`: parse (unverified)
+- [ ] **Step 6 — GitHub webhook handler + poll mode.** `/webhooks/github`: parse (unverified)
       `repository.full_name` → look up owning project → verify against **that project's** secret →
       route the 4 subscribed events (`pull_request`, `pull_request_review`,
       `pull_request_review_comment`, `pull_request_review_thread`), deduped by `X-GitHub-Delivery`.
@@ -269,7 +282,7 @@ the live progress tracker; check steps off as PRs land.
       `journal_mode=WAL`, a `busy_timeout`, and `foreign_keys=ON` on connect (sqlite-only, engine
       `connect` event) or overlapping webhook-ingest + dispatcher + status writes will raise
       `database is locked`.
-- [ ] **Step 6 — Docs & acceptance.** docs/SETUP_GITHUB.md (machine account, fine-grained PAT scopes +
+- [ ] **Step 7 — Docs & acceptance.** docs/SETUP_GITHUB.md (machine account, fine-grained PAT scopes +
       repo-visibility caveat, per-project webhook walkthrough, branch protection, poll vs. webhook,
       tunnel guidance); run the Phase 3 acceptance test in `docs/PLAN.md`.
 
