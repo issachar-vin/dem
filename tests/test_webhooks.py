@@ -180,6 +180,14 @@ async def test_malformed_payload_400(api: httpx.AsyncClient) -> None:
     assert resp.status_code == 400
 
 
+async def test_plane_non_json_body_400_not_500(api: httpx.AsyncClient) -> None:
+    # A signed but non-JSON body (e.g. a webhook left on form-encoding) must be a clean 400.
+    body = b"payload=%7B%22event%22%3A%22issue%22%7D"
+    resp = await api.post("/webhooks/plane", content=body, headers=_headers(body))
+    assert resp.status_code == 400
+    assert "application/json" in resp.json()["detail"]
+
+
 async def test_ready_for_dev_issue_creates_engineer_job(
     api: httpx.AsyncClient,
     mappings: MappingStore,
@@ -340,3 +348,11 @@ async def test_github_malformed_payload_400(api: httpx.AsyncClient) -> None:
     body = json.dumps({"repository": "not-an-object"}).encode()
     resp = await api.post("/webhooks/github", content=body, headers=_gh_headers(body))
     assert resp.status_code == 400
+
+
+async def test_github_non_json_body_400_not_500(api: httpx.AsyncClient) -> None:
+    # A repo webhook left on form-encoding sends a non-JSON body — must be a clean 400, not a 500.
+    body = b"payload=%7B%22action%22%3A%22opened%22%7D"
+    resp = await api.post("/webhooks/github", content=body, headers=_gh_headers(body))
+    assert resp.status_code == 400
+    assert "application/json" in resp.json()["detail"]

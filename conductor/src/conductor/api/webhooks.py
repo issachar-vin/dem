@@ -17,6 +17,21 @@ logger = logging.getLogger("conductor")
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
+_NOT_JSON_DETAIL = (
+    "Request body is not JSON. Set the webhook's content type to application/json "
+    "(form-encoding is not accepted)."
+)
+
+
+async def _parse_json(request: Request) -> Any:
+    """Read the body as JSON or 400. Split from schema validation so a wrong content type (a
+    form-encoded webhook) gets an actionable message instead of a generic 'malformed' 400 — or,
+    before this guard, an uncaught JSONDecodeError 500."""
+    try:
+        return await request.json()
+    except ValueError:
+        raise HTTPException(status_code=400, detail=_NOT_JSON_DETAIL) from None
+
 
 # ── Plane ────────────────────────────────────────────────────────────────────
 class PlaneIssueData(BaseModel):
@@ -63,7 +78,7 @@ async def plane_webhook(request: Request) -> dict[str, str]:
         raise HTTPException(status_code=401, detail="Invalid or missing webhook signature.")
 
     try:
-        payload = PlaneWebhook.model_validate(await request.json())
+        payload = PlaneWebhook.model_validate(await _parse_json(request))
     except ValidationError:
         raise HTTPException(status_code=400, detail="Malformed webhook payload.") from None
 
@@ -198,7 +213,7 @@ def _github_signature_ok(body: bytes, header: str | None, secret: str) -> bool:
 async def github_webhook(request: Request) -> dict[str, str]:
     body = await request.body()
     try:
-        payload = GitHubWebhook.model_validate(await request.json())
+        payload = GitHubWebhook.model_validate(await _parse_json(request))
     except ValidationError:
         raise HTTPException(status_code=400, detail="Malformed webhook payload.") from None
 
