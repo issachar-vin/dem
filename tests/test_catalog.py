@@ -19,8 +19,8 @@ def _resolved(**overrides: str) -> dict[str, str]:
 
 
 def test_complete_config_has_no_issues() -> None:
-    # webhook is the default event mode, so a complete config includes the webhook secret.
-    assert catalog.validate_config(_resolved(github_webhook_secret="w")) == []
+    # Webhook secrets are project-scoped (in the mapping store), not a global config field.
+    assert catalog.validate_config(_resolved()) == []
 
 
 def test_both_claude_credentials_flagged() -> None:
@@ -31,15 +31,6 @@ def test_both_claude_credentials_flagged() -> None:
 def test_no_claude_credential_flagged() -> None:
     issues = catalog.validate_config(_resolved(claude_code_oauth_token=""))
     assert any("No Claude credential" in i for i in issues)
-
-
-def test_webhook_mode_requires_secret() -> None:
-    issues = catalog.validate_config(_resolved(github_event_mode="webhook"))
-    assert any("GITHUB_WEBHOOK_SECRET" in i for i in issues)
-    ok = catalog.validate_config(
-        _resolved(github_event_mode="webhook", github_webhook_secret="w")
-    )
-    assert ok == []
 
 
 def test_ntfy_notify_requires_url() -> None:

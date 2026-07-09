@@ -15,7 +15,7 @@ from conductor.plane import PlaneError
 from conductor.store import ConfigFieldView
 from conductor.ui.context import get_context
 from conductor.ui.shell import _layout, _page
-from conductor.ui.widgets import _Section
+from conductor.ui.widgets import _is_owner_name, _Section
 
 
 @ui.page("/config")
@@ -98,10 +98,6 @@ def _export_import() -> None:
         ui.notify(f"Imported {imported} project mapping(s).")
 
     ui.upload(label="targets.yml file", auto_upload=True, on_upload=on_targets_upload)
-
-
-def _is_owner_name(repo: str) -> bool:
-    return repo.count("/") == 1 and not repo.startswith("/") and not repo.endswith("/")
 
 
 @ui.page("/projects")

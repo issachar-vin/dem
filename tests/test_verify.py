@@ -128,26 +128,32 @@ async def test_verify_github_bad_token() -> None:
     assert "401" in result.detail
 
 
-async def test_list_github_repos_paginates_and_returns_full_names() -> None:
+async def test_list_github_repos_paginates_and_maps_default_branch() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["authorization"] == "Bearer g"
         if request.url.params.get("page") == "2":
-            return httpx.Response(200, json=[{"full_name": "izzy/two"}, {"nope": 1}])
+            return httpx.Response(
+                200,
+                json=[
+                    {"full_name": "izzy/two", "default_branch": "develop"},
+                    {"nope": 1},
+                ],
+            )
         return httpx.Response(
             200,
-            json=[{"full_name": "izzy/one"}],
+            json=[{"full_name": "izzy/one"}],  # no default_branch → falls back to main
             headers={"Link": '<https://api.github.com/user/repos?page=2>; rel="next"'},
         )
 
     async with _client(handler) as client:
         repos = await verify.list_github_repos(token="g", client=client)
-    assert repos == ["izzy/one", "izzy/two"]
+    assert repos == {"izzy/one": "main", "izzy/two": "develop"}
 
 
 async def test_list_github_repos_empty_on_error() -> None:
     async with _client(lambda r: httpx.Response(401, json={})) as client:
         repos = await verify.list_github_repos(token="g", client=client)
-    assert repos == []
+    assert repos == {}
 
 
 async def test_verify_github_repo_access_checked() -> None:

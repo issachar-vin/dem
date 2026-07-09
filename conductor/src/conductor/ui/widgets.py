@@ -35,6 +35,10 @@ def _is_set(field: ConfigFieldView) -> bool:
     return bool(field.is_set) if field.secret else bool(field.value)
 
 
+def _is_owner_name(repo: str) -> bool:
+    return repo.count("/") == 1 and not repo.startswith("/") and not repo.endswith("/")
+
+
 def _input(field: ConfigFieldView) -> ValueElement[Any]:
     """Render one field's editor (no save button). Secrets show a masked placeholder and stay
     empty until a new value is typed."""
