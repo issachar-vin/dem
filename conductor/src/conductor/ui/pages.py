@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import binascii
 import json
+import logging
 from collections import defaultdict
 from typing import Any
 
@@ -10,12 +11,26 @@ from cryptography.fernet import InvalidToken
 from nicegui import ui
 
 from conductor import plane
+from conductor.mappings import MappingStore
 from conductor.models import WorkflowState
 from conductor.plane import PlaneError
-from conductor.store import ConfigFieldView
+from conductor.store import ConfigFieldView, ConfigStore
 from conductor.ui.context import get_context
 from conductor.ui.shell import _layout, _page
 from conductor.ui.widgets import _is_owner_name, _Section
+
+logger = logging.getLogger("conductor")
+
+
+async def _apply_targets_upload(mappings: MappingStore, file: Any) -> int:
+    """Read an uploaded targets.yml and import it, returning the count. `file` is NiceGUI 3.x's
+    `FileUpload` (async `.text()`/`.read()`); the old `event.content.read()` API is gone, so this
+    seam keeps the adapter in one testable place."""
+    return await mappings.import_targets_text(await file.text())
+
+
+async def _apply_bundle_upload(store: ConfigStore, file: Any, passphrase: str) -> int:
+    return await store.import_bundle(await file.read(), passphrase)
 
 
 @ui.page("/config")
@@ -28,27 +43,36 @@ async def config_page() -> None:
     with _page():
         ui.label("Configuration").classes("text-2xl font-bold")
         ui.label("Every field in one place. The wizard is the guided version of this page.")
-        for step, fields in by_step.items():
-            ui.label(step.title()).classes("text-lg font-semibold mt-2")
-            section = _Section()
-            for field in fields:
-                section.field(field)
-            section.save_button(ui.navigate.reload)
-        ui.separator()
-        _export_import()
+        steps = list(by_step)
+        with ui.tabs().classes("w-full") as tabs:
+            for step in steps:
+                ui.tab(step, label=step.title())
+            ui.tab("migration", label="Migration")
+        with ui.tab_panels(tabs, value=steps[0]).classes("w-full"):
+            for step, fields in by_step.items():
+                with ui.tab_panel(step):
+                    section = _Section()
+                    for field in fields:
+                        section.field(field)
+                    section.save_button(ui.navigate.reload)
+            with ui.tab_panel("migration"):
+                _migration_panel()
 
 
-def _export_import() -> None:
-    ui.label("Export / import").classes("text-lg font-semibold mt-2")
-
-    ui.label(".env export — plaintext secrets; handle carefully.")
+def _migration_panel() -> None:
+    """Export and import the whole configuration. Split into two clear sections: everything you can
+    download on top, everything you can upload below."""
+    ui.label("Export").classes("text-lg font-semibold")
+    ui.label(".env — plaintext secrets; handle carefully.").classes("text-sm text-gray-500")
 
     async def download_env() -> None:
         ui.download.content(await get_context().store.export_env(), "dem.env")
 
     ui.button("Download .env", on_click=download_env)
 
-    ui.label("Encrypted bundle — passphrase-protected, safe to store.")
+    ui.label("Encrypted bundle — passphrase-protected, safe to store.").classes(
+        "text-sm text-gray-500"
+    )
     export_pass = ui.input("Passphrase (export)", password=True)
 
     async def download_bundle() -> None:
@@ -60,24 +84,9 @@ def _export_import() -> None:
 
     ui.button("Download bundle", on_click=download_bundle)
 
-    ui.label("Import bundle")
-    import_pass = ui.input("Passphrase (import)", password=True)
-
-    async def on_upload(event: Any) -> None:
-        if not import_pass.value:
-            ui.notify("Enter the import passphrase first.", color="negative")
-            return
-        blob = event.content.read()
-        try:
-            imported = await get_context().store.import_bundle(blob, import_pass.value)
-        except (InvalidToken, binascii.Error, ValueError, json.JSONDecodeError):
-            ui.notify("Wrong passphrase or corrupt bundle.", color="negative")
-            return
-        ui.notify(f"Imported {imported} value(s).")
-
-    ui.upload(label="Bundle file", auto_upload=True, on_upload=on_upload)
-
-    ui.label("targets.yml — full project→repos mapping incl. secrets; plaintext, handle carefully.")
+    ui.label(
+        "targets.yml — full project→repos mapping incl. secrets; plaintext, handle carefully."
+    ).classes("text-sm text-gray-500")
 
     async def download_targets() -> None:
         ctx = get_context()
@@ -86,16 +95,45 @@ def _export_import() -> None:
 
     ui.button("Download targets.yml", on_click=download_targets)
 
-    ui.label("Import targets.yml")
+    ui.separator()
+    ui.label("Import").classes("text-lg font-semibold mt-2")
+    ui.label("Encrypted bundle").classes("text-sm text-gray-500")
+    import_pass = ui.input("Passphrase (import)", password=True)
+
+    async def on_upload(event: Any) -> None:
+        if not import_pass.value:
+            ui.notify("Enter the import passphrase first.", color="negative")
+            return
+        try:
+            imported = await _apply_bundle_upload(
+                get_context().store, event.file, import_pass.value
+            )
+        except (InvalidToken, binascii.Error, ValueError, json.JSONDecodeError):
+            ui.notify("Wrong passphrase or corrupt bundle.", color="negative")
+            return
+        except Exception:  # never let an upload fail silently with no toast
+            logger.exception("Bundle import failed")
+            ui.notify("Bundle import failed — check server logs.", color="negative")
+            return
+        ui.notify(f"Imported {imported} value(s).")
+        ui.navigate.reload()
+
+    ui.upload(label="Bundle file", auto_upload=True, on_upload=on_upload)
+
+    ui.label("targets.yml").classes("text-sm text-gray-500")
 
     async def on_targets_upload(event: Any) -> None:
-        text = event.content.read().decode()
         try:
-            imported = await get_context().mappings.import_targets_text(text)
+            imported = await _apply_targets_upload(get_context().mappings, event.file)
         except (yaml.YAMLError, ValueError):
             ui.notify("Invalid targets.yml.", color="negative")
             return
+        except Exception:  # never let an upload fail silently with no toast
+            logger.exception("targets.yml import failed")
+            ui.notify("targets.yml import failed — check server logs.", color="negative")
+            return
         ui.notify(f"Imported {imported} project mapping(s).")
+        ui.navigate.to("/projects")
 
     ui.upload(label="targets.yml file", auto_upload=True, on_upload=on_targets_upload)
 
