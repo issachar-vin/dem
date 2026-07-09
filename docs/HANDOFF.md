@@ -3,7 +3,7 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 3 step 7 — docs & acceptance — is done (PR #NN), pending review; this
+**Last updated:** **Phase 3 step 7 — docs & acceptance — is done (PR #29), pending review; this
 closes Phase 3's code work.** `docs/SETUP_GITHUB.md` written (machine account, fine-grained PAT
 scopes + repo-visibility caveat, per-project webhook walkthrough, branch protection as the approval
 gate, webhook-vs-poll, tunnel guidance) and the wizard's GitHub step now links to it; UI guide and
@@ -340,7 +340,7 @@ the live progress tracker; check steps off as PRs land.
         matrix, `github` client, `poller` baseline/change/error, mappings lookups, db PRAGMAs). 105 green;
         ruff + mypy --strict clean. Verified: full migration chain + no autogenerate drift; app boots
         with poll mode, `/health` 200, both webhooks 401 unsigned, clean lifespan shutdown.
-- [x] **Step 7 — Docs & acceptance (PR #NN).** `docs/SETUP_GITHUB.md` written: machine account,
+- [x] **Step 7 — Docs & acceptance (PR #29).** `docs/SETUP_GITHUB.md` written: machine account,
       fine-grained PAT scopes (Contents RW / Pull requests RW / Metadata) + the repo-visibility caveat,
       webhook-vs-poll tradeoffs, per-project webhook walkthrough (per repo, same project secret, the 4
       events, `application/json`, SSL on) with the verify-after-lookup explainer, branch protection as
