@@ -27,7 +27,7 @@ async def test_resolved_overlays_defaults_and_secrets(
     await store.seed_from_env(make_env(), reseed=False)
     resolved = await store.resolved()
     assert resolved["plane_api_key"] == "plane_api_test"  # decrypted secret
-    assert resolved["github_base_branch"] == "main"  # catalog default, unset
+    assert resolved["github_poll_interval_seconds"] == "60"  # catalog default, unset
 
 
 async def test_seed_once_then_db_wins(store: ConfigStore, make_env: EnvFactory) -> None:
