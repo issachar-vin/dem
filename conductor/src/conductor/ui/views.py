@@ -658,6 +658,10 @@ def _export_import() -> None:
     ui.upload(label="Bundle file", auto_upload=True, on_upload=on_upload)
 
 
+def _is_owner_name(repo: str) -> bool:
+    return repo.count("/") == 1 and not repo.startswith("/") and not repo.endswith("/")
+
+
 @ui.page("/projects")
 async def projects_page() -> None:
     _layout("/projects")
@@ -666,43 +670,77 @@ async def projects_page() -> None:
 
     with _page():
         ui.label("Project mappings").classes("text-2xl font-bold")
-        ui.label("Route each Plane project to a GitHub repo in owner/name form.")
+        ui.label("Enable each Plane project and map the GitHub repos it owns (owner/name form).")
         if projects:
             for project in projects:
-                pid: str = project["plane_project_id"]
-                with ui.row().classes("items-center w-full gap-4"):
-                    ui.label(pid).classes("grow")
-                    ui.label(project["repo"]).classes("grow")
-                    ui.label(project["base_branch"])
-                    ui.label(project["source"])
+                pid = project.plane_project_id
+                with ui.card().classes("w-full gap-2"):
+                    with ui.row().classes("items-center w-full gap-4"):
+                        ui.label(pid).classes("grow font-semibold")
+                        secret_note = "secret set" if project.has_webhook_secret else "no secret"
+                        ui.label(f"{'enabled' if project.enabled else 'disabled'} · {secret_note}")
+                        ui.label(project.source)
 
-                    async def delete(project_id: str = pid) -> None:
-                        await get_context().mappings.delete_project(project_id)
+                        async def delete_proj(project_id: str = pid) -> None:
+                            await get_context().mappings.delete_project(project_id)
+                            ui.navigate.reload()
+
+                        ui.button("Delete project", on_click=delete_proj, color="negative")
+
+                    for repo in project.repos:
+                        with ui.row().classes("items-center w-full gap-4 pl-4"):
+                            ui.label(repo.key).classes("w-24")
+                            ui.label(repo.github_repo).classes("grow")
+                            ui.label(repo.base_branch)
+
+                            async def delete_repo(
+                                project_id: str = pid, key: str = repo.key
+                            ) -> None:
+                                await get_context().mappings.delete_repo(project_id, key)
+                                ui.navigate.reload()
+
+                            ui.button("Remove", on_click=delete_repo, color="negative")
+
+                    key_in = ui.input("Repo key (e.g. ui, backend)")
+                    repo_in = ui.input("Repo (owner/name)")
+                    branch_in = ui.input("Base branch", value="main")
+
+                    async def add_repo(
+                        project_id: str = pid,
+                        key_field: Any = key_in,
+                        repo_field: Any = repo_in,
+                        branch_field: Any = branch_in,
+                    ) -> None:
+                        key, repo = key_field.value, repo_field.value
+                        if not key or not repo:
+                            return
+                        if not _is_owner_name(repo):
+                            ui.notify("Repo must be in owner/name form.", color="negative")
+                            return
+                        await get_context().mappings.set_repo(
+                            project_id,
+                            key,
+                            github_repo=repo,
+                            base_branch=branch_field.value or "main",
+                        )
                         ui.navigate.reload()
 
-                    ui.button("Delete", on_click=delete, color="negative")
+                    ui.button("Add repo", on_click=add_repo)
         else:
             ui.label("No project mappings yet.")
 
         ui.separator()
-        ui.label("Add / update").classes("text-lg font-semibold")
+        ui.label("Add project").classes("text-lg font-semibold")
         pid_in = ui.input("Plane project ID")
-        repo_in = ui.input("Repo (owner/name)")
-        branch_in = ui.input("Base branch", value="main")
+        enabled_in = ui.checkbox("Enabled")
 
-        async def add() -> None:
-            pid_value, repo = pid_in.value, repo_in.value
-            if not pid_value or not repo:
+        async def add_project() -> None:
+            if not pid_in.value:
                 return
-            if repo.count("/") != 1 or repo.startswith("/") or repo.endswith("/"):
-                ui.notify("Repo must be in owner/name form.", color="negative")
-                return
-            await get_context().mappings.set_project(
-                pid_value, repo=repo, base_branch=branch_in.value or "main"
-            )
+            await get_context().mappings.set_project(pid_in.value, enabled=enabled_in.value)
             ui.navigate.reload()
 
-        ui.button("Save", on_click=add)
+        ui.button("Save", on_click=add_project)
 
 
 @ui.page("/states")
@@ -726,7 +764,9 @@ async def states_page() -> None:
             ui.label("Add a project mapping first.")
             return
 
-        labels = {p["plane_project_id"]: f"{p['plane_project_id']} → {p['repo']}" for p in projects}
+        labels = {
+            p.plane_project_id: f"{p.plane_project_id} ({len(p.repos)} repo(s))" for p in projects
+        }
         picker = ui.select(options=labels, label="Project", value=next(iter(labels)))
         form = ui.column().classes("w-full")
 

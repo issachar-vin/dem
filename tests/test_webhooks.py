@@ -26,7 +26,7 @@ async def api(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> AsyncIterator[httpx.AsyncClient]:
     await store.set_secret("plane_webhook_secret", SECRET)
-    await mappings.set_project("proj-1", repo="izzy/chess")
+    await mappings.set_project("proj-1", enabled=True)
     app = FastAPI()
     app.state.store = store
     app.state.mappings = mappings
@@ -41,7 +41,9 @@ def _sign(body: bytes) -> str:
     return hmac.new(SECRET.encode(), body, hashlib.sha256).hexdigest()
 
 
-def _issue_body(*, labels: list[str], project: str = "proj-1", issue: str = "i1") -> bytes:
+def _issue_body(
+    *, labels: list[str], project: str = "proj-1", issue: str = "i1"
+) -> bytes:
     payload = {
         "event": "issue",
         "action": "created",
@@ -50,7 +52,9 @@ def _issue_body(*, labels: list[str], project: str = "proj-1", issue: str = "i1"
     return json.dumps(payload).encode()
 
 
-def _headers(body: bytes, *, delivery: str = "d1", signed: bool = True) -> dict[str, str]:
+def _headers(
+    body: bytes, *, delivery: str = "d1", signed: bool = True
+) -> dict[str, str]:
     h = {
         "Content-Type": "application/json",
         "X-Plane-Event": "issue",
@@ -68,14 +72,18 @@ def _stub_epic_labels(monkeypatch: pytest.MonkeyPatch) -> None:
     real = plane.client_from_resolved
 
     def fake(resolved: dict[str, str], **_: object) -> plane.PlaneClient:
-        return real(resolved, client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+        return real(
+            resolved, client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        )
 
     monkeypatch.setattr(webhooks_api.plane, "client_from_resolved", fake)
 
 
 async def _job_count(sessionmaker: async_sessionmaker[AsyncSession]) -> int:
     async with sessionmaker() as session:
-        return (await session.execute(select(func.count()).select_from(Job))).scalar_one()
+        return (
+            await session.execute(select(func.count()).select_from(Job))
+        ).scalar_one()
 
 
 async def test_valid_epic_webhook_creates_job(
@@ -137,6 +145,18 @@ async def test_unmapped_project_ignored(
     api: httpx.AsyncClient, sessionmaker: async_sessionmaker[AsyncSession]
 ) -> None:
     body = _issue_body(labels=["L-epic"], project="unknown")
+    resp = await api.post("/webhooks/plane", content=body, headers=_headers(body))
+    assert resp.json()["status"] == "ignored"
+    assert await _job_count(sessionmaker) == 0
+
+
+async def test_disabled_project_ignored(
+    api: httpx.AsyncClient,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    await mappings.set_project("proj-1", enabled=False)
+    body = _issue_body(labels=["L-epic"])
     resp = await api.post("/webhooks/plane", content=body, headers=_headers(body))
     assert resp.json()["status"] == "ignored"
     assert await _job_count(sessionmaker) == 0

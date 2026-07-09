@@ -1,21 +1,13 @@
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-class Target(BaseModel):
-    workspace: str
-    project_id: str
+class RepoTarget(BaseModel):
+    key: str
     github_repo: str
     base_branch: str = "main"
-
-    # Optional per-repo overrides; fall back to the conductor's global settings.
-    agent_image: str | None = None
-    model_engineer: str | None = None
-    model_planner: str | None = None
-    model_reviewer: str | None = None
-    model_qa: str | None = None
 
     @field_validator("github_repo")
     @classmethod
@@ -23,6 +15,21 @@ class Target(BaseModel):
         if v.count("/") != 1 or v.startswith("/") or v.endswith("/"):
             raise ValueError(f"github_repo must be in 'owner/name' form, got {v!r}")
         return v
+
+
+class Target(BaseModel):
+    workspace: str
+    project_id: str
+    enabled: bool = False
+    webhook_secret: str | None = None
+    repos: list[RepoTarget] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _unique_repo_keys(self) -> "Target":
+        keys = [r.key for r in self.repos]
+        if len(keys) != len(set(keys)):
+            raise ValueError(f"repo keys must be unique within project {self.project_id}")
+        return self
 
 
 class TargetsFile(BaseModel):

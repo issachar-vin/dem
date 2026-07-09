@@ -51,30 +51,25 @@ async def plane_webhook(request: Request) -> dict[str, str]:
 
     mappings: MappingStore = request.app.state.mappings
     mapping = await mappings.get_project(project_id)
-    if mapping is None:
-        return {"status": "ignored", "reason": f"project {project_id} is not mapped"}
+    if mapping is None or not mapping.enabled:
+        return {"status": "ignored", "reason": f"project {project_id} is not enabled"}
 
     if not await _is_epic(resolved, data):
         return {"status": "ignored", "reason": "issue is not an epic"}
 
     delivery_id = request.headers.get("X-Plane-Delivery")
     sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
+    # The epic is project-scoped; the planner assigns each ticket its target repo (Phase 5),
+    # so no single repo is pinned here.
     created = await _create_job(
         sessionmaker,
         delivery_id=delivery_id,
         event_type=f"issue.{action}",
-        payload={
-            "project_id": project_id,
-            "issue_id": issue_id,
-            "repo": mapping.repo,
-            "base_branch": mapping.base_branch,
-        },
+        payload={"project_id": project_id, "issue_id": issue_id},
     )
     if not created:
         return {"status": "duplicate", "delivery_id": delivery_id or ""}
-    logger.info(
-        "Queued job for epic issue %s (project %s → %s)", issue_id, project_id, mapping.repo
-    )
+    logger.info("Queued job for epic issue %s (project %s)", issue_id, project_id)
     return {"status": "queued", "issue_id": issue_id}
 
 
