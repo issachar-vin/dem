@@ -400,6 +400,12 @@ the live progress tracker; check steps off as PRs land.
         row. `jobs.list_jobs`/`delete_job` + `JobView`; UI `AppContext` gained `sessionmaker`. (Column
         named `raw_payloads`, not `metadata`, which is reserved on SQLAlchemy declarative models.)
         First console surface to *see* the intake queue before the Phase 4 dispatcher exists.
+      - **Follow-up fix (PR #36):** the Jobs page was hand-rolled `ui.row`s with fixed-width labels,
+        so a long `dedupe_key` overflowed and pushed the action buttons off-row. Rebuilt on **`ui.table`**
+        (Quasar QTable): real isolated columns, full-width, sortable, paginated, per-row action buttons
+        via `body-cell` slots (info/delete emit → `table.on`), dedupe-key cell truncated with ellipsis +
+        hover tooltip. Confirms NiceGUI handles a proper data table — no React needed (drag-resize columns
+        is the one thing QTable lacks natively; would be a single embedded JS component, not a rewrite).
 
 **DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
 spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if
