@@ -41,6 +41,15 @@ deliverables/acceptance text; the box below tracks live progress.
 > **Before starting Phase 4, the user still needs to run the Phase 3 acceptance test** (live; checklist
 > in `docs/SETUP_GITHUB.md` §7). Steps 1–7 are **done** — see "Phase 3 — steps" below.
 >
+> **Decided for Phase 4 — git commit authorship (do NOT add manual name/email fields).** When the
+> agent commits, git needs a `user.name`/`user.email`. Derive both from the existing `github_token`
+> at setup time via `GET /user` (returns `login`, `name`, `id`) — works identically for a personal or
+> a bot account, zero extra config. Email: if the account has a public email use it, else fall back to
+> the GitHub **noreply** address `{id}+{login}@users.noreply.github.com` (private-email accounts
+> return `email: null` from `GET /user`; the noreply form is what GitHub attributes to the account).
+> An *optional* manual override field is fine, but the default is derive-from-token, not required
+> input. This supersedes an earlier idea to add `github_bot_name`/`github_bot_email` catalog fields.
+>
 > **The scheduler deferred from step 6, now Phase 4 (the dispatcher/state machine):** the work **scheduler** —
 > in-flight-first then oldest-created ordering, the Plane blocking-relationship eligibility gate, the
 > `MAX_CONCURRENT_AGENTS` per-role semaphore, and the actual container dispatch. Step 6 only *enqueues*
