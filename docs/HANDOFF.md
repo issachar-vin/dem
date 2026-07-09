@@ -3,8 +3,8 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 3 step 2 (Pydantic request/response models) is done and merged (PR #21).**
-Next up is **step 3 — live repo/project listing** (see the RESUME box). Phase 2 was fully accepted
+**Last updated:** **Phase 3 step 3 (live repo/project listing) is done.**
+Next up is **step 4 — wizard UI** (see the RESUME box). Phase 2 was fully accepted
 (user confirmed, 2026-07-09). Since the step-8 NiceGUI migration (PR #11, merged),
 the console shipped several rounds of wizard polish, all merged and not previously logged here:
 - **PR #12** — guided tabbed wizard, icon nav, dark theme (console redesign).
@@ -22,12 +22,13 @@ webhook secret (CLAUDE.md deviations #1, #7). Phase 3 is broken into 7 PR-sized 
 request/response-model pass was inserted as step 2) — see `docs/PLAN.md` for the authoritative
 deliverables/acceptance text; the box below tracks live progress.
 
-> **RESUME: start Phase 3 step 3 — live repo/project listing.** Add `PlaneClient.list_projects(
-> workspace_slug)` and a GitHub `list_repos(token)` (paginated `GET /user/repos`), following the
-> existing `PlaneClient`/`verify.py` httpx patterns (injectable `client=` for `MockTransport` tests).
-> These feed step 4's wizard pickers. Note for the eventual SETUP_GITHUB.md: fine-grained PATs only
-> list repos explicitly granted at token creation. Full spec: `docs/PLAN.md` → Phase 3 step 3.
-> Steps 1 (multi-repo schema) and 2 (Pydantic models) are **done** — see "Phase 3 — steps" below.
+> **RESUME: start Phase 3 step 4 — wizard UI.** Wire the step-3 listers into the console. Plane
+> step: a checkbox per workspace project (from `PlaneClient.list_projects()`), backed by
+> `ProjectMapping.enabled`. GitHub step: one section per enabled project — live repo picker (from
+> `verify.list_github_repos()`; 1 slot default + "Add another repo"), project-scoped secret field +
+> Generate button (pattern from PR #17), shared payload URL with the copy control (PR #17), and the
+> 4-events + SSL-verification instructions (drafted in PR #17) repeated per repo. Full spec:
+> `docs/PLAN.md` → Phase 3 step 4. Steps 1–3 are **done** — see "Phase 3 — steps" below.
 >
 > **Note for a new session:** the console UI is no longer one `ui/views.py`. PR #21 split it into
 > `ui/{shell,widgets,wizard,pages,auth}.py` (shell = theme/nav/layout/`_origin`; widgets = field
@@ -260,9 +261,15 @@ the live progress tracker; check steps off as PRs land.
       `catalog.StepStatus` + `verify.VerifyResult` moved from dataclasses to Pydantic. Internal typing
       only — response JSON shapes unchanged. Also folded in (SRP): the 880-line `ui/views.py` split into
       `ui/{shell,widgets,wizard,pages,auth}.py`.
-- [ ] **Step 3 — Live repo/project listing.** `PlaneClient.list_projects(workspace_slug)`; GitHub
-      `list_repos(token)` (paginated `GET /user/repos`). Note for SETUP_GITHUB.md: fine-grained PATs
-      only list repos explicitly granted at token creation.
+- [x] **Step 3 — Live repo/project listing.** `PlaneClient.list_projects()` (paginated
+      `GET .../workspaces/{slug}/projects/`, unwraps `results` like `list_states`/`list_labels`);
+      `verify.list_github_repos(token)` (paginated `GET /user/repos`, follows the `Link: rel="next"`
+      header via `httpx.Response.links`, returns `owner/name`, **empty list on any failure** so the
+      wizard falls back to a free-typed field — same contract as `list_claude_models`). Shared
+      `verify._github_headers` extracted (used by `verify_github` too). Internal API only, not yet
+      wired into the UI (step 4). Note for SETUP_GITHUB.md: fine-grained PATs only list repos
+      explicitly granted at token creation, so a missing repo = the token's GitHub-side grant needs
+      editing, not a conductor bug.
 - [ ] **Step 4 — Wizard UI.** Plane step: checkbox per workspace project (backed by `enabled`). GitHub
       step: one section per enabled project — live repo picker (1 slot default + "Add another repo"),
       project-scoped secret field + Generate button (pattern from PR #17), shared payload URL with the

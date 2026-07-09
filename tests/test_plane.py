@@ -49,6 +49,19 @@ async def test_list_labels_unwraps_results() -> None:
     assert labels[0]["name"] == "epic"
 
 
+async def test_list_projects_unwraps_results() -> None:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        return httpx.Response(200, json={"results": [{"id": "p1", "name": "chessbro"}]})
+
+    async with _client(handler) as c:
+        projects = await _plane(c).list_projects()
+    assert projects[0]["name"] == "chessbro"
+    assert seen["path"] == "/api/v1/workspaces/dem/projects/"
+
+
 async def test_post_comment_sends_comment_html() -> None:
     seen: dict[str, object] = {}
 
@@ -78,7 +91,9 @@ async def test_set_state_patches_state() -> None:
 
 
 async def test_error_response_raises_plane_error() -> None:
-    async with _client(lambda r: httpx.Response(404, json={"detail": "not found"})) as c:
+    async with _client(
+        lambda r: httpx.Response(404, json={"detail": "not found"})
+    ) as c:
         with pytest.raises(PlaneError) as exc:
             await _plane(c).get_issue("p1", "missing")
     assert exc.value.status_code == 404
