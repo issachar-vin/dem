@@ -1,29 +1,44 @@
 # GitHub setup
 
-How to connect DEM to GitHub: a machine account, a fine-grained token, per-project webhooks, and
-branch protection. Do this once per deployment (plus one webhook per repo). It assumes you have
-already run the setup wizard's Plane step and enabled at least one project with its repos mapped
-(see the console's Projects page).
+How to connect DEM to GitHub: a bot identity, a fine-grained token, per-project webhooks, and branch
+protection. Do this once per deployment (plus one webhook per repo). It assumes you have already run
+the setup wizard's Plane step and enabled at least one project with its repos mapped (see the
+console's Projects page).
 
 For the conductor-side config field reference, see `docs/PLAN.md`; this doc is the operator
 walkthrough on the GitHub side.
 
 ---
 
-## 1. Create a machine account
+## 1. Pick the bot identity: machine account vs. your own account
 
-Agents commit, push branches, and open PRs under whatever identity owns the token. **Use a dedicated
-GitHub account (a "machine account" / bot user), not your personal one:**
+Agents commit, push branches, and open PRs under whatever identity owns the token. Both approaches
+use a scoped fine-grained token (§2) — the difference is **how the "a human approves, the bot
+doesn't" gate is enforced.** Pick one:
 
-- Its activity (branches, PRs, comments) is clearly attributable to the pipeline, not to you.
-- You can scope its repo access narrowly and revoke it without touching your own access.
-- Branch protection can require review from a *human* while the bot opens the PR — the bot never
-  approves its own work.
+### Option A — dedicated machine account (recommended: *enforced* approval gate)
 
-Create a normal GitHub account (e.g. `your-org-dem-bot`), then invite it as a collaborator (or org
-member) with **write** access to each repository DEM will work on. Write is enough: the bot pushes
-branches and opens PRs; it never needs admin, and it must **not** be able to bypass branch
-protection (see §5).
+Create a separate GitHub account (e.g. `your-org-dem-bot`) and invite it as a collaborator with
+**write** access to each target repo (write is enough — it pushes branches and opens PRs; never give
+it admin or a protection bypass). Now the bot **authors** PRs and **you** approve/merge them. Because
+the author and the approver are different identities, **branch protection can *require* an approving
+review the bot literally cannot give** (§5) — GitHub enforces the human gate for you. You also get
+clean attribution (bot activity is distinct from yours) and can revoke the account without touching
+your own access.
+
+### Option B — your own account (the "eyeball" method: *manual* gate)
+
+Skip the second account and issue the token from your personal account. Simpler, nothing extra to
+manage. The catch is the approval gate becomes **your discipline, not GitHub's enforcement**:
+**GitHub won't let you approve your own pull request**, and here every PR is authored by *you* — so
+required-approving-reviews can't be satisfied by you alone. You therefore rely on personally reading
+each PR before clicking **Merge** yourself (see §5 for the protection settings that still apply). Fine
+for a solo/hobby deployment, as long as you accept the trade: you're swapping an *enforced* guarantee
+for a *manual* one. If you ever add a second human or want the gate to be un-bypassable, move to
+Option A.
+
+> The rest of this guide works for either option. Where it says "the bot" / "the machine account,"
+> read it as "whichever identity owns the token."
 
 ---
 
@@ -32,8 +47,9 @@ protection (see §5).
 DEM authenticates to the GitHub REST API with a single token, stored encrypted and entered in the
 wizard's GitHub step as **`GITHUB_TOKEN`**.
 
-Sign in **as the machine account** and go to **Settings → Developer settings → Personal access
-tokens → Fine-grained tokens → Generate new token**.
+Sign in **as the identity you chose in §1** (the machine account for Option A, or yourself for
+Option B) and go to **Settings → Developer settings → Personal access tokens → Fine-grained tokens →
+Generate new token**.
 
 - **Resource owner:** the account/org that owns the target repos.
 - **Repository access:** *Only select repositories* → pick every repo any enabled project maps to.
@@ -125,23 +141,38 @@ project, instead of every repo the conductor serves.
 
 ---
 
-## 5. Branch protection — the real approval gate
+## 5. Branch protection — the approval gate
 
 **DEM never auto-merges.** The pipeline takes a ticket all the way to `ready_for_approval` and opens
-a PR, then stops. The guarantee that a human — not the bot — merges is **GitHub branch protection**,
-not anything in the agent prompts. Prompts can be ignored or jailbroken; a protected branch cannot.
+a PR, then stops. A human does the merge. How strongly that's *enforced* depends on the identity you
+chose in §1 — agent prompts are never the guarantee (they can be ignored or jailbroken); branch
+protection is.
 
 On each target repo: **Settings → Branches → Add branch ruleset** (or *Branch protection rule*) for
-the base branch (`main`, or whatever you mapped):
+the base branch (`main`, or whatever you mapped).
 
-- ✅ **Require a pull request before merging** — and **Require approvals** (≥ 1).
-- ✅ **Do not allow bypassing the above settings** — this is what stops the machine account from
-  merging its own PR. Confirm the bot is **not** in any bypass/allow list.
+**Option A (machine account) — enforced gate:**
+
+- ✅ **Require a pull request before merging** — and **Require approvals** (≥ 1). The bot authors the
+  PR, so it can't supply this approval — you do.
+- ✅ **Do not allow bypassing the above settings** — this is what stops the bot from merging its own
+  PR. Confirm the machine account is **not** in any bypass/allow list.
 - ✅ (Recommended) **Require status checks to pass** if the repo runs CI.
 - Keep the machine account's access at **write**, never admin, so it cannot edit the ruleset.
 
-Net effect: the bot can open and update a PR but physically cannot merge it. Merging is your second
-(and final) human touchpoint.
+Net effect: the bot can open and update a PR but *physically cannot* merge it.
+
+**Option B (your own account) — manual gate:** because you authored the PR, GitHub won't let you
+approve it, so **Require approvals** can't be satisfied by you and would just block you. Instead:
+
+- ✅ **Require a pull request before merging** (keeps work off the base branch and forces the PR view
+  where you review the diff) — but leave **Require approvals** off, or you'll be unable to merge.
+- ✅ (Recommended) **Require status checks to pass** if the repo runs CI — this part *is* still
+  enforced regardless of identity.
+- The gate is now **you reading the diff before clicking Merge**. Nothing GitHub-side stops a
+  bad merge, so this rests on your discipline (the trade you accepted in §1).
+
+Either way, merging is your second (and final) human touchpoint.
 
 ---
 
