@@ -3,7 +3,12 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from conductor.targets import DuplicateProjectError, load_targets
+from conductor.targets import (
+    DuplicateProjectError,
+    dump_targets,
+    load_targets,
+    parse_targets,
+)
 
 
 def _write(path: Path, body: str) -> Path:
@@ -104,3 +109,47 @@ targets:
     )
     with pytest.raises(ValidationError, match="owner/name"):
         load_targets(f)
+
+
+def test_dump_targets_round_trips_through_parse(tmp_path: Path) -> None:
+    original = load_targets(
+        _write(
+            tmp_path / "targets.yml",
+            """
+targets:
+  - workspace: dem
+    project_id: proj-1
+    enabled: true
+    webhook_secret: whsec_1
+    repos:
+      - key: backend
+        github_repo: izzy/chess-bro
+      - key: ui
+        github_repo: izzy/chess-ui
+        base_branch: develop
+  - workspace: dem
+    project_id: proj-2
+    repos:
+      - key: backend
+        github_repo: izzy/other
+""",
+        )
+    )
+    assert parse_targets(dump_targets(original)) == original
+
+
+def test_dump_targets_omits_absent_secret(tmp_path: Path) -> None:
+    targets = load_targets(
+        _write(
+            tmp_path / "targets.yml",
+            """
+targets:
+  - workspace: dem
+    project_id: proj-1
+    repos:
+      - key: backend
+        github_repo: izzy/other
+""",
+        )
+    )
+    assert "webhook_secret" not in dump_targets(targets)

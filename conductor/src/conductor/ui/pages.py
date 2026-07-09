@@ -5,6 +5,7 @@ import json
 from collections import defaultdict
 from typing import Any
 
+import yaml
 from cryptography.fernet import InvalidToken
 from nicegui import ui
 
@@ -75,6 +76,28 @@ def _export_import() -> None:
         ui.notify(f"Imported {imported} value(s).")
 
     ui.upload(label="Bundle file", auto_upload=True, on_upload=on_upload)
+
+    ui.label("targets.yml — full project→repos mapping incl. secrets; plaintext, handle carefully.")
+
+    async def download_targets() -> None:
+        ctx = get_context()
+        workspace = (await ctx.store.resolved()).get("plane_workspace_slug", "")
+        ui.download.content(await ctx.mappings.export_targets(workspace), "targets.yml")
+
+    ui.button("Download targets.yml", on_click=download_targets)
+
+    ui.label("Import targets.yml")
+
+    async def on_targets_upload(event: Any) -> None:
+        text = event.content.read().decode()
+        try:
+            imported = await get_context().mappings.import_targets_text(text)
+        except (yaml.YAMLError, ValueError):
+            ui.notify("Invalid targets.yml.", color="negative")
+            return
+        ui.notify(f"Imported {imported} project mapping(s).")
+
+    ui.upload(label="targets.yml file", auto_upload=True, on_upload=on_targets_upload)
 
 
 def _is_owner_name(repo: str) -> bool:

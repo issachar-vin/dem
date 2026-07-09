@@ -3,8 +3,10 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 3 step 3 (live repo/project listing) is done.**
-Next up is **step 4 — wizard UI** (see the RESUME box). Phase 2 was fully accepted
+**Last updated:** **Phase 3 step 5 (structured targets.yml export/import) is done.** Step 4 (wizard
+UI) is done in PR #24 (open at time of writing); this step-5 branch is cut from `main` and is
+independent of it. Next up is **step 6 — GitHub webhook handler + poll mode** (see the RESUME box).
+Phase 2 was fully accepted
 (user confirmed, 2026-07-09). Since the step-8 NiceGUI migration (PR #11, merged),
 the console shipped several rounds of wizard polish, all merged and not previously logged here:
 - **PR #12** — guided tabbed wizard, icon nav, dark theme (console redesign).
@@ -22,13 +24,16 @@ webhook secret (CLAUDE.md deviations #1, #7). Phase 3 is broken into 7 PR-sized 
 request/response-model pass was inserted as step 2) — see `docs/PLAN.md` for the authoritative
 deliverables/acceptance text; the box below tracks live progress.
 
-> **RESUME: start Phase 3 step 4 — wizard UI.** Wire the step-3 listers into the console. Plane
-> step: a checkbox per workspace project (from `PlaneClient.list_projects()`), backed by
-> `ProjectMapping.enabled`. GitHub step: one section per enabled project — live repo picker (from
-> `verify.list_github_repos()`; 1 slot default + "Add another repo"), project-scoped secret field +
-> Generate button (pattern from PR #17), shared payload URL with the copy control (PR #17), and the
-> 4-events + SSL-verification instructions (drafted in PR #17) repeated per repo. Full spec:
-> `docs/PLAN.md` → Phase 3 step 4. Steps 1–3 are **done** — see "Phase 3 — steps" below.
+> **RESUME: start Phase 3 step 6 — GitHub webhook handler + poll mode.** `/webhooks/github`: parse
+> the (unverified) body's `repository.full_name` → look up the owning project → HMAC-verify against
+> **that project's** `webhook_secret` (verify-after-lookup, the multi-tenant pattern) → route the 4
+> subscribed events (`pull_request`, `pull_request_review`, `pull_request_review_comment`,
+> `pull_request_review_thread`), deduped by `X-GitHub-Delivery`; poll mode = interval loop across every
+> mapped repo. Folds in the intake/ordering/concurrency design (two entry points, in-flight-first
+> ordering, blocking-relationship gate, `MAX_CONCURRENT_AGENTS=1`, no auto-merge) + semantic Job dedupe.
+> **Prerequisite:** add SQLite PRAGMAs in `db.py` (`journal_mode=WAL`, `busy_timeout`, `foreign_keys=ON`)
+> before concurrent writes. Full spec: `docs/PLAN.md` → Phase 3 step 6. Steps 1–5 are **done** — see
+> "Phase 3 — steps" below.
 >
 > **Note for a new session:** the console UI is no longer one `ui/views.py`. PR #21 split it into
 > `ui/{shell,widgets,wizard,pages,auth}.py` (shell = theme/nav/layout/`_origin`; widgets = field
@@ -270,14 +275,26 @@ the live progress tracker; check steps off as PRs land.
       wired into the UI (step 4). Note for SETUP_GITHUB.md: fine-grained PATs only list repos
       explicitly granted at token creation, so a missing repo = the token's GitHub-side grant needs
       editing, not a conductor bug.
-- [ ] **Step 4 — Wizard UI.** Plane step: checkbox per workspace project (backed by `enabled`). GitHub
-      step: one section per enabled project — live repo picker (1 slot default + "Add another repo"),
-      project-scoped secret field + Generate button (pattern from PR #17), shared payload URL with the
-      copy control (PR #17), instructions for the 4 events + SSL verification (already drafted, PR #17)
-      repeated per repo under that project.
-- [ ] **Step 5 — Structured export/import.** `targets.yml` becomes bidirectional (export added, not
-      just import) so the full project→repos(+secrets) mapping round-trips through one YAML file. `.env`
-      export stays flat/unchanged.
+- [x] **Step 4 — Wizard UI (PR #24, open).** Plane panel gained a "Projects to manage" sub-step
+      (checkbox per workspace project from `PlaneClient.list_projects()`, backed by
+      `ProjectMapping.enabled`). GitHub panel: dropped the flat global `github_webhook_secret` (catalog
+      field + `_conditionally_required` gate removed — secrets are project-scoped now) and added one
+      section per **enabled** project: repo picker fed by `verify.list_github_repos()` (live select with
+      typeable fallback; 1 slot + "Add another repo"; existing repos removable), project-scoped webhook
+      secret field + Generate button (`set_project(webhook_secret=…)`), and the shared `/webhooks/github`
+      payload URL + copy control + 4-events/SSL instructions (webhook mode only). `_is_owner_name` moved
+      pages.py → widgets.py (shared). `.env.example` drops `GITHUB_WEBHOOK_SECRET`.
+- [x] **Step 5 — Structured targets.yml export/import.** `targets.py` gained `parse_targets(text)`
+      (factored out of `load_targets`) + `dump_targets(targets)` (inverse; `exclude_none` so an absent
+      secret isn't serialized as `null`). `MappingStore` gained `export_targets(workspace)` (builds
+      `Target`s from the DB, decrypts each project's webhook secret to plaintext, dumps YAML) and
+      `import_targets_text(text, reseed=True)` (UI supplies text, not a path; reseed by default so an
+      explicit upload applies over existing mappings — the seed-once boot path stays `reseed=False`);
+      the import loop is shared via `_apply_targets`. Config page's export/import section gained
+      "Download targets.yml" + "Import targets.yml" controls next to the `.env`/bundle ones. The flat
+      `.env` export is unchanged (can't represent a dynamic repo list). Workspace slug comes from
+      `store.resolved()['plane_workspace_slug']`; plaintext secrets in the file carry the same
+      handle-carefully caveat as the `.env` export.
 - [ ] **Step 6 — GitHub webhook handler + poll mode.** `/webhooks/github`: parse (unverified)
       `repository.full_name` → look up owning project → verify against **that project's** secret →
       route the 4 subscribed events (`pull_request`, `pull_request_review`,
