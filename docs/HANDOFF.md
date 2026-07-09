@@ -4,7 +4,7 @@
 > work progresses; trim finished detail once a phase merges.
 
 **Last updated:** **Phase 3 step 6 — GitHub webhook handler + poll mode (intake layer) — is done
-(PR #NN), pending review.** Scope was deliberately cut to **intake only** (webhook + poll → deduped
+(PR #28), pending review.** Scope was deliberately cut to **intake only** (webhook + poll → deduped
 Jobs); the runtime **scheduler** (in-flight-first ordering, blocking-relationship gate,
 `MAX_CONCURRENT_AGENTS` semaphore, actual container dispatch) is deferred to **Phase 4**, where the
 agent image/dispatcher it drives is built — there is nothing to schedule until then. Next up is
@@ -306,7 +306,7 @@ the live progress tracker; check steps off as PRs land.
       `.env` export is unchanged (can't represent a dynamic repo list). Workspace slug comes from
       `store.resolved()['plane_workspace_slug']`; plaintext secrets in the file carry the same
       handle-carefully caveat as the `.env` export.
-- [x] **Step 6 — GitHub webhook handler + poll mode (intake layer, PR #NN).** Cut to **intake only**
+- [x] **Step 6 — GitHub webhook handler + poll mode (intake layer, PR #28).** Cut to **intake only**
       (see the RESUME box for what deferred to Phase 4). Built:
       - **`db.py` SQLite PRAGMAs** (prerequisite): `journal_mode=WAL`, `busy_timeout=5000`,
         `foreign_keys=ON` via a sqlite-only engine `connect` listener.
