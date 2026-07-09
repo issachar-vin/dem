@@ -2,7 +2,17 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from conductor.db import Base
@@ -35,14 +45,29 @@ class WorkflowState(StrEnum):
 
 class Job(Base):
     __tablename__ = "jobs"
+    __table_args__ = (
+        # At most one *active* (queued/running) job per (source, dedupe_key). This is the race-safe
+        # backstop to enqueue_job's read-then-insert semantic dedupe: two concurrent Plane
+        # re-deliveries of the same issue event can both pass the "any active job?" read, but only
+        # one can win this insert — the other hits IntegrityError and is dropped. Partial (active
+        # only) so a key is reusable once its job is terminal; NULL-guarded so github/poll jobs
+        # (dedupe_key IS NULL) are exempt. SQLite-only backend (deviation: single-writer conductor).
+        Index(
+            "ix_jobs_active_dedupe",
+            "source",
+            "dedupe_key",
+            unique=True,
+            sqlite_where=text("status IN ('queued', 'running') AND dedupe_key IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
     # Provider delivery id (Plane/GitHub), used to dedupe redelivered webhooks.
     delivery_id: Mapped[str | None] = mapped_column(String(255), unique=True, default=None)
-    # Semantic dedupe key (e.g. "<project_id>:<issue_id>"): at most one *active* job per key, so a
-    # re-fired Plane issue event doesn't stack a second job while one is still queued/running.
-    # Distinct from delivery_id, which only catches a literal duplicate delivery of one event.
-    dedupe_key: Mapped[str | None] = mapped_column(String(255), index=True, default=None)
+    # Semantic dedupe key (e.g. "<project_id>:<issue_id>"): at most one *active* job per key
+    # (enforced by ix_jobs_active_dedupe above), so a re-fired Plane issue event doesn't stack a
+    # second job. Distinct from delivery_id, which only catches a literal duplicate of one delivery.
+    dedupe_key: Mapped[str | None] = mapped_column(String(255), default=None)
     source: Mapped[str] = mapped_column(String(32))
     event_type: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

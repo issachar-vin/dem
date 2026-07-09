@@ -33,9 +33,10 @@ async def enqueue_job(
     - `dedupe_key` rejects a *semantically* duplicate trigger while a prior job for the same key
       is still active (queued/running) — e.g. a repeat Plane issue event for an in-flight issue.
 
-    The semantic check is a read-then-insert, so under truly concurrent enqueues a duplicate can
-    still slip through; that is acceptable under the single-writer conductor model, and the
-    downstream state machine is idempotent per ticket.
+    The semantic check here is a read-then-insert, so under truly concurrent enqueues (Plane can
+    deliver the same issue event twice, milliseconds apart) both callers may pass the read. The
+    `ix_jobs_active_dedupe` partial-unique index is the backstop: the losing insert raises
+    IntegrityError and is dropped, so at most one active job per (source, dedupe_key) survives.
     """
     async with sessionmaker() as session:
         if dedupe_key is not None:
