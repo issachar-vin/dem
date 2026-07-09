@@ -3,12 +3,16 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 3 step 6 — GitHub webhook handler + poll mode (intake layer) — is done
-(PR #28), pending review.** Scope was deliberately cut to **intake only** (webhook + poll → deduped
-Jobs); the runtime **scheduler** (in-flight-first ordering, blocking-relationship gate,
-`MAX_CONCURRENT_AGENTS` semaphore, actual container dispatch) is deferred to **Phase 4**, where the
-agent image/dispatcher it drives is built — there is nothing to schedule until then. Next up is
-**step 7 — docs & acceptance** (see the RESUME box). Phase 2 was fully accepted
+**Last updated:** **Phase 3 step 7 — docs & acceptance — is done (PR #NN), pending review; this
+closes Phase 3's code work.** `docs/SETUP_GITHUB.md` written (machine account, fine-grained PAT
+scopes + repo-visibility caveat, per-project webhook walkthrough, branch protection as the approval
+gate, webhook-vs-poll, tunnel guidance) and the wizard's GitHub step now links to it; UI guide and
+doc were reconciled to match. **The Phase 3 acceptance test itself is a live user step** (needs the
+real Plane workspace + GitHub repos + deployment) — checklist is in `docs/SETUP_GITHUB.md` §7 and
+`docs/PLAN.md` → Phase 3. Step 6 (PR #28) was **intake only**; the runtime **scheduler** (in-flight
+ordering, blocking gate, `MAX_CONCURRENT_AGENTS` semaphore, container dispatch) is **Phase 4** work,
+where the agent image it drives is built. **Next up: Phase 4 — agent image & dispatcher** (see the
+RESUME box). Phase 2 was fully accepted
 (user confirmed, 2026-07-09). Since the step-8 NiceGUI migration (PR #11, merged),
 the console shipped several rounds of wizard polish, all merged and not previously logged here:
 - **PR #12** — guided tabbed wizard, icon nav, dark theme (console redesign).
@@ -26,14 +30,18 @@ webhook secret (CLAUDE.md deviations #1, #7). Phase 3 is broken into 7 PR-sized 
 request/response-model pass was inserted as step 2) — see `docs/PLAN.md` for the authoritative
 deliverables/acceptance text; the box below tracks live progress.
 
-> **RESUME: start Phase 3 step 7 — docs & acceptance.** Write `docs/SETUP_GITHUB.md` (machine
-> account, fine-grained PAT scopes + the step-3 repo-visibility caveat, per-project webhook
-> walkthrough repeated per repo with the same project secret, branch-protection walkthrough and *why*
-> it — not prompts — is the human-approval guarantee, poll vs. webhook tradeoffs, tunnel guidance for
-> non-public deployments). Then run the Phase 3 acceptance test in `docs/PLAN.md` → "Phase 3". Full
-> spec: `docs/PLAN.md` → Phase 3 step 7. Steps 1–6 are **done** — see "Phase 3 — steps" below.
+> **RESUME: Phase 3 is code-complete (steps 1–7 done). Start Phase 4 — agent image & dispatcher.**
+> Full spec: `docs/PLAN.md` → "Phase 4". Deliverables: `agent/Dockerfile` (node:22-slim + Claude Code
+> CLI + git/gh + Python/pytest, non-root `agent` user); `entrypoint.sh` (fail if both auth vars set;
+> seed `~/.claude.json` on a fresh state volume; exec the passed `claude -p`); the **dispatcher**
+> module (`docker run` construction: per-ticket volumes, role env, mem/CPU limits, `--rm`, hard
+> timeout→kill) and volume lifecycle (create + `git clone --depth 50` + `ticket/<id>` branch; destroy
+> on cleanup); agent output contracts (Pydantic). **This is where the intake Jobs from step 6 finally
+> get consumed** — the scheduler deferred out of step 6 (below) is built here.
+> **Before starting Phase 4, the user still needs to run the Phase 3 acceptance test** (live; checklist
+> in `docs/SETUP_GITHUB.md` §7). Steps 1–7 are **done** — see "Phase 3 — steps" below.
 >
-> **Deferred out of step 6 into Phase 4 (the dispatcher/state machine):** the work **scheduler** —
+> **The scheduler deferred from step 6, now Phase 4 (the dispatcher/state machine):** the work **scheduler** —
 > in-flight-first then oldest-created ordering, the Plane blocking-relationship eligibility gate, the
 > `MAX_CONCURRENT_AGENTS` per-role semaphore, and the actual container dispatch. Step 6 only *enqueues*
 > Jobs (webhook + poll); nothing consumes/orders them until Phase 4 builds the agent image + dispatcher.
@@ -332,9 +340,14 @@ the live progress tracker; check steps off as PRs land.
         matrix, `github` client, `poller` baseline/change/error, mappings lookups, db PRAGMAs). 105 green;
         ruff + mypy --strict clean. Verified: full migration chain + no autogenerate drift; app boots
         with poll mode, `/health` 200, both webhooks 401 unsigned, clean lifespan shutdown.
-- [ ] **Step 7 — Docs & acceptance.** docs/SETUP_GITHUB.md (machine account, fine-grained PAT scopes +
-      repo-visibility caveat, per-project webhook walkthrough, branch protection, poll vs. webhook,
-      tunnel guidance); run the Phase 3 acceptance test in `docs/PLAN.md`.
+- [x] **Step 7 — Docs & acceptance (PR #NN).** `docs/SETUP_GITHUB.md` written: machine account,
+      fine-grained PAT scopes (Contents RW / Pull requests RW / Metadata) + the repo-visibility caveat,
+      webhook-vs-poll tradeoffs, per-project webhook walkthrough (per repo, same project secret, the 4
+      events, `application/json`, SSL on) with the verify-after-lookup explainer, branch protection as
+      the human-approval gate (not prompts), and tunnel guidance (Cloudflare Tunnel / Tailscale Funnel).
+      The wizard's GitHub step links to it and its inline guide was reconciled to match the doc.
+      **Acceptance test = a live user step** (real Plane + GitHub + deployment): checklist in
+      `docs/SETUP_GITHUB.md` §7 / `docs/PLAN.md` → Phase 3 — not run in this PR.
 
 **DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
 spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if

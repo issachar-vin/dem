@@ -264,7 +264,10 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
             "GitHub → **Settings → Developer settings → Fine-grained tokens → Generate new "
             "token**. Grant it access to the target repos with **Contents: Read and write** and "
             "**Pull requests: Read and write**. A dedicated machine account is recommended so PRs "
-            "aren't attributed to you."
+            "aren't attributed to you.\n\n"
+            "Full walkthrough (machine account, exact token scopes, per-project webhooks, and "
+            "branch protection): [docs/SETUP_GITHUB.md]"
+            "(https://github.com/issachar-vin/dem/blob/main/docs/SETUP_GITHUB.md)."
         )
     token_section = _Section()
     token_section.field(config["github_token"])
