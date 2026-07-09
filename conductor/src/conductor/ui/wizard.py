@@ -316,7 +316,7 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
         return
 
     resolved = await get_context().store.resolved()
-    repo_options = await verify.list_github_repos(token=resolved.get("github_token", ""))
+    repo_defaults = await verify.list_github_repos(token=resolved.get("github_token", ""))
     names = {p["id"]: p["name"] for p in await _plane_projects()}
     payload_url = f"{origin.rstrip('/')}/webhooks/github"
     default_branch = config["github_base_branch"].value or "main"
@@ -337,7 +337,7 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
             names.get(project.plane_project_id, project.plane_project_id),
             project.repos,
             project.has_webhook_secret,
-            repo_options,
+            repo_defaults,
             default_branch,
             webhook_mode,
         )
@@ -383,12 +383,14 @@ def _project_section(
     name: str,
     repos: list[RepoMappingView],
     has_secret: bool,
-    repo_options: list[str],
+    repo_defaults: dict[str, str],
     default_branch: str,
     webhook_mode: bool,
 ) -> Callable[[], Awaitable[bool]]:
     """Render one project's editable repo list (add/remove rows in place, nothing persisted) plus
-    its webhook secret, and return an async save() reconciling the DB with the on-screen state."""
+    its webhook secret, and return an async save() reconciling the DB with the on-screen state.
+    `repo_defaults` maps each listable repo to its GitHub default branch, used to auto-fill the
+    base branch when a repo is picked."""
     rows: list[_RepoRow] = []
 
     with ui.card().classes("w-full gap-2"):
@@ -406,10 +408,21 @@ def _project_section(
                 role_in = ui.select(options=list(ROLE_CHOICES), value=role, label="Role").classes(
                     "w-full"
                 )
-                repo_in = _repo_field(repo_options, repo)
+                repo_in = _repo_field(list(repo_defaults), repo)
                 branch_in = ui.input(label="Base branch", value=branch or default_branch).classes(
                     "w-full"
                 )
+
+                if repo_defaults:  # select mode — seed the base branch from the picked repo
+
+                    def seed_branch(
+                        _: object,
+                        target: ui.input = branch_in,
+                        picker: ui.select | ui.input = repo_in,
+                    ) -> None:
+                        target.value = repo_defaults.get(str(picker.value or ""), default_branch)
+
+                    repo_in.on_value_change(seed_branch)
 
                 def remove() -> None:
                     repo_col.remove(exp)

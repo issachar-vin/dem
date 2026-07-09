@@ -150,30 +150,31 @@ async def list_github_repos(
     *,
     token: str,
     client: httpx.AsyncClient | None = None,
-) -> list[str]:
-    """Full names (`owner/name`) of every repo the token can access, for the wizard's repo picker.
-    Empty list on any failure — the UI falls back to a free-typed repo field. A fine-grained PAT
-    only lists repos explicitly granted at token creation, so a missing repo means the token's own
-    GitHub-side grant needs editing."""
+) -> dict[str, str]:
+    """Map of `owner/name` → default branch for every repo the token can access, for the wizard's
+    repo picker (the default branch seeds each repo's base-branch field). Empty dict on any failure
+    — the UI falls back to a free-typed repo field. A fine-grained PAT only lists repos explicitly
+    granted at token creation, so a missing repo means the token's own GitHub-side grant needs
+    editing."""
     headers = _github_headers(token)
 
-    async def fetch(c: httpx.AsyncClient) -> list[str]:
-        repos: list[str] = []
+    async def fetch(c: httpx.AsyncClient) -> dict[str, str]:
+        repos: dict[str, str] = {}
         url: str | None = GITHUB_REPOS_URL
         params: dict[str, str] | None = {"per_page": "100", "sort": "full_name"}
         while url:
             try:
                 response = await c.get(url, headers=headers, params=params)
             except httpx.HTTPError:
-                return []
+                return {}
             if response.status_code != 200:
-                return []
+                return {}
             page = response.json()
             if not isinstance(page, list):
-                return []
-            repos.extend(
-                str(r["full_name"]) for r in page if isinstance(r, dict) and "full_name" in r
-            )
+                return {}
+            for r in page:
+                if isinstance(r, dict) and "full_name" in r:
+                    repos[str(r["full_name"])] = str(r.get("default_branch") or "main")
             url = response.links.get("next", {}).get("url")
             params = None  # the next-page URL already carries the query string
         return repos
