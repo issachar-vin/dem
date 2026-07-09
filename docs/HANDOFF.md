@@ -3,23 +3,31 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** Phase 2 is built through **step 8** — the NiceGUI console migration is **done**
-(branch `feat/nicegui-console`, PR open). The console is now mounted inside the conductor
-(single process/container); the Streamlit `console/` package and the whole `/api/*` layer are gone.
-One Phase 2 step remains:
-- **Step 9 — verification.** (a) The user **redeploys barad-dur** to the single-container layout
-  (below), then (b) runs the setup wizard on the NiceGUI console, then (c) we run the live Plane
-  acceptance test.
+**Last updated:** **Phase 2 is done and accepted** (user confirmed, 2026-07-09) — step 9 verification
+(barad-dur redeploy, wizard run, live Plane acceptance test) is no longer blocking; **work now
+proceeds to Phase 3.** Since the step-8 NiceGUI migration (PR #11, merged), the console shipped
+several rounds of wizard polish, all merged and not previously logged here:
+- **PR #12** — guided tabbed wizard, icon nav, dark theme (console redesign).
+- **PR #13** — Plane webhook payload URL derived from the request origin, not hand-typed.
+- **PR #14** — manual `0.<phase>.<patch>` version scheme + versioned Docker image tag.
+- **PR #15** — version shown at the bottom of the nav drawer.
+- **PR #16** — mobile nav fix, live wizard-step completion checks, GitHub webhook UX, masked secrets.
+- **PR #17** — copy-to-clipboard on both payload URL fields, generate-secret button for the GitHub
+  webhook secret, wizard copy for the 4 GitHub webhook events + SSL verification.
 
-Phase 3 design (pipeline intake/ordering/concurrency) is spec'd in `docs/PLAN.md` (PR #9) and waits
-behind step 9.
-**Active branch:** `feat/nicegui-console` (PR open — awaiting merge).
+`docs/PLAN.md` Phase 3 is now **"GitHub integration & multi-repo wizard"** — folds in the pipeline
+intake/ordering/concurrency design (originally PR #9) plus a new prerequisite: project↔repo mapping
+widens from one-repo-per-project to **one project → many repos**, with a project-scoped GitHub
+webhook secret (CLAUDE.md deviations #1, #7). Phase 3 is broken into 6 PR-sized steps — see
+`docs/PLAN.md` for the authoritative deliverables/acceptance text; the box below tracks live progress.
 
-> **RESUME: after this PR merges, the next task is Phase 2 step 9.** First the barad-dur redeploy
-> (drop `dem-console`, simplify Caddy — see below), then the user runs the wizard on the NiceGUI
-> console, then the live Plane acceptance test ("resume here" further down).
+> **RESUME: start Phase 3 step 1 — multi-repo mapping schema.** `RepoMapping` table (project_id,
+> repo key, `github_repo`, `base_branch`); `ProjectMapping` gains `enabled` + `webhook_secret`;
+> `MappingStore` repo CRUD; `targets.yml` schema widens to a repo list per project (clean cut, no
+> back-compat shim — one live deployment, one mapped project to move over). Full spec: `docs/PLAN.md`
+> → Phase 3 step 1. See "Phase 3 — steps" below for the full breakdown.
 
-## Phase 2 step 8 — NiceGUI console migration DONE (PR open, branch `feat/nicegui-console`)
+## Phase 2 step 8 — NiceGUI console migration DONE (PR #11, merged)
 
 **What & why:** Streamlit forced a second service (its own runtime; can't host the raw-body webhook
 receiver; can't share the conductor's process), and that split was the *sole* reason the `/api/*`
@@ -180,39 +188,11 @@ deviation #4's "Streamlit-native login" wording.
 (defense-in-depth) — that's infra wiring, part of step 7, not app code. No console `AppTest` gate test
 (the client-level auth is covered by `test_api_client.py`; the Streamlit gate is thin glue).
 
-## Phase 2 step 9 — verification (wizard run + live Plane acceptance test)
-**(Step 8 has shipped, so the wizard is now the NiceGUI console.)** After the barad-dur redeploy
-(step 9a above), ask whether the user has completed the setup wizard at https://dem.eroizzy.com and
-route on the answer:
-
-### If the wizard is NOT done yet — help finish it
-The console gates first-run behind create-admin, then the wizard drives config. Checklist (each item
-maps to what's built in Phase 2a/2b/2-UI):
-1. Open https://dem.eroizzy.com → **create the admin account** (first-run; `GET /api/auth/status` still
-   reports `initialized:false` as of deploy).
-2. Wizard steps with a live **Test connection** button: **Claude** (subscription token per CLAUDE.md),
-   **Plane** (`PLANE_API_KEY`, `PLANE_BASE_URL=https://plane.eroizzy.com`), **GitHub** (machine PAT).
-   Each must go green before moving on.
-3. Set **`plane_webhook_secret`** to match the secret from the Plane webhook (next item).
-4. In Plane, create a **webhook → `https://dem.eroizzy.com/webhooks/plane`** (issue events), using the
-   same secret as step 3.
-5. **Map the `chessbro` project** (Projects page) and **map its workflow states** (States page: live
-   `state-scan` → assign each canonical `WorkflowState`, incl. `ready_for_dev`).
-
-### If the wizard IS done — run the Phase 2 end-to-end acceptance test
-This is the **live Plane check** that has been pending since 2b (unit tests only synthesize signatures).
-It validates the real HMAC signature, live label→name resolution, and project/state mapping. **Scope
-note:** Phase 3 (dispatcher/engineer) is NOT built, so a ticket will **not** get "worked" yet — success
-here = **the conductor accepts a genuine Plane delivery and enqueues a `Job`.**
-1. In the mapped `chessbro` project, create an issue and add the **`epic`** label.
-2. Plane fires `issue.*` → `POST /webhooks/plane`. Expected: HMAC verifies, `_is_epic` resolves the
-   label UUID→name via `list_labels`, a `Job` row is inserted.
-3. **Confirm it landed:** `docker logs dem-conductor` should show `Queued job for epic issue <id>
-   (project <pid> → <repo>)`. (There is no jobs API/UI yet; log line or the SQLite `jobs` table is the
-   check.) A non-epic issue should log/return `ignored`.
-4. If signature fails (401): the wizard's `plane_webhook_secret` ≠ the Plane webhook's secret — re-check
-   step 3/4 above. If `project ... is not mapped`: finish the Projects mapping.
-Once this passes, **Phase 2 is fully accepted** and Phase 3 starts (design in `docs/PLAN.md`, PR #9).
+## Phase 2 step 9 — verification — DONE (user-confirmed, 2026-07-09)
+barad-dur redeploy, wizard run, and the live Plane acceptance test (real HMAC signature, live
+label→name resolution, project/state mapping, a genuine delivery enqueuing a `Job`) are complete per
+the user. **Phase 2 is fully accepted.** Detailed checklist steps that were tracked here are no
+longer needed and have been removed — see git history on this file if they're ever needed again.
 
 <details><summary>Superseded: 7a/7b detail (kept for provenance)</summary>
 
@@ -251,29 +231,49 @@ ChessLearner stacks). Specifics:
 
 </details>
 
-## Phases 3–7 (per docs/PLAN.md, adjusted per CLAUDE.md deviations)
-GitHub client + webhook → agent image & dispatcher → four agent roles + review loop/state machine →
-observability wired to the existing barad-dur stack → docs/packaging/release.
-**Phase 3 intake design is now spec'd** in `docs/PLAN.md` → "Work intake, ordering & concurrency"
-(PR #9): two entry points (`epic` label → planner; `ready_for_dev` state → engineer), in-flight-first
-then oldest-created ordering, a Plane **blocking-relationship** eligibility gate, one-agent-per-role
-(`MAX_CONCURRENT_AGENTS=1`), planner **sets** the Plane blocks graph, and **no auto-merge** (human
-approves behind branch protection). The current webhook is **epic-only** (`_is_epic` gate drops
-everything else) — Phase 3 must widen it to the two-trigger router above.
-Carry forward from 2b: **semantic Job dedupe** (per project+issue, see decision #3) and the
-**live end-to-end Plane check** (now the Phase 2 acceptance test above).
-**DB decision (confirmed): stay on SQLite** — the conductor is a single-process, single-writer, and
-the spin-up-anywhere/home-lab goal rewards SQLite's zero-friction (no extra container, creds, or
-tuning). No future phase requires Postgres; `DATABASE_URL` keeps it pluggable if that ever changes.
-**Phase 3 prerequisite (before concurrent writes land):** `db.py` currently sets no SQLite PRAGMAs
-— add `journal_mode=WAL`, a `busy_timeout`, and `foreign_keys=ON` on connect (sqlite-only, via an
-engine `connect` event). Without it, overlapping webhook-ingest + dispatcher + status writes will
-raise `database is locked`. Not needed in Phase 2 (nothing writes concurrently yet).
+## Phase 3 — GitHub integration & multi-repo wizard (IN PROGRESS — start here)
+Full deliverables/acceptance text is the authoritative spec in `docs/PLAN.md` → "Phase 3". This is
+the live progress tracker; check steps off as PRs land.
+
+- [ ] **Step 1 — Multi-repo mapping schema.** `RepoMapping` table (project_id, repo key, `github_repo`,
+      `base_branch`); `ProjectMapping` gains `enabled` + `webhook_secret` (encrypted, project-scoped —
+      CLAUDE.md deviation #7); `MappingStore` repo CRUD; `targets.yml` schema widens to a repo list per
+      project. Clean schema cut — no back-compat shim (one live deployment, one mapped project to move).
+- [ ] **Step 2 — Live repo/project listing.** `PlaneClient.list_projects(workspace_slug)`; GitHub
+      `list_repos(token)` (paginated `GET /user/repos`). Note for SETUP_GITHUB.md: fine-grained PATs
+      only list repos explicitly granted at token creation.
+- [ ] **Step 3 — Wizard UI.** Plane step: checkbox per workspace project (backed by `enabled`). GitHub
+      step: one section per enabled project — live repo picker (1 slot default + "Add another repo"),
+      project-scoped secret field + Generate button (pattern from PR #17), shared payload URL with the
+      copy control (PR #17), instructions for the 4 events + SSL verification (already drafted, PR #17)
+      repeated per repo under that project.
+- [ ] **Step 4 — Structured export/import.** `targets.yml` becomes bidirectional (export added, not
+      just import) so the full project→repos(+secrets) mapping round-trips through one YAML file. `.env`
+      export stays flat/unchanged.
+- [ ] **Step 5 — GitHub webhook handler + poll mode.** `/webhooks/github`: parse (unverified)
+      `repository.full_name` → look up owning project → verify against **that project's** secret →
+      route the 4 subscribed events (`pull_request`, `pull_request_review`,
+      `pull_request_review_comment`, `pull_request_review_thread`), deduped by `X-GitHub-Delivery`.
+      Poll mode: interval loop across every mapped repo. Also folds in the intake/ordering/concurrency
+      design already spec'd in `docs/PLAN.md` (originally PR #9): two entry points (`epic` label →
+      planner; `ready_for_dev` → engineer), in-flight-first then oldest-created ordering, Plane
+      blocking-relationship eligibility gate, `MAX_CONCURRENT_AGENTS=1`, no auto-merge. The current
+      webhook is Plane-only/epic-only (`_is_epic` gate) — this step adds the GitHub side of the router.
+      Carry forward from 2b: **semantic Job dedupe** (per project+issue, decision #3 above — delivery-id
+      dedupe alone isn't enough).
+      **Prerequisite before concurrent writes:** `db.py` sets no SQLite PRAGMAs yet — add
+      `journal_mode=WAL`, a `busy_timeout`, and `foreign_keys=ON` on connect (sqlite-only, engine
+      `connect` event) or overlapping webhook-ingest + dispatcher + status writes will raise
+      `database is locked`.
+- [ ] **Step 6 — Docs & acceptance.** docs/SETUP_GITHUB.md (machine account, fine-grained PAT scopes +
+      repo-visibility caveat, per-project webhook walkthrough, branch protection, poll vs. webhook,
+      tunnel guidance); run the Phase 3 acceptance test in `docs/PLAN.md`.
+
+**DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
+spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if
+that ever changes; no phase requires Postgres.
 
 ## Pending from the user
-- **Run the setup wizard** at https://dem.eroizzy.com, then the **Phase 2 acceptance test** above
-  (live Plane check — real `PLANE_API_KEY` + a real Plane webhook + the matching `plane_webhook_secret`).
-- **Later phases:** GitHub machine-account PAT + webhook secret, barad-dur otel-collector
-  host:port, ntfy/Slack notify target.
+- **Later phases:** barad-dur otel-collector host:port, ntfy/Slack notify target (Phase 6).
 - `DEM_SECRET_KEY` for the barad-dur deploy is already generated and set in the Portainer stack env
   (`eroizzy-env` `Barad-dur/Portainer/DEM/dem.env`). A local dev run still needs its own key.
