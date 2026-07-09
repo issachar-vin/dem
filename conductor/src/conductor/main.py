@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         logger.info("Seeded %d project mapping(s) from %s", imported, settings.targets_file)
 
-    issues = (await store.status())["issues"]
+    issues = (await store.status()).issues
     if issues:
         logger.warning("App config incomplete: %s", "; ".join(issues))
 

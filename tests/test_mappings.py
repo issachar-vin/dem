@@ -81,7 +81,9 @@ async def test_state_mapping_upserts_by_project_and_state(
     await mappings.set_state("p1", WorkflowState.IN_REVIEW, "s1")
     await mappings.set_state("p1", WorkflowState.IN_REVIEW, "s2")
     states = await mappings.list_states("p1")
-    assert states == [{"workflow_state": "in_review", "plane_state_id": "s2"}]
+    assert [s.model_dump() for s in states] == [
+        {"workflow_state": "in_review", "plane_state_id": "s2"}
+    ]
 
 
 async def test_import_targets_seeds_project_and_repos_once(

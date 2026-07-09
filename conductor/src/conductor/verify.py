@@ -1,7 +1,7 @@
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 
 import httpx
+from pydantic import BaseModel
 
 # Cheapest current model; the connection test only needs a 200, not a useful answer.
 CLAUDE_TEST_MODEL = "claude-haiku-4-5"
@@ -21,8 +21,7 @@ def _claude_headers(oauth_token: str | None, api_key: str | None) -> dict[str, s
     return headers
 
 
-@dataclass(frozen=True)
-class VerifyResult:
+class VerifyResult(BaseModel):
     ok: bool
     detail: str
 
@@ -49,7 +48,7 @@ async def verify_claude(
 ) -> VerifyResult:
     """A minimal Messages API call (Haiku, max_tokens=4). OAuth and API-key auth differ."""
     if bool(oauth_token) == bool(api_key):
-        return VerifyResult(False, "Set exactly one of subscription token or API key.")
+        return VerifyResult(ok=False, detail="Set exactly one of subscription token or API key.")
 
     headers = {**_claude_headers(oauth_token, api_key), "content-type": "application/json"}
     mode = "subscription" if oauth_token else "api key"
@@ -153,12 +152,12 @@ async def _request(
         try:
             response = await send(c)
         except httpx.HTTPError as exc:
-            return VerifyResult(False, f"Connection failed: {exc}")
+            return VerifyResult(ok=False, detail=f"Connection failed: {exc}")
         if response.status_code == 200:
-            return VerifyResult(True, ok_detail)
+            return VerifyResult(ok=True, detail=ok_detail)
         if response.status_code == 404 and not_found_detail is not None:
-            return VerifyResult(False, not_found_detail)
-        return VerifyResult(False, _http_detail(response))
+            return VerifyResult(ok=False, detail=not_found_detail)
+        return VerifyResult(ok=False, detail=_http_detail(response))
 
     if client is not None:
         return await evaluate(client)

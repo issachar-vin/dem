@@ -4,7 +4,7 @@ from starlette.routing import Mount
 from conductor.config import BootstrapSettings
 from conductor.crypto import generate_key
 from conductor.main import create_app
-from conductor.ui.views import _origin
+from conductor.ui.shell import _origin
 
 
 def _request(headers: dict[str, str], *, scheme: str = "http") -> Request:
