@@ -158,3 +158,19 @@ async def test_import_targets_text_reseeds_over_existing(
     assert await mappings.import_targets_text(text) == 1
     row = await mappings.get_project("p1")
     assert row is not None and row.enabled is True and row.source == "import"
+
+
+async def test_get_project_for_repo(mappings: MappingStore) -> None:
+    await mappings.set_project("p1", enabled=True)
+    await mappings.set_repo("p1", "backend", github_repo="izzy/api")
+    assert await mappings.get_project_for_repo("izzy/api") == "p1"
+    assert await mappings.get_project_for_repo("izzy/unknown") is None
+
+
+async def test_get_state_id(mappings: MappingStore) -> None:
+    await mappings.set_project("p1", enabled=True)
+    await mappings.set_state("p1", WorkflowState.READY_FOR_DEV, "state-ready")
+    assert (
+        await mappings.get_state_id("p1", WorkflowState.READY_FOR_DEV) == "state-ready"
+    )
+    assert await mappings.get_state_id("p1", WorkflowState.DONE) is None

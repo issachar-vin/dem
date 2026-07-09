@@ -3,19 +3,13 @@ from collections.abc import Awaitable, Callable
 import httpx
 from pydantic import BaseModel
 
+from conductor.github import github_headers
+
 # Cheapest current model; the connection test only needs a 200, not a useful answer.
 CLAUDE_TEST_MODEL = "claude-haiku-4-5"
 ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models"
 GITHUB_REPOS_URL = "https://api.github.com/user/repos"
-
-
-def _github_headers(token: str) -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
 
 
 def _claude_headers(oauth_token: str | None, api_key: str | None) -> dict[str, str]:
@@ -127,7 +121,7 @@ async def verify_github(
     repo: str | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> VerifyResult:
-    headers = _github_headers(token)
+    headers = github_headers(token)
     auth = await _get_ok(
         client,
         "https://api.github.com/user",
@@ -156,7 +150,7 @@ async def list_github_repos(
     — the UI falls back to a free-typed repo field. A fine-grained PAT only lists repos explicitly
     granted at token creation, so a missing repo means the token's own GitHub-side grant needs
     editing."""
-    headers = _github_headers(token)
+    headers = github_headers(token)
 
     async def fetch(c: httpx.AsyncClient) -> dict[str, str]:
         repos: dict[str, str] = {}

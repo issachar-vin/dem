@@ -113,7 +113,35 @@ class MappingStore:
             await session.commit()
             return True
 
+    async def get_state_id(self, project_id: str, workflow_state: WorkflowState) -> str | None:
+        async with self._sessionmaker() as session:
+            return (
+                await session.execute(
+                    select(StateMapping.plane_state_id).where(
+                        StateMapping.plane_project_id == project_id,
+                        StateMapping.workflow_state == workflow_state.value,
+                    )
+                )
+            ).scalar_one_or_none()
+
     # ── repo mappings ────────────────────────────────────────────────────────
+    async def get_project_for_repo(self, github_repo: str) -> str | None:
+        """Resolve `owner/name` → the id of the Plane project that owns it. Drives the GitHub
+        webhook's verify-after-lookup: the repo name in an unverified delivery is only trusted far
+        enough to find whose secret to check the signature against."""
+        async with self._sessionmaker() as session:
+            return (
+                (
+                    await session.execute(
+                        select(RepoMapping.plane_project_id).where(
+                            RepoMapping.github_repo == github_repo
+                        )
+                    )
+                )
+                .scalars()
+                .first()
+            )
+
     async def list_repos(self, project_id: str) -> list[RepoMappingView]:
         async with self._sessionmaker() as session:
             rows = (

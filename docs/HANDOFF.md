@@ -3,10 +3,12 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 3 steps 4 (wizard UI, PR #24) and 5 (structured targets.yml export/import,
-PR #25) are both done & merged.** Step 5 was cut from `main` and merged ahead of step 4, so #24
-carried the merge that reconciled them. Next up is **step 6 — GitHub webhook handler + poll mode**
-(see the RESUME box). Phase 2 was fully accepted
+**Last updated:** **Phase 3 step 6 — GitHub webhook handler + poll mode (intake layer) — is done
+(PR #28), pending review.** Scope was deliberately cut to **intake only** (webhook + poll → deduped
+Jobs); the runtime **scheduler** (in-flight-first ordering, blocking-relationship gate,
+`MAX_CONCURRENT_AGENTS` semaphore, actual container dispatch) is deferred to **Phase 4**, where the
+agent image/dispatcher it drives is built — there is nothing to schedule until then. Next up is
+**step 7 — docs & acceptance** (see the RESUME box). Phase 2 was fully accepted
 (user confirmed, 2026-07-09). Since the step-8 NiceGUI migration (PR #11, merged),
 the console shipped several rounds of wizard polish, all merged and not previously logged here:
 - **PR #12** — guided tabbed wizard, icon nav, dark theme (console redesign).
@@ -24,16 +26,25 @@ webhook secret (CLAUDE.md deviations #1, #7). Phase 3 is broken into 7 PR-sized 
 request/response-model pass was inserted as step 2) — see `docs/PLAN.md` for the authoritative
 deliverables/acceptance text; the box below tracks live progress.
 
-> **RESUME: start Phase 3 step 6 — GitHub webhook handler + poll mode.** `/webhooks/github`: parse
-> the (unverified) body's `repository.full_name` → look up the owning project → HMAC-verify against
-> **that project's** `webhook_secret` (verify-after-lookup, the multi-tenant pattern) → route the 4
-> subscribed events (`pull_request`, `pull_request_review`, `pull_request_review_comment`,
-> `pull_request_review_thread`), deduped by `X-GitHub-Delivery`; poll mode = interval loop across every
-> mapped repo. Folds in the intake/ordering/concurrency design (two entry points, in-flight-first
-> ordering, blocking-relationship gate, `MAX_CONCURRENT_AGENTS=1`, no auto-merge) + semantic Job dedupe.
-> **Prerequisite:** add SQLite PRAGMAs in `db.py` (`journal_mode=WAL`, `busy_timeout`, `foreign_keys=ON`)
-> before concurrent writes. Full spec: `docs/PLAN.md` → Phase 3 step 6. Steps 1–5 are **done** — see
-> "Phase 3 — steps" below.
+> **RESUME: start Phase 3 step 7 — docs & acceptance.** Write `docs/SETUP_GITHUB.md` (machine
+> account, fine-grained PAT scopes + the step-3 repo-visibility caveat, per-project webhook
+> walkthrough repeated per repo with the same project secret, branch-protection walkthrough and *why*
+> it — not prompts — is the human-approval guarantee, poll vs. webhook tradeoffs, tunnel guidance for
+> non-public deployments). Then run the Phase 3 acceptance test in `docs/PLAN.md` → "Phase 3". Full
+> spec: `docs/PLAN.md` → Phase 3 step 7. Steps 1–6 are **done** — see "Phase 3 — steps" below.
+>
+> **Deferred out of step 6 into Phase 4 (the dispatcher/state machine):** the work **scheduler** —
+> in-flight-first then oldest-created ordering, the Plane blocking-relationship eligibility gate, the
+> `MAX_CONCURRENT_AGENTS` per-role semaphore, and the actual container dispatch. Step 6 only *enqueues*
+> Jobs (webhook + poll); nothing consumes/orders them until Phase 4 builds the agent image + dispatcher.
+> The two intake entry points and semantic dedupe those depend on **are** built (see step 6 below).
+>
+> **Future roadmap captured (not started):** a **user-configurable dynamic workflow** — promote
+> `WorkflowState` + transitions from a code enum to DB tables and add a console page to reorder/add/
+> remove pipeline steps (n8n-style ordered list). Decision: **stay NiceGUI** (ordered-list editor
+> fits it; a true canvas would be one embedded JS island, not a React rewrite). The real lift is the
+> backend states-as-data model. Full write-up: `docs/PLAN.md` → "Out of scope for v1" (dynamic
+> workflow editor). Intake was built decoupled from pipeline shape specifically so this stays additive.
 >
 > **Note for a new session:** the console UI is no longer one `ui/views.py`. PR #21 split it into
 > `ui/{shell,widgets,wizard,pages,auth}.py` (shell = theme/nav/layout/`_origin`; widgets = field
@@ -295,21 +306,32 @@ the live progress tracker; check steps off as PRs land.
       `.env` export is unchanged (can't represent a dynamic repo list). Workspace slug comes from
       `store.resolved()['plane_workspace_slug']`; plaintext secrets in the file carry the same
       handle-carefully caveat as the `.env` export.
-- [ ] **Step 6 — GitHub webhook handler + poll mode.** `/webhooks/github`: parse (unverified)
-      `repository.full_name` → look up owning project → verify against **that project's** secret →
-      route the 4 subscribed events (`pull_request`, `pull_request_review`,
-      `pull_request_review_comment`, `pull_request_review_thread`), deduped by `X-GitHub-Delivery`.
-      Poll mode: interval loop across every mapped repo. Also folds in the intake/ordering/concurrency
-      design already spec'd in `docs/PLAN.md` (originally PR #9): two entry points (`epic` label →
-      planner; `ready_for_dev` → engineer), in-flight-first then oldest-created ordering, Plane
-      blocking-relationship eligibility gate, `MAX_CONCURRENT_AGENTS=1`, no auto-merge. The current
-      webhook is Plane-only/epic-only (`_is_epic` gate) — this step adds the GitHub side of the router.
-      Carry forward from 2b: **semantic Job dedupe** (per project+issue, decision #3 above — delivery-id
-      dedupe alone isn't enough).
-      **Prerequisite before concurrent writes:** `db.py` sets no SQLite PRAGMAs yet — add
-      `journal_mode=WAL`, a `busy_timeout`, and `foreign_keys=ON` on connect (sqlite-only, engine
-      `connect` event) or overlapping webhook-ingest + dispatcher + status writes will raise
-      `database is locked`.
+- [x] **Step 6 — GitHub webhook handler + poll mode (intake layer, PR #28).** Cut to **intake only**
+      (see the RESUME box for what deferred to Phase 4). Built:
+      - **`db.py` SQLite PRAGMAs** (prerequisite): `journal_mode=WAL`, `busy_timeout=5000`,
+        `foreign_keys=ON` via a sqlite-only engine `connect` listener.
+      - **`jobs.enqueue_job`** (new `jobs.py`) — the single intake choke point for both webhooks and the
+        poll loop. Two dedupe layers: `delivery_id` (unique col, literal re-delivery) + `dedupe_key`
+        (semantic — at most one *active* queued/running Job per key; read-then-insert, race-tolerant
+        under the single-writer model). New `Job.dedupe_key` column + index (migration `a1b2c3d4e5f6`).
+      - **`/webhooks/github`** (`api/webhooks.py`) — typed Pydantic payload models; **verify-after-lookup**
+        (unverified `repository.full_name` → `MappingStore.get_project_for_repo` → that project's
+        `webhook_secret` → HMAC over `X-Hub-Signature-256: sha256=…`); routes the 4 events via a
+        `GITHUB_EVENT_PAYLOADS` map (open/closed — a new event is one entry), deduped by
+        `X-GitHub-Delivery`; unmapped repo / missing / wrong secret → 401; other events acked+ignored;
+        malformed body → 400.
+      - **Second Plane entry point** — `_plane_trigger` now returns `planner` (epic label) **or**
+        `engineer` (issue whose `state` == the project's mapped `ready_for_dev`), else ignored; both get
+        semantic `dedupe_key = "<project>:<issue>"`. `MappingStore.get_state_id` added.
+      - **Poll mode** (`poller.py`) — `GitHubPoller.poll_once` reads each enabled project's repos' open
+        PRs (`github.GitHubClient.list_pull_requests`, new read-only client), enqueues on PR-state change;
+        first sweep per repo is a silent baseline (no startup storm). Launched from the lifespan via
+        `start_if_enabled` iff `GITHUB_EVENT_MODE=poll`; cancelled on shutdown.
+      - Refactor: `verify._github_headers` → `github.github_headers` (shared, dedup).
+      - **Tests:** +29 (webhook GitHub routing/401s/dedupe, ready_for_dev entry point, `jobs` dedupe
+        matrix, `github` client, `poller` baseline/change/error, mappings lookups, db PRAGMAs). 105 green;
+        ruff + mypy --strict clean. Verified: full migration chain + no autogenerate drift; app boots
+        with poll mode, `/health` 200, both webhooks 401 unsigned, clean lifespan shutdown.
 - [ ] **Step 7 — Docs & acceptance.** docs/SETUP_GITHUB.md (machine account, fine-grained PAT scopes +
       repo-visibility caveat, per-project webhook walkthrough, branch protection, poll vs. webhook,
       tunnel guidance); run the Phase 3 acceptance test in `docs/PLAN.md`.

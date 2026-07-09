@@ -1,16 +1,16 @@
 import hashlib
 import hmac
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from conductor import plane
+from conductor.jobs import enqueue_job
 from conductor.mappings import MappingStore
-from conductor.models import Job
+from conductor.models import WorkflowState
 from conductor.store import ConfigStore
 
 logger = logging.getLogger("conductor")
@@ -18,6 +18,7 @@ logger = logging.getLogger("conductor")
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
+# ── Plane ────────────────────────────────────────────────────────────────────
 class PlaneIssueData(BaseModel):
     """The `data` block of a Plane issue webhook. IDs and labels arrive as UUID strings; every
     field is optional because Plane omits them on some actions (see docs/HANDOFF.md, Phase 2b)."""
@@ -28,6 +29,7 @@ class PlaneIssueData(BaseModel):
     project: str = ""
     labels: list[str] = Field(default_factory=list)
     parent: str | None = None
+    state: str = ""
 
 
 class PlaneWebhook(BaseModel):
@@ -70,31 +72,45 @@ async def plane_webhook(request: Request) -> dict[str, str]:
         return {"status": "ignored", "reason": f"event {event!r} not handled"}
 
     data = payload.data
-    project_id = data.project
-    issue_id = data.id
-
     mappings: MappingStore = request.app.state.mappings
-    mapping = await mappings.get_project(project_id)
+    mapping = await mappings.get_project(data.project)
     if mapping is None or not mapping.enabled:
-        return {"status": "ignored", "reason": f"project {project_id} is not enabled"}
+        return {"status": "ignored", "reason": f"project {data.project} is not enabled"}
 
-    if not await _is_epic(resolved, data):
-        return {"status": "ignored", "reason": "issue is not an epic"}
+    trigger = await _plane_trigger(resolved, mappings, data)
+    if trigger is None:
+        return {"status": "ignored", "reason": "issue is not an epic or ready for dev"}
 
-    delivery_id = request.headers.get("X-Plane-Delivery")
-    sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
-    # The epic is project-scoped; the planner assigns each ticket its target repo (Phase 5),
-    # so no single repo is pinned here.
-    created = await _create_job(
-        sessionmaker,
-        delivery_id=delivery_id,
+    # The epic/ticket is project-scoped; the planner assigns each ticket its target repo (Phase 5),
+    # so no single repo is pinned here. Semantic dedupe keeps a re-fired issue event from stacking a
+    # second job while one for the same issue is still in flight (docs/HANDOFF.md, Phase 2b #3).
+    job = await enqueue_job(
+        request.app.state.sessionmaker,
+        source="plane",
         event_type=f"issue.{payload.action}",
-        payload={"project_id": project_id, "issue_id": issue_id},
+        payload={"project_id": data.project, "issue_id": data.id, "trigger": trigger},
+        delivery_id=request.headers.get("X-Plane-Delivery"),
+        dedupe_key=f"{data.project}:{data.id}",
     )
-    if not created:
-        return {"status": "duplicate", "delivery_id": delivery_id or ""}
-    logger.info("Queued job for epic issue %s (project %s)", issue_id, project_id)
-    return {"status": "queued", "issue_id": issue_id}
+    if job is None:
+        return {"status": "duplicate", "delivery_id": request.headers.get("X-Plane-Delivery") or ""}
+    logger.info("Queued %s job for issue %s (project %s)", trigger, data.id, data.project)
+    return {"status": "queued", "issue_id": data.id}
+
+
+async def _plane_trigger(
+    resolved: dict[str, str], mappings: MappingStore, data: PlaneIssueData
+) -> str | None:
+    """Which pipeline entry point (if any) this issue event fires — the two intake triggers from
+    the design: an `epic`-labelled issue → the planner; an issue in `ready_for_dev` → the engineer.
+    Anything else is project noise and ignored."""
+    if await _is_epic(resolved, data):
+        return "planner"
+    if data.state:
+        ready = await mappings.get_state_id(data.project, WorkflowState.READY_FOR_DEV)
+        if ready is not None and data.state == ready:
+            return "engineer"
+    return None
 
 
 async def _is_epic(resolved: dict[str, str], data: PlaneIssueData) -> bool:
@@ -111,26 +127,117 @@ async def _is_epic(resolved: dict[str, str], data: PlaneIssueData) -> bool:
     return bool(epic_ids & label_ids)
 
 
-async def _create_job(
-    sessionmaker: async_sessionmaker[AsyncSession],
-    *,
-    delivery_id: str | None,
-    event_type: str,
-    payload: dict[str, Any],
-) -> bool:
-    """Insert a deduped Job. Returns False if the delivery id was already seen."""
-    async with sessionmaker() as session:
-        session.add(
-            Job(
-                delivery_id=delivery_id,
-                source="plane",
-                event_type=event_type,
-                payload=payload,
-            )
-        )
-        try:
-            await session.commit()
-        except IntegrityError:
-            await session.rollback()
-            return False
-    return True
+# ── GitHub ───────────────────────────────────────────────────────────────────
+class GitHubRepository(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    full_name: str = ""
+
+
+class GitHubPullRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    number: int | None = None
+    state: str = ""
+    merged: bool = False
+
+
+class GitHubReview(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    state: str = ""
+
+
+class GitHubThread(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    resolved: bool = False
+
+
+class GitHubWebhook(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    action: str = ""
+    repository: GitHubRepository = Field(default_factory=GitHubRepository)
+    pull_request: GitHubPullRequest | None = None
+    review: GitHubReview | None = None
+    thread: GitHubThread | None = None
+
+
+def _pr_number(webhook: GitHubWebhook) -> int | None:
+    return webhook.pull_request.number if webhook.pull_request else None
+
+
+# event name → payload builder. A new subscribed event is one entry here (open/closed); the
+# webhook body stays a dumb enqueue — the state machine (Phase 4+) decides what each job does.
+GITHUB_EVENT_PAYLOADS: dict[str, Callable[[GitHubWebhook], dict[str, Any]]] = {
+    "pull_request": lambda w: {
+        "pr_number": _pr_number(w),
+        "merged": bool(w.pull_request and w.pull_request.merged),
+    },
+    "pull_request_review": lambda w: {
+        "pr_number": _pr_number(w),
+        "review_state": w.review.state if w.review else "",
+    },
+    "pull_request_review_comment": lambda w: {"pr_number": _pr_number(w)},
+    "pull_request_review_thread": lambda w: {
+        "pr_number": _pr_number(w),
+        "resolved": bool(w.thread and w.thread.resolved),
+    },
+}
+
+
+def _github_signature_ok(body: bytes, header: str | None, secret: str) -> bool:
+    if not header or not header.startswith("sha256=") or not secret:
+        return False
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header.removeprefix("sha256="))
+
+
+@router.post("/github")
+async def github_webhook(request: Request) -> dict[str, str]:
+    body = await request.body()
+    try:
+        payload = GitHubWebhook.model_validate(await request.json())
+    except ValidationError:
+        raise HTTPException(status_code=400, detail="Malformed webhook payload.") from None
+
+    # Verify-after-lookup: the repo name in an unverified body is trusted only far enough to find
+    # whose secret to check the signature against (the multi-tenant-webhook pattern). Secrets are
+    # per-project (CLAUDE.md deviation #7), so there is no global secret to fall back on.
+    mappings: MappingStore = request.app.state.mappings
+    project_id = await mappings.get_project_for_repo(payload.repository.full_name)
+    secret = await mappings.get_webhook_secret(project_id) if project_id else None
+    if not _github_signature_ok(body, request.headers.get("X-Hub-Signature-256"), secret or ""):
+        raise HTTPException(status_code=401, detail="Invalid or missing webhook signature.")
+
+    event = request.headers.get("X-GitHub-Event", "")
+    build = GITHUB_EVENT_PAYLOADS.get(event)
+    if build is None:
+        return {"status": "ignored", "reason": f"event {event!r} not handled"}
+
+    job = await enqueue_job(
+        request.app.state.sessionmaker,
+        source="github",
+        event_type=f"{event}.{payload.action}",
+        payload={
+            "project_id": project_id,
+            "repo": payload.repository.full_name,
+            "action": payload.action,
+            **build(payload),
+        },
+        delivery_id=request.headers.get("X-GitHub-Delivery"),
+    )
+    if job is None:
+        return {
+            "status": "duplicate",
+            "delivery_id": request.headers.get("X-GitHub-Delivery") or "",
+        }
+    logger.info(
+        "Queued github %s.%s for %s (project %s)",
+        event,
+        payload.action,
+        payload.repository.full_name,
+        project_id,
+    )
+    return {"status": "queued", "event": event}
