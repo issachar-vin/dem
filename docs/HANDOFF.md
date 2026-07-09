@@ -3,9 +3,9 @@
 > Transient companion to [`../CLAUDE.md`](../CLAUDE.md). Read this at session start; update it as
 > work progresses; trim finished detail once a phase merges.
 
-**Last updated:** **Phase 3 step 1 (multi-repo mapping schema) is done and merged (PR #19).** Next
-up is the newly inserted **step 2 — Pydantic request/response models** (see the RESUME box). Phase 2
-was fully accepted (user confirmed, 2026-07-09). Since the step-8 NiceGUI migration (PR #11, merged),
+**Last updated:** **Phase 3 step 2 (Pydantic request/response models) is done and merged (PR #21).**
+Next up is **step 3 — live repo/project listing** (see the RESUME box). Phase 2 was fully accepted
+(user confirmed, 2026-07-09). Since the step-8 NiceGUI migration (PR #11, merged),
 the console shipped several rounds of wizard polish, all merged and not previously logged here:
 - **PR #12** — guided tabbed wizard, icon nav, dark theme (console redesign).
 - **PR #13** — Plane webhook payload URL derived from the request origin, not hand-typed.
@@ -22,14 +22,18 @@ webhook secret (CLAUDE.md deviations #1, #7). Phase 3 is broken into 7 PR-sized 
 request/response-model pass was inserted as step 2) — see `docs/PLAN.md` for the authoritative
 deliverables/acceptance text; the box below tracks live progress.
 
-> **RESUME: start Phase 3 step 2 — Pydantic request/response models.** Model the Plane `issue`
-> webhook payload (currently `await request.json()` + raw dict access in `api/webhooks.py`;
-> `_is_epic(data: dict)`) as a Pydantic model and parse-then-validate at the boundary, setting the
-> pattern for the GitHub webhook payloads coming in step 6. Convert the remaining `dict[str, Any]`
-> store/config surfaces — `ConfigStore.list_config`/`status`, `MappingStore.list_states`, the
-> `catalog`/`verify` result dicts — to Pydantic read models like step 1's `ProjectMappingView`.
-> Internal typing only; response JSON shapes unchanged. Full spec: `docs/PLAN.md` → Phase 3 step 2.
-> Step 1 (multi-repo schema) is **done** — see "Phase 3 — steps" below.
+> **RESUME: start Phase 3 step 3 — live repo/project listing.** Add `PlaneClient.list_projects(
+> workspace_slug)` and a GitHub `list_repos(token)` (paginated `GET /user/repos`), following the
+> existing `PlaneClient`/`verify.py` httpx patterns (injectable `client=` for `MockTransport` tests).
+> These feed step 4's wizard pickers. Note for the eventual SETUP_GITHUB.md: fine-grained PATs only
+> list repos explicitly granted at token creation. Full spec: `docs/PLAN.md` → Phase 3 step 3.
+> Steps 1 (multi-repo schema) and 2 (Pydantic models) are **done** — see "Phase 3 — steps" below.
+>
+> **Note for a new session:** the console UI is no longer one `ui/views.py`. PR #21 split it into
+> `ui/{shell,widgets,wizard,pages,auth}.py` (shell = theme/nav/layout/`_origin`; widgets = field
+> editors + `_Section` + test rows; wizard = step helpers + panels + `/`; pages = config/projects/
+> states; auth = middleware + login). `ui/__init__.py` imports wizard/pages/auth for their
+> page/middleware registration side effects.
 
 ## Phase 2 step 8 — NiceGUI console migration DONE (PR #11, merged)
 
@@ -248,14 +252,14 @@ the live progress tracker; check steps off as PRs land.
       cut, no data migration). The Plane epic webhook now gates on `enabled` and no longer pins a repo
       in the Job payload (repo is per-ticket, the planner's job). Projects admin page reworked for the
       multi-repo model (polished per-project wizard sections are step 4).
-- [ ] **Step 2 — Pydantic request/response models.** Model the Plane `issue` webhook payload as a
-      Pydantic model and parse-then-validate at the boundary (today `api/webhooks.py` does
-      `await request.json()` + raw dict access; `_is_epic(data: dict)`), setting the pattern for the
-      GitHub webhook payloads landing in step 6. Convert the remaining `dict[str, Any]` store/config
-      surfaces — `ConfigStore.list_config`/`status`, `MappingStore.list_states`, the `catalog`/`verify`
-      result dicts — to Pydantic read models like step 1's `ProjectMappingView`. Internal typing only;
-      response JSON shapes unchanged. Lands before step 6 so the larger GitHub payload is written typed,
-      not refactored later.
+- [x] **Step 2 — Pydantic request/response models (PR #21, merged).** Plane `issue` webhook payload
+      modelled as `PlaneWebhook`/`PlaneIssueData` in `api/webhooks.py`, parse-then-validate at the
+      boundary (malformed body → 400); `_is_epic` takes a typed `PlaneIssueData`. Store/config
+      surfaces converted to Pydantic read models: `ConfigStore.list_config` → `list[ConfigFieldView]`,
+      `ConfigStore.status` → `ConfigStatus`, `MappingStore.list_states` → `list[StateMappingView]`;
+      `catalog.StepStatus` + `verify.VerifyResult` moved from dataclasses to Pydantic. Internal typing
+      only — response JSON shapes unchanged. Also folded in (SRP): the 880-line `ui/views.py` split into
+      `ui/{shell,widgets,wizard,pages,auth}.py`.
 - [ ] **Step 3 — Live repo/project listing.** `PlaneClient.list_projects(workspace_slug)`; GitHub
       `list_repos(token)` (paginated `GET /user/repos`). Note for SETUP_GITHUB.md: fine-grained PATs
       only list repos explicitly granted at token creation.
