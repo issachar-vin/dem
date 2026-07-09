@@ -135,6 +135,24 @@ def _origin(request: Request) -> str:
 
 
 # ── field helpers ───────────────────────────────────────────────────────────────
+_ACRONYMS = {
+    "url": "URL",
+    "api": "API",
+    "qa": "QA",
+    "cpu": "CPU",
+    "id": "ID",
+    "oauth": "OAuth",
+    "otel": "OTel",
+    "otlp": "OTLP",
+    "github": "GitHub",
+}
+
+
+def _label(name: str) -> str:
+    """Human label for a config key: `plane_base_url` → `Plane Base URL`."""
+    return " ".join(_ACRONYMS.get(w, w.capitalize()) for w in name.split("_"))
+
+
 def _is_set(field: dict[str, Any]) -> bool:
     return bool(field["set"]) if field["secret"] else bool(field["value"])
 
@@ -142,13 +160,13 @@ def _is_set(field: dict[str, Any]) -> bool:
 def _input(field: dict[str, Any]) -> ValueElement[Any]:
     """Render one field's editor (no save button). Secrets show a masked placeholder and stay
     empty until a new value is typed."""
-    name: str = field["name"]
+    label = _label(field["name"])
     box: ValueElement[Any]
     if field["secret"]:
         placeholder = ("•" * 6 + field["last_four"]) if field["set"] else "not set"
         box = (
             ui.input(
-                label=name, password=True, password_toggle_button=True, placeholder=placeholder
+                label=label, password=True, password_toggle_button=True, placeholder=placeholder
             )
             .props("stack-label")
             .classes("w-full")
@@ -158,10 +176,10 @@ def _input(field: dict[str, Any]) -> ValueElement[Any]:
         current: str = field["value"] or ""
         if choices:
             box = ui.select(
-                options=choices, value=current if current in choices else choices[0], label=name
+                options=choices, value=current if current in choices else choices[0], label=label
             ).classes("w-full")
         else:
-            box = ui.input(label=name, value=current).classes("w-full")
+            box = ui.input(label=label, value=current).classes("w-full")
     if field["help"]:
         ui.label(field["help"]).classes("text-xs text-gray-500")
     if field["secret"] and field["set"]:
@@ -187,13 +205,12 @@ def _payload_url_field(url: str) -> None:
 
 
 def _model_input(field: dict[str, Any], models: list[str]) -> ValueElement[Any]:
-    name: str = field["name"]
     current: str = field["value"] or ""
     options = list(dict.fromkeys([*models, *([current] if current else [])]))
     return ui.select(
         options=options,
         value=current if current in options else (options[0] if options else None),
-        label=name,
+        label=_label(field["name"]),
         with_input=True,
     ).classes("w-full")
 
