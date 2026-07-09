@@ -1,8 +1,39 @@
+import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from conductor.jobs import enqueue_job
 from conductor.models import Job, JobStatus
+
+
+async def test_active_dedupe_backstop_blocks_concurrent_duplicate(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    # The concurrent-delivery race: two enqueues both pass enqueue_job's read-check, so the guard
+    # must be at the DB. A second *active* job with the same (source, dedupe_key) is rejected.
+    async with sessionmaker() as session:
+        session.add(Job(source="plane", event_type="e", payload={}, dedupe_key="p:i"))
+        await session.commit()
+    with pytest.raises(IntegrityError):
+        async with sessionmaker() as session:
+            session.add(
+                Job(source="plane", event_type="e", payload={}, dedupe_key="p:i")
+            )
+            await session.commit()
+
+
+async def test_active_dedupe_backstop_allows_other_source(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    for source in ("plane", "github"):
+        async with sessionmaker() as session:
+            session.add(
+                Job(source=source, event_type="e", payload={}, dedupe_key="p:i")
+            )
+            await session.commit()
+    async with sessionmaker() as session:
+        assert len((await session.execute(select(Job))).scalars().all()) == 2
 
 
 async def test_enqueue_returns_job(
