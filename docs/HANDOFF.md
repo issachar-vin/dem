@@ -376,6 +376,9 @@ the live progress tracker; check steps off as PRs land.
         string. Also (per request) **every webhook 4XX now carries a field-level reason in the
         response body *and* a `logger.warning`** (via a shared `_reject` helper + `_validation_detail`),
         so a bad delivery is diagnosable from either the sender's delivery log or the conductor logs.
+        Same PR also drops the **vestigial global `github_base_branch`** field (wizard step 2) — the
+        per-repo `RepoMapping.base_branch` (step 3, seeded from each repo's live default branch) is
+        the real source of truth; the global one was never read by any operation.
 
 **DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
 spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if
