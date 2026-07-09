@@ -85,12 +85,27 @@ class PlaneIssueData(BaseModel):
         return "" if value is None else str(value)
 
 
+class PlaneActivity(BaseModel):
+    """The `activity` block: what actually changed in this event. Plane fires one webhook per
+    changed field, so `field` distinguishes a real state move (`state_id`) from incidental edits
+    (`sort_order`, `description`, …) that carry the same current `data`. `new_value`/`old_value` are
+    `Any` because their type depends on the field (a UUID string for `state_id`, an int for
+    `sort_order`)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    field: str | None = None
+    new_value: Any = None
+    old_value: Any = None
+
+
 class PlaneWebhook(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     event: str = ""
     action: str = ""
     data: PlaneIssueData = Field(default_factory=PlaneIssueData)
+    activity: PlaneActivity | None = None
 
 
 def verify_signature(body: bytes, signature: str | None, secret: str) -> bool:
@@ -143,9 +158,9 @@ async def plane_webhook(request: Request) -> dict[str, str]:
     if mapping is None or not mapping.enabled:
         return {"status": "ignored", "reason": f"project {data.project} is not enabled"}
 
-    trigger = await _plane_trigger(resolved, mappings, data)
+    trigger = await _plane_trigger(resolved, mappings, payload)
     if trigger is None:
-        return {"status": "ignored", "reason": "issue is not an epic or ready for dev"}
+        return {"status": "ignored", "reason": "issue is not an epic or entering ready_for_dev"}
 
     # The epic/ticket is project-scoped; the planner assigns each ticket its target repo (Phase 5),
     # so no single repo is pinned here. Semantic dedupe keeps a re-fired issue event from stacking a
@@ -166,18 +181,33 @@ async def plane_webhook(request: Request) -> dict[str, str]:
 
 
 async def _plane_trigger(
-    resolved: dict[str, str], mappings: MappingStore, data: PlaneIssueData
+    resolved: dict[str, str], mappings: MappingStore, payload: PlaneWebhook
 ) -> str | None:
     """Which pipeline entry point (if any) this issue event fires — the two intake triggers from
-    the design: an `epic`-labelled issue → the planner; an issue in `ready_for_dev` → the engineer.
-    Anything else is project noise and ignored."""
+    the design: an `epic`-labelled issue → the planner; an issue *entering* `ready_for_dev` → the
+    engineer. Anything else is project noise and ignored."""
+    data = payload.data
     if await _is_epic(resolved, data):
         return "planner"
-    if data.state:
-        ready = await mappings.get_state_id(data.project, WorkflowState.READY_FOR_DEV)
-        if ready is not None and data.state == ready:
-            return "engineer"
+    ready = await mappings.get_state_id(data.project, WorkflowState.READY_FOR_DEV)
+    if ready is not None and _entered_state(payload, ready):
+        return "engineer"
     return None
+
+
+def _entered_state(payload: PlaneWebhook, target_state_id: str) -> bool:
+    """True only when this event represents the issue *entering* `target_state_id`, not an unrelated
+    edit while it already sits there. Plane fires one webhook per changed field, so a card dragged
+    into a column emits both a `state_id` change and a `sort_order` change (both carrying the same
+    current `data.state`); only the former is the transition we act on. Also fires when an issue is
+    *created* directly in the target state (e.g. planner-created tickets dropped into
+    ready_for_dev), which has no state-change activity."""
+    activity = payload.activity
+    if activity is not None and activity.field == "state_id":
+        return str(activity.new_value) == target_state_id
+    if payload.action == "created":
+        return payload.data.state == target_state_id
+    return False
 
 
 async def _is_epic(resolved: dict[str, str], data: PlaneIssueData) -> bool:

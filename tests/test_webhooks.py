@@ -45,13 +45,21 @@ def _sign(body: bytes) -> str:
 
 
 def _issue_body(
-    *, labels: list[str], project: str = "proj-1", issue: str = "i1", state: str = ""
+    *,
+    labels: list[str],
+    project: str = "proj-1",
+    issue: str = "i1",
+    state: str = "",
+    action: str = "created",
+    activity: dict[str, object] | None = None,
 ) -> bytes:
-    payload = {
+    payload: dict[str, object] = {
         "event": "issue",
-        "action": "created",
+        "action": action,
         "data": {"id": issue, "project": project, "labels": labels, "state": state},
     }
+    if activity is not None:
+        payload["activity"] = activity
     return json.dumps(payload).encode()
 
 
@@ -232,6 +240,84 @@ async def test_issue_not_in_ready_for_dev_ignored(
 ) -> None:
     await mappings.set_state("proj-1", WorkflowState.READY_FOR_DEV, "state-ready")
     body = _issue_body(labels=[], state="state-backlog")
+    resp = await api.post("/webhooks/plane", content=body, headers=_headers(body))
+    assert resp.json()["status"] == "ignored"
+    assert await _job_count(sessionmaker) == 0
+
+
+async def test_state_transition_into_ready_triggers_engineer(
+    api: httpx.AsyncClient,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    await mappings.set_state("proj-1", WorkflowState.READY_FOR_DEV, "state-ready")
+    body = _issue_body(
+        labels=[],
+        state="state-ready",
+        action="updated",
+        activity={
+            "field": "state_id",
+            "old_value": "state-backlog",
+            "new_value": "state-ready",
+        },
+    )
+    resp = await api.post("/webhooks/plane", content=body, headers=_headers(body))
+    assert resp.json()["status"] == "queued"
+    assert await _job_count(sessionmaker) == 1
+
+
+async def test_ignored_edit_is_not_stored_on_active_job(
+    api: httpx.AsyncClient,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    # After a state_id transition queues a job, a later sort_order edit for the same issue must be
+    # ignored *before* enqueue — so it is never appended to the job's raw_payloads.
+    await mappings.set_state("proj-1", WorkflowState.READY_FOR_DEV, "state-ready")
+    transition = _issue_body(
+        labels=[],
+        state="state-ready",
+        action="updated",
+        activity={
+            "field": "state_id",
+            "old_value": "state-backlog",
+            "new_value": "state-ready",
+        },
+    )
+    await api.post(
+        "/webhooks/plane",
+        content=transition,
+        headers=_headers(transition, delivery="a"),
+    )
+    noise = _issue_body(
+        labels=[],
+        state="state-ready",
+        action="updated",
+        activity={"field": "sort_order", "old_value": 40000, "new_value": 65535},
+    )
+    resp = await api.post(
+        "/webhooks/plane", content=noise, headers=_headers(noise, delivery="b")
+    )
+    assert resp.json()["status"] == "ignored"
+    async with sessionmaker() as session:
+        job = (await session.execute(select(Job))).scalar_one()
+    assert [p["activity"]["field"] for p in job.raw_payloads] == ["state_id"]
+
+
+async def test_unrelated_edit_while_in_ready_ignored(
+    api: httpx.AsyncClient,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    # The bug: a non-state edit (e.g. sort_order changing when a card is dragged) carries the same
+    # current state=ready but must NOT re-fire the engineer — only the state_id transition does.
+    await mappings.set_state("proj-1", WorkflowState.READY_FOR_DEV, "state-ready")
+    body = _issue_body(
+        labels=[],
+        state="state-ready",
+        action="updated",
+        activity={"field": "sort_order", "old_value": 40000, "new_value": 65535},
+    )
     resp = await api.post("/webhooks/plane", content=body, headers=_headers(body))
     assert resp.json()["status"] == "ignored"
     assert await _job_count(sessionmaker) == 0
