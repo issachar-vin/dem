@@ -370,6 +370,12 @@ the live progress tracker; check steps off as PRs land.
         `_apply_bundle_upload` adapters (correct API) + a catch-all so an upload can never fail
         silently again. Same PR refactors `/config` into per-step tabs + a Migration tab
         (Export / Import sections).
+      - **Follow-up fix (PR #32), from the live acceptance run:** a real Plane state-move delivery
+        returned **400** because the `state` field added in step 6 assumed a plain string, but Plane
+        can send it as a nested object. Hardened `PlaneIssueData.state` to coerce object/null → id
+        string. Also (per request) **every webhook 4XX now carries a field-level reason in the
+        response body *and* a `logger.warning`** (via a shared `_reject` helper + `_validation_detail`),
+        so a bad delivery is diagnosable from either the sender's delivery log or the conductor logs.
 
 **DB decision (confirmed): stay on SQLite** — single-process, single-writer conductor; the
 spin-up-anywhere/home-lab goal rewards SQLite's zero-friction. `DATABASE_URL` keeps it pluggable if

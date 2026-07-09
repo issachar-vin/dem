@@ -178,6 +178,28 @@ async def test_malformed_payload_400(api: httpx.AsyncClient) -> None:
     body = json.dumps({"event": "issue", "data": "not-an-object"}).encode()
     resp = await api.post("/webhooks/plane", content=body, headers=_headers(body))
     assert resp.status_code == 400
+    # The body names the offending field so the sender's delivery log explains the failure.
+    assert "data" in resp.json()["detail"]
+
+
+async def test_rejection_is_logged(
+    api: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    import logging
+
+    body = json.dumps({"event": "issue", "data": "not-an-object"}).encode()
+    with caplog.at_level(logging.WARNING, logger="conductor"):
+        await api.post("/webhooks/plane", content=body, headers=_headers(body))
+    assert "plane webhook rejected (400)" in caplog.text
+
+
+def test_plane_state_object_or_null_coerced() -> None:
+    obj = webhooks_api.PlaneWebhook.model_validate(
+        {"event": "issue", "data": {"id": "i1", "project": "p1", "state": {"id": "s1"}}}
+    )
+    assert obj.data.state == "s1"
+    null = webhooks_api.PlaneWebhook.model_validate({"data": {"state": None}})
+    assert null.data.state == ""
 
 
 async def test_plane_non_json_body_400_not_500(api: httpx.AsyncClient) -> None:
@@ -348,6 +370,7 @@ async def test_github_malformed_payload_400(api: httpx.AsyncClient) -> None:
     body = json.dumps({"repository": "not-an-object"}).encode()
     resp = await api.post("/webhooks/github", content=body, headers=_gh_headers(body))
     assert resp.status_code == 400
+    assert "repository" in resp.json()["detail"]
 
 
 async def test_github_non_json_body_400_not_500(api: httpx.AsyncClient) -> None:
