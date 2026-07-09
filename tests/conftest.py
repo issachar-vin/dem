@@ -68,9 +68,9 @@ async def store(
 
 @pytest_asyncio.fixture
 async def mappings(
-    sessionmaker: async_sessionmaker[AsyncSession],
+    sessionmaker: async_sessionmaker[AsyncSession], box: SecretBox
 ) -> MappingStore:
-    return MappingStore(sessionmaker)
+    return MappingStore(sessionmaker, box)
 
 
 @pytest_asyncio.fixture

@@ -37,7 +37,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     sessionmaker = create_sessionmaker(engine)
     app.state.sessionmaker = sessionmaker
 
-    store = ConfigStore(sessionmaker, SecretBox(settings.dem_secret_key))
+    box = SecretBox(settings.dem_secret_key)
+    store = ConfigStore(sessionmaker, box)
     app.state.store = store
     seeded = await store.seed_from_env(
         _seed_env(settings.config_seed_file), reseed=settings.reseed_from_env
@@ -47,7 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     auth = AuthStore(sessionmaker)
     app.state.auth = auth
 
-    mappings = MappingStore(sessionmaker)
+    mappings = MappingStore(sessionmaker, box)
     app.state.mappings = mappings
 
     ui.configure(store=store, mappings=mappings, auth=auth, settings=settings)

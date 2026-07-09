@@ -1,16 +1,25 @@
-# Which Plane project maps to which GitHub repo. One workspace, many projects,
-# one project per repo. Routing key is project_id (present on every Plane event).
-# Copy to targets.yml. No secrets here — GITHUB_TOKEN/PLANE_API_KEY live in .env.
+# Which Plane projects the conductor works, and the GitHub repos each owns.
+# One workspace, many projects; each project owns one or more repos, keyed by a short role
+# (ui, backend, ...). Routing key is project_id (present on every Plane event).
+# Copy to targets.yml. PLANE_API_KEY / GITHUB_TOKEN still live in .env; the per-project
+# webhook_secret below is the only secret in this file — handle it accordingly.
 targets:
   - workspace: dem
     project_id: 9a28bd00-ed9c-4f5d-8be9-fc05cbb1fc57   # chessbro project UUID
-    github_repo: issachar-vin/chess-bro
-    base_branch: main
-    # Optional per-repo overrides (fall back to .env defaults):
-    # agent_image: ghcr.io/issachar-vin/chess-bro-agent:latest
-    # model_engineer: claude-sonnet-4-6
+    enabled: true
+    webhook_secret: whsec_replace_me                    # shared by every repo below
+    repos:
+      - key: backend
+        github_repo: issachar-vin/chess-bro
+        base_branch: main
+      - key: ui
+        github_repo: issachar-vin/chess-bro-ui
+        base_branch: main
 
   # - workspace: dem
   #   project_id: 4c11ee00-0000-0000-0000-000000000000
-  #   github_repo: issachar-vin/another-repo
-  #   base_branch: main
+  #   enabled: false
+  #   repos:
+  #     - key: backend
+  #       github_repo: issachar-vin/another-repo
+  #       base_branch: main

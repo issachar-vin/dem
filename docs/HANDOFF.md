@@ -21,11 +21,10 @@ widens from one-repo-per-project to **one project → many repos**, with a proje
 webhook secret (CLAUDE.md deviations #1, #7). Phase 3 is broken into 6 PR-sized steps — see
 `docs/PLAN.md` for the authoritative deliverables/acceptance text; the box below tracks live progress.
 
-> **RESUME: start Phase 3 step 1 — multi-repo mapping schema.** `RepoMapping` table (project_id,
-> repo key, `github_repo`, `base_branch`); `ProjectMapping` gains `enabled` + `webhook_secret`;
-> `MappingStore` repo CRUD; `targets.yml` schema widens to a repo list per project (clean cut, no
-> back-compat shim — one live deployment, one mapped project to move over). Full spec: `docs/PLAN.md`
-> → Phase 3 step 1. See "Phase 3 — steps" below for the full breakdown.
+> **RESUME: start Phase 3 step 2 — live repo/project listing.** `PlaneClient.list_projects(workspace_slug)`
+> (powers the wizard's project checklist) + GitHub `list_repos(token)` (paginated `GET /user/repos`,
+> powers a live repo picker instead of free-typed `owner/name`). Full spec: `docs/PLAN.md` → Phase 3
+> step 2. Step 1 (multi-repo schema) is **done** — see "Phase 3 — steps" below.
 
 ## Phase 2 step 8 — NiceGUI console migration DONE (PR #11, merged)
 
@@ -235,10 +234,15 @@ ChessLearner stacks). Specifics:
 Full deliverables/acceptance text is the authoritative spec in `docs/PLAN.md` → "Phase 3". This is
 the live progress tracker; check steps off as PRs land.
 
-- [ ] **Step 1 — Multi-repo mapping schema.** `RepoMapping` table (project_id, repo key, `github_repo`,
-      `base_branch`); `ProjectMapping` gains `enabled` + `webhook_secret` (encrypted, project-scoped —
-      CLAUDE.md deviation #7); `MappingStore` repo CRUD; `targets.yml` schema widens to a repo list per
-      project. Clean schema cut — no back-compat shim (one live deployment, one mapped project to move).
+- [x] **Step 1 — Multi-repo mapping schema.** `RepoMapping` table (project_id, repo key, `github_repo`,
+      `base_branch`); `ProjectMapping` dropped `repo`/`base_branch`, gained `enabled` + `webhook_secret`
+      (encrypted, project-scoped — CLAUDE.md deviation #7); `MappingStore` gained repo CRUD +
+      `get_webhook_secret`, and its read methods now return **Pydantic** `ProjectMappingView`/
+      `RepoMappingView` (masks the secret) instead of raw dicts; `targets.yml` widened to project→repos
+      (dropped the never-consumed `agent_image`/`model_*` overrides). Migration `8c03955898af` (clean
+      cut, no data migration). The Plane epic webhook now gates on `enabled` and no longer pins a repo
+      in the Job payload (repo is per-ticket, the planner's job). Projects admin page reworked for the
+      multi-repo model (polished per-project wizard sections are step 3).
 - [ ] **Step 2 — Live repo/project listing.** `PlaneClient.list_projects(workspace_slug)`; GitHub
       `list_repos(token)` (paginated `GET /user/repos`). Note for SETUP_GITHUB.md: fine-grained PATs
       only list repos explicitly granted at token creation.

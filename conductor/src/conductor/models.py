@@ -94,13 +94,35 @@ class Setting(Base):
 
 
 class ProjectMapping(Base):
-    """Routes a Plane project to the GitHub repo the conductor builds it into (one repo per
-    project). Seeded once from targets.yml; the DB wins thereafter."""
+    """A Plane project the conductor may work. A project owns many repos (see RepoMapping) and
+    exactly one GitHub webhook secret, shared by all of them. `enabled` is the human opt-in gate:
+    a project is only worked once someone turns it on. Seeded once from targets.yml; DB wins
+    thereafter."""
 
     __tablename__ = "project_mappings"
 
     plane_project_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    repo: Mapped[str] = mapped_column(String(255))
+    enabled: Mapped[bool] = mapped_column(default=False)
+    # Fernet ciphertext (keyed by DEM_SECRET_KEY); one secret per project, shared by its repos.
+    webhook_secret: Mapped[str | None] = mapped_column(String, default=None)
+    source: Mapped[str] = mapped_column(String(16), default="ui")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RepoMapping(Base):
+    """One GitHub repo owned by a Plane project, identified by a short role key (`ui`, `backend`).
+    A project maps to many of these; the planner assigns each ticket exactly one repo key."""
+
+    __tablename__ = "repo_mappings"
+    __table_args__ = (UniqueConstraint("plane_project_id", "key"),)
+
+    id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
+    plane_project_id: Mapped[str] = mapped_column(String(64), index=True)
+    key: Mapped[str] = mapped_column(String(64))
+    github_repo: Mapped[str] = mapped_column(String(255))
     base_branch: Mapped[str] = mapped_column(String(255), default="main")
     source: Mapped[str] = mapped_column(String(16), default="ui")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
