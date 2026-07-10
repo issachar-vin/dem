@@ -75,6 +75,22 @@ class VolumeManager:
             user="root",
         )
 
+    async def diff_hash(self, *, ticket_id: str, base_branch: str) -> str:
+        """sha256 of `git diff <base>...HEAD` on the ticket branch. The stall detector compares this
+        across rounds — an identical hash twice means the engineer's resume produced no new work."""
+        cfg = await self._store.resolved()
+        client = self._docker_factory()
+        stdout = await run_container(
+            client,
+            image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
+            entrypoint=["bash", "-c"],
+            command=[_diff_hash_script(base_branch)],
+            name=f"psa-diff-{ticket_id}",
+            volumes={f"psa-repo-{ticket_id}": "/work"},
+            user="root",
+        )
+        return stdout.strip()
+
     async def destroy(self, *, ticket_id: str) -> None:
         client = self._docker_factory()
         await self._remove_volumes(client, f"psa-repo-{ticket_id}", f"psa-claude-{ticket_id}")
@@ -98,6 +114,17 @@ def _push_script(github_repo: str, ticket_id: str) -> str:
             "cd /work",
             f'git push "https://x-access-token:${{CLONE_TOKEN}}@github.com/{github_repo}.git" '
             f'"ticket/{ticket_id}"',
+        ]
+    )
+
+
+def _diff_hash_script(base_branch: str) -> str:
+    return "\n".join(
+        [
+            "set -euo pipefail",
+            "git config --global --add safe.directory /work",
+            "cd /work",
+            f'git diff "{base_branch}...HEAD" | sha256sum | cut -d" " -f1',
         ]
     )
 

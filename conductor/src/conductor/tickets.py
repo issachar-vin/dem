@@ -37,6 +37,21 @@ class TicketStore:
             )
             await session.commit()
 
+    async def bump_loop_round(self, ticket_id: str) -> int:
+        async with self._sessionmaker() as session:
+            ticket = await session.get(Ticket, ticket_id)
+            assert ticket is not None  # the scheduler creates the ticket before the loop runs
+            ticket.loop_round += 1
+            await session.commit()
+            return ticket.loop_round
+
+    async def set_diff_hash(self, ticket_id: str, diff_hash: str) -> None:
+        async with self._sessionmaker() as session:
+            await session.execute(
+                update(Ticket).where(Ticket.ticket_id == ticket_id).values(last_diff_hash=diff_hash)
+            )
+            await session.commit()
+
     async def set_engineer_session(self, ticket_id: str, session_id: str) -> None:
         async with self._sessionmaker() as session:
             await session.execute(
