@@ -183,3 +183,6 @@ secrets/
 
 # Local Claude Code config
 .claude/
+
+# NiceGUI session storage (created when running the console locally)
+.nicegui/
