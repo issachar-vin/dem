@@ -70,6 +70,7 @@ async def run_container(
     environment: Mapping[str, str] | None = None,
     volumes: Mapping[str, str] | None = None,
     user: str | None = None,
+    entrypoint: Sequence[str] | None = None,
     mem_limit: str | None = None,
     nano_cpus: int | None = None,
     timeout: float | None = None,
@@ -89,6 +90,7 @@ async def run_container(
             environment=dict(environment or {}),
             volumes=binds,
             user=user,
+            entrypoint=list(entrypoint) if entrypoint is not None else None,
             mem_limit=mem_limit,
             nano_cpus=nano_cpus,
         )

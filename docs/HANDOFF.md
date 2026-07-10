@@ -37,7 +37,9 @@ needed), and (2) use an `agent_image` that host can pull. `release.yml` now publ
 `ghcr.io/<owner>/dem-agent` (`:latest`/`:<version>`/`:sha`) alongside the conductor, so set the
 console **Advanced → `agent_image`** to `ghcr.io/issachar-vin/dem-agent:latest` (the catalog default
 `dem-agent:latest` is only the locally-built `make agent-build` tag). Each dispatch leaves
-`psa-*-<id>` volumes behind (cleanup is Phase 5) and spends tokens.
+`psa-*-<id>` volumes behind (cleanup is Phase 5) and spends tokens. The clone helper runs the agent
+image with `entrypoint=["bash","-c"]` to **bypass** the agent entrypoint's Claude-credential
+assertion (it clones only, no creds) — PR #43; the engineer dispatch keeps the entrypoint.
 
 ---
 
