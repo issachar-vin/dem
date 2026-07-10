@@ -29,6 +29,15 @@ class GitHubUser(BaseModel):
         return self.email or f"{self.id}+{self.login}@users.noreply.github.com"
 
 
+class PullRequest(BaseModel):
+    """The subset of GitHub's created-PR response the conductor records on the ticket."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    number: int
+    html_url: str
+
+
 def github_headers(token: str) -> dict[str, str]:
     return {
         "Authorization": f"Bearer {token}",
@@ -73,6 +82,19 @@ class GitHubClient:
             lambda c: c.get(f"{GITHUB_API_BASE}/user", headers=github_headers(self.token))
         )
         return GitHubUser.model_validate(result)
+
+    async def create_pull_request(
+        self, repo: str, *, head: str, base: str, title: str, body: str
+    ) -> PullRequest:
+        """Open a PR for the engineer's branch. `head`/`base` are branch names on `owner/name`."""
+        result = await self._json(
+            lambda c: c.post(
+                f"{GITHUB_API_BASE}/repos/{repo}/pulls",
+                headers=github_headers(self.token),
+                json={"head": head, "base": base, "title": title, "body": body},
+            )
+        )
+        return PullRequest.model_validate(result)
 
     async def _json(self, send: Callable[[httpx.AsyncClient], Awaitable[httpx.Response]]) -> Any:
         async def run(c: httpx.AsyncClient) -> Any:

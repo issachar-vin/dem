@@ -2,10 +2,10 @@
 next engineer ticket to build — in-flight work first, then the oldest `ready_for_dev` — gated by
 Plane blocking relationships, and dispatches one agent container per role (MAX_CONCURRENT_AGENTS).
 
-Part 3 wires the consumer end-to-end for the **engineer** trigger with a placeholder prompt and
-mirrors the pipeline state onto the Plane board (ready_for_dev → in_progress → in_review). The real
-role prompts, the reviewer/QA loop, and PR creation are Phase 5. Other job triggers (planner, GitHub
-PR events) are left queued for Phase 5 to handle."""
+The engineer trigger runs end-to-end: build the ticket in a container with the real engineer prompt,
+push its branch, open a PR, and mirror the pipeline state onto the Plane board (ready_for_dev →
+in_progress → in_review only after the PR exists). The reviewer/QA loop and the planner/GitHub
+triggers are later Phase-5 parts; those jobs are left queued for now."""
 
 import asyncio
 import contextlib
@@ -15,10 +15,11 @@ from collections.abc import Callable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from conductor import plane
+from conductor import github, plane, prompts
 from conductor.agents.dispatcher import AgentRun, Dispatcher
 from conductor.agents.roles import AgentRole
 from conductor.agents.volumes import VolumeManager
+from conductor.github import GitHubClient
 from conductor.jobs import claim_job, complete_job, requeue_running
 from conductor.mappings import MappingStore
 from conductor.models import Job, JobStatus, WorkflowState
@@ -43,6 +44,7 @@ class Scheduler:
         dispatcher: Dispatcher,
         volumes: VolumeManager,
         plane_factory: Callable[[dict[str, str]], PlaneClient] = plane.client_from_resolved,
+        github_factory: Callable[[dict[str, str]], GitHubClient] = github.client_from_resolved,
     ) -> None:
         self._sessionmaker = sessionmaker
         self._store = store
@@ -51,6 +53,7 @@ class Scheduler:
         self._dispatcher = dispatcher
         self._volumes = volumes
         self._plane_factory = plane_factory
+        self._github_factory = github_factory
 
     async def tick(self) -> bool:
         """Select and run at most one ticket. Returns True if work was dispatched this tick."""
@@ -100,6 +103,7 @@ class Scheduler:
             repo, base_branch = await self._resolve_repo(project_id)
             cfg = await self._store.resolved()
             plane_client = self._plane_factory(cfg)
+            issue = await plane_client.get_issue(project_id, issue_id)
             await self._tickets.get_or_create(issue_id, project_id)
             await self._set_state(
                 plane_client, project_id, issue_id, "in_progress", WorkflowState.IN_PROGRESS
@@ -111,16 +115,30 @@ class Scheduler:
                 AgentRun(
                     role=AgentRole.ENGINEER,
                     ticket_id=issue_id,
-                    prompt=_placeholder_prompt(issue_id),
+                    prompt=_engineer_prompt(issue_id, issue),
                     model=cfg.get("claude_model_engineer", "claude-sonnet-4-6"),
                 )
             )
             await self._tickets.set_engineer_session(issue_id, envelope.session_id)
+            await self._volumes.push(ticket_id=issue_id, github_repo=repo)
+            pr = await self._github_factory(cfg).create_pull_request(
+                repo,
+                head=f"ticket/{issue_id}",
+                base=base_branch,
+                title=_issue_title(issue),
+                body=_pr_body(issue_id, issue),
+            )
+            await self._tickets.set_pr(issue_id, pr.number, pr.html_url)
             await self._set_state(
                 plane_client, project_id, issue_id, "in_review", WorkflowState.IN_REVIEW
             )
             await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
-            logger.info("Engineer built ticket %s (session %s)", issue_id, envelope.session_id)
+            logger.info(
+                "Engineer built ticket %s → PR %s (session %s)",
+                issue_id,
+                pr.number,
+                envelope.session_id,
+            )
         except Exception as exc:
             await complete_job(self._sessionmaker, job.id, status=JobStatus.FAILED, error=str(exc))
             if issue_id:
@@ -179,13 +197,25 @@ class Scheduler:
             await asyncio.sleep(_INTERVAL_SECONDS)
 
 
-def _placeholder_prompt(issue_id: str) -> str:
-    # Phase 5 replaces this with the real engineer prompt (ticket body + criteria + findings on
-    # resume). For now we only need a run that produces a session id to prove the consumer.
-    return (
-        f"You are a placeholder engineer agent for ticket {issue_id}. "
-        "Reply with a one-sentence acknowledgement; do not modify any files."
+def _issue_title(issue: dict[str, object]) -> str:
+    return str(issue.get("name") or "Untitled ticket")
+
+
+def _issue_body(issue: dict[str, object]) -> str:
+    # Plane CE has no dedicated acceptance-criteria field; the description carries both. Prefer the
+    # plain-text rendering, falling back to the HTML if that is all Plane returned.
+    return str(issue.get("description_stripped") or issue.get("description_html") or "")
+
+
+def _engineer_prompt(issue_id: str, issue: dict[str, object]) -> str:
+    return prompts.render(
+        "engineer", ticket_id=issue_id, title=_issue_title(issue), body=_issue_body(issue)
     )
+
+
+def _pr_body(issue_id: str, issue: dict[str, object]) -> str:
+    body = _issue_body(issue)
+    return f"Automated implementation of ticket `{issue_id}`.\n\n{body}".rstrip()
 
 
 async def start(scheduler: Scheduler) -> asyncio.Task[None]:

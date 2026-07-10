@@ -58,6 +58,23 @@ class VolumeManager:
             user="root",
         )
 
+    async def push(self, *, ticket_id: str, github_repo: str) -> None:
+        """Push the engineer's `ticket/<id>` branch to origin. Credentialed (the token is stripped
+        from the volume's stored remote), so it runs conductor-side in a root helper — the same
+        reason the clone does — keeping the token out of the agent container."""
+        cfg = await self._store.resolved()
+        client = self._docker_factory()
+        await run_container(
+            client,
+            image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
+            entrypoint=["bash", "-c"],
+            command=[_push_script(github_repo, ticket_id)],
+            name=f"psa-push-{ticket_id}",
+            environment={"CLONE_TOKEN": cfg.get("github_token", "")},
+            volumes={f"psa-repo-{ticket_id}": "/work"},
+            user="root",
+        )
+
     async def destroy(self, *, ticket_id: str) -> None:
         client = self._docker_factory()
         await self._remove_volumes(client, f"psa-repo-{ticket_id}", f"psa-claude-{ticket_id}")
@@ -69,6 +86,20 @@ class VolumeManager:
                 await asyncio.to_thread(volume.remove, force=True)
             except Exception:  # best-effort; a missing volume is not an error
                 logger.debug("Volume %s not removed (likely absent)", name)
+
+
+def _push_script(github_repo: str, ticket_id: str) -> str:
+    # The stored remote is token-stripped (see _clone_script), so push to an explicit tokened URL
+    # rather than `origin`; the token stays in $CLONE_TOKEN and never lands in the volume.
+    return "\n".join(
+        [
+            "set -euo pipefail",
+            "git config --global --add safe.directory /work",
+            "cd /work",
+            f'git push "https://x-access-token:${{CLONE_TOKEN}}@github.com/{github_repo}.git" '
+            f'"ticket/{ticket_id}"',
+        ]
+    )
 
 
 def _clone_script(github_repo: str, base_branch: str, ticket_id: str, identity: GitHubUser) -> str:
