@@ -3,6 +3,11 @@ from enum import StrEnum
 
 from pydantic import BaseModel
 
+# The agent image the dispatcher runs. Published by release.yml. Used as the code fallback when
+# `agent_image` is unset and as the wizard's pre-filled suggestion. `agent_image` itself has no
+# catalog default on purpose (see its ConfigField) so the wizard can flag it as still-to-set.
+DEFAULT_AGENT_IMAGE = "ghcr.io/issachar-vin/dem-agent:latest"
+
 
 class ConfigStep(StrEnum):
     CLAUDE = "claude"
@@ -106,7 +111,16 @@ CATALOG: tuple[ConfigField, ...] = (
     ConfigField("conductor_public_url", ConfigStep.ADVANCED, default="http://localhost:8420"),
     ConfigField("max_concurrent_agents", ConfigStep.ADVANCED, default="1"),
     ConfigField("agent_timeout_minutes", ConfigStep.ADVANCED, default="30"),
-    ConfigField("agent_image", ConfigStep.ADVANCED, default="dem/agent-runner:latest"),
+    # Required with no default so the wizard's Advanced step reads incomplete until it is set —
+    # a silent wrong default is how a dispatch ends up pulling an image that doesn't exist. The
+    # wizard pre-fills DEFAULT_AGENT_IMAGE as the suggested value.
+    ConfigField(
+        "agent_image",
+        ConfigStep.ADVANCED,
+        required=True,
+        help="Container image the dispatcher runs per ticket, e.g. "
+        f"{DEFAULT_AGENT_IMAGE} (published by release.yml alongside the conductor).",
+    ),
     ConfigField("agent_memory_limit", ConfigStep.ADVANCED, default="4g"),
     ConfigField("agent_cpu_limit", ConfigStep.ADVANCED, default="2"),
     ConfigField("docker_host", ConfigStep.ADVANCED, default="unix:///var/run/docker.sock"),

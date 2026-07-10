@@ -74,3 +74,16 @@ async def test_destroy_missing_volume_is_swallowed(store: ConfigStore) -> None:
     docker = FakeDocker()
     user = GitHubUser(login="bot", id=1)
     await _manager(store, docker, user).destroy(ticket_id="ghost")  # no volumes exist
+
+
+async def test_prepare_clears_stale_volumes_first(store: ConfigStore) -> None:
+    await store.set_secret("github_token", "ghtok")
+    docker = FakeDocker()
+    # A stale repo volume from a prior aborted dispatch would make `git clone` fail on a non-empty
+    # /work; prepare must remove it before re-creating.
+    stale = docker.volumes.create("psa-repo-T-9")
+    user = GitHubUser(login="bot", id=1)
+    await _manager(store, docker, user).prepare(
+        ticket_id="T-9", github_repo="octo/ui", base_branch="main"
+    )
+    assert stale.removed is True

@@ -5,7 +5,8 @@ from conductor.agents.contracts import ClaudeEnvelope
 from conductor.agents.dispatcher import AgentRun
 from conductor.jobs import enqueue_job
 from conductor.mappings import MappingStore
-from conductor.models import Job
+from conductor.models import Job, WorkflowState
+from conductor.plane import PlaneError
 from conductor.scheduler import Scheduler
 from conductor.store import ConfigStore
 from conductor.tickets import TicketStore
@@ -42,12 +43,27 @@ class FakeVolumes:
         )
 
 
+class FakePlane:
+    def __init__(self, *, error: Exception | None = None) -> None:
+        self._error = error
+        self.moves: list[tuple[str, str, str]] = []
+
+    async def set_state(
+        self, project_id: str, issue_id: str, state_id: str
+    ) -> dict[str, str]:
+        if self._error is not None:
+            raise self._error
+        self.moves.append((project_id, issue_id, state_id))
+        return {}
+
+
 async def _scheduler(
     store: ConfigStore,
     mappings: MappingStore,
     sessionmaker: async_sessionmaker[AsyncSession],
     dispatcher: FakeDispatcher,
     volumes: FakeVolumes,
+    plane: FakePlane | None = None,
 ) -> tuple[Scheduler, TicketStore]:
     await mappings.set_project("proj-1", enabled=True)
     await mappings.set_repo(
@@ -61,6 +77,7 @@ async def _scheduler(
         tickets=tickets,
         dispatcher=dispatcher,  # type: ignore[arg-type]
         volumes=volumes,  # type: ignore[arg-type]
+        plane_factory=lambda _cfg: plane,  # type: ignore[arg-type,return-value]
     )
     return scheduler, tickets
 
@@ -200,3 +217,75 @@ async def test_no_repo_marks_failed(
     await scheduler.tick()
     assert dispatcher.runs == []
     assert await _job_status(sessionmaker, "ISSUE-1") == "failed"
+
+
+async def test_board_mirroring_moves_the_card(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    await mappings.set_state("proj-1", WorkflowState.IN_PROGRESS, "state-inprog")
+    await mappings.set_state("proj-1", WorkflowState.IN_REVIEW, "state-inreview")
+    plane = FakePlane()
+    scheduler, _ = await _scheduler(
+        store, mappings, sessionmaker, FakeDispatcher(), FakeVolumes(), plane
+    )
+    await _enqueue(sessionmaker, "ISSUE-1")
+
+    await scheduler.tick()
+    assert plane.moves == [
+        ("proj-1", "ISSUE-1", "state-inprog"),
+        ("proj-1", "ISSUE-1", "state-inreview"),
+    ]
+
+
+async def test_unmapped_state_skips_board_move(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    plane = FakePlane()  # no state mappings set → nothing to move to
+    scheduler, _ = await _scheduler(
+        store, mappings, sessionmaker, FakeDispatcher(), FakeVolumes(), plane
+    )
+    await _enqueue(sessionmaker, "ISSUE-1")
+
+    await scheduler.tick()
+    assert plane.moves == []
+    assert await _job_status(sessionmaker, "ISSUE-1") == "done"
+
+
+async def test_plane_error_does_not_fail_dispatch(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    await mappings.set_state("proj-1", WorkflowState.IN_PROGRESS, "state-inprog")
+    plane = FakePlane(error=PlaneError("plane down"))
+    scheduler, _ = await _scheduler(
+        store, mappings, sessionmaker, FakeDispatcher(), FakeVolumes(), plane
+    )
+    await _enqueue(sessionmaker, "ISSUE-1")
+
+    await scheduler.tick()
+    assert (
+        await _job_status(sessionmaker, "ISSUE-1") == "done"
+    )  # board move is best-effort
+
+
+async def test_recover_requeues_orphaned_running_job(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    scheduler, _ = await _scheduler(
+        store, mappings, sessionmaker, FakeDispatcher(), FakeVolumes()
+    )
+    await _enqueue(sessionmaker, "ISSUE-1")
+    async with sessionmaker() as session:
+        job = (await session.execute(select(Job))).scalar_one()
+        job.status = "running"
+        await session.commit()
+
+    await scheduler.recover()
+    assert await _job_status(sessionmaker, "ISSUE-1") == "queued"

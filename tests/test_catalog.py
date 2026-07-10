@@ -12,6 +12,7 @@ def _resolved(**overrides: str) -> dict[str, str]:
             "plane_api_key": "k",
             "plane_webhook_secret": "s",
             "github_token": "g",
+            "agent_image": "ghcr.io/issachar-vin/dem-agent:latest",
         }
     )
     values.update(overrides)
