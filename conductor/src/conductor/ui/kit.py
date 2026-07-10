@@ -175,6 +175,11 @@ body {{ font-family: 'Inter', sans-serif; background: {PAGE_BG}; color: {TEXT}; 
 .v2-nav .q-item:hover {{ background: {SURFACE}; color: {TEXT}; }}
 .v2-nav .v2-nav-active {{ background: {SURFACE_2}; color: {TEXT}; }}
 .v2-nav .q-item__section--avatar {{ min-width: 34px; }}
+/* Nav icon color is set inline per item (orange when active, else a dim default) so it renders
+   correctly with no CSS loaded. Hovering a non-active item should still light its icon white;
+   !important is required to beat that inline style. The active item is excluded so it always
+   stays orange, hovered or not. */
+.v2-nav .q-item:not(.v2-nav-active):hover [class^="icon-"] {{ color: {TEXT} !important; }}
 
 /* collapsed (mini) drawer: the avatar section is the only one shown — kill Quasar's side
    padding and min-width so each icon sits dead-center in the rail */
@@ -182,6 +187,11 @@ body {{ font-family: 'Inter', sans-serif; background: {PAGE_BG}; color: {TEXT}; 
 .q-drawer--mini .v2-nav .q-item__section--avatar {{ min-width: 0; padding: 0; }}
 .q-drawer--mini .v2-brand {{ justify-content: center; padding-left: 0; padding-right: 0; }}
 .q-drawer--mini .v2-brand-text {{ display: none; }}
+.q-drawer--mini .v2-nav .v2-nav-active {{ background: transparent; }}
+.q-drawer--mini .v2-nav .q-item:hover {{ background: transparent; }}
+/* Quasar's hover/focus tint is a separate overlay element (.q-focus-helper), not the item's own
+   background-color, so the rule above alone doesn't remove it — kill the overlay directly. */
+.q-drawer--mini .v2-nav .q-item .q-focus-helper {{ display: none; }}
 """
 
 
