@@ -33,10 +33,13 @@ async def test_prepare_creates_volumes_and_clones(store: ConfigStore) -> None:
     image, command, kwargs = docker.containers.calls[0]
     assert kwargs["name"] == "psa-clone-T-1"
     assert kwargs["user"] == "root"
+    # The agent entrypoint asserts a Claude credential; the clone helper has none, so it must
+    # override the entrypoint and run the script under plain bash.
+    assert kwargs["entrypoint"] == ["bash", "-c"]
     assert kwargs["environment"]["CLONE_TOKEN"] == "ghtok"
     assert kwargs["volumes"] == {"psa-repo-T-1": {"bind": "/work", "mode": "rw"}}
 
-    script = command[2]
+    script = command[0]
     assert 'git clone --depth 50 --branch "main"' in script
     assert "octo/backend.git" in script
     assert 'git checkout -b "ticket/T-1"' in script
@@ -51,7 +54,7 @@ async def test_clone_strips_token_from_remote(store: ConfigStore) -> None:
     await _manager(store, docker, user).prepare(
         ticket_id="T-2", github_repo="octo/ui", base_branch="dev"
     )
-    script = docker.containers.calls[0][1][2]
+    script = docker.containers.calls[0][1][0]
     assert 'git remote set-url origin "https://github.com/octo/ui.git"' in script
 
 

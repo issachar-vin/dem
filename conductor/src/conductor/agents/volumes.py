@@ -45,7 +45,10 @@ class VolumeManager:
         await run_container(
             client,
             image=cfg.get("agent_image") or _DEFAULT_IMAGE,
-            command=["bash", "-c", _clone_script(github_repo, base_branch, ticket_id, identity)],
+            # Override the agent entrypoint: it asserts a Claude credential before running anything,
+            # but this helper only clones (no Claude creds, by design), so it must not run it.
+            entrypoint=["bash", "-c"],
+            command=[_clone_script(github_repo, base_branch, ticket_id, identity)],
             name=f"psa-clone-{ticket_id}",
             environment={"CLONE_TOKEN": cfg.get("github_token", "")},
             volumes={repo_vol: "/work"},
