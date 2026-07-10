@@ -71,6 +71,11 @@ def _clone_script(github_repo: str, base_branch: str, ticket_id: str, identity: 
     return "\n".join(
         [
             "set -euo pipefail",
+            # The volume mounts owned by the image's `agent` user, but this helper runs as root to
+            # clone + chown. Since git 2.35.2 that ownership mismatch trips "dubious ownership" and
+            # aborts, even for root — so trust /work explicitly. The final chown hands the tree to
+            # the agent, whose own git then sees a matching owner and needs no such exception.
+            "git config --global --add safe.directory /work",
             f'git clone --depth 50 --branch "{base_branch}" '
             f'"https://x-access-token:${{CLONE_TOKEN}}@github.com/{github_repo}.git" /work',
             "cd /work",

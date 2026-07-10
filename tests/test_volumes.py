@@ -40,6 +40,7 @@ async def test_prepare_creates_volumes_and_clones(store: ConfigStore) -> None:
     assert kwargs["volumes"] == {"psa-repo-T-1": {"bind": "/work", "mode": "rw"}}
 
     script = command[0]
+    assert "git config --global --add safe.directory /work" in script
     assert 'git clone --depth 50 --branch "main"' in script
     assert "octo/backend.git" in script
     assert 'git checkout -b "ticket/T-1"' in script
