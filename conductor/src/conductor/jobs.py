@@ -107,6 +107,21 @@ async def claim_job(sessionmaker: async_sessionmaker[AsyncSession], job_id: int)
         return result.rowcount == 1
 
 
+async def requeue_running(sessionmaker: async_sessionmaker[AsyncSession]) -> int:
+    """Reset orphaned RUNNING jobs back to QUEUED and return how many. Called on startup: if the
+    conductor is restarted mid-dispatch, a job left RUNNING never completes on its own and — because
+    the active-dedupe index counts RUNNING as active — also blocks any re-trigger of that issue."""
+    async with sessionmaker() as session:
+        result = cast(
+            CursorResult[Any],
+            await session.execute(
+                update(Job).where(Job.status == JobStatus.RUNNING).values(status=JobStatus.QUEUED)
+            ),
+        )
+        await session.commit()
+        return result.rowcount
+
+
 async def complete_job(
     sessionmaker: async_sessionmaker[AsyncSession],
     job_id: int,

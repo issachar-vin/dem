@@ -93,6 +93,7 @@ def make_env() -> Callable[..., dict[str, str]]:
             "PLANE_WEBHOOK_SECRET": "whsec_test",
             "GITHUB_TOKEN": "github_pat_test",
             "GITHUB_EVENT_MODE": "poll",
+            "AGENT_IMAGE": "ghcr.io/issachar-vin/dem-agent:latest",
         }
         env.update(overrides)
         return {k: v for k, v in env.items() if v is not None}

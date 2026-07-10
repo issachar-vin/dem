@@ -32,7 +32,7 @@ async def test_resolved_overlays_defaults_and_secrets(
 
 async def test_seed_once_then_db_wins(store: ConfigStore, make_env: EnvFactory) -> None:
     seeded = await store.seed_from_env(make_env(), reseed=False)
-    assert seeded == 7
+    assert seeded == 8
     await store.set_secret("plane_api_key", "changed-in-ui")
     # Re-seeding without reseed must not clobber the UI-edited value.
     assert await store.seed_from_env(make_env(), reseed=False) == 0

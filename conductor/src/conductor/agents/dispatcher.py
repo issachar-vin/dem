@@ -10,11 +10,10 @@ from dataclasses import dataclass
 from conductor.agents import contracts
 from conductor.agents.dockerctl import DockerFactory, run_container
 from conductor.agents.roles import AgentRole
+from conductor.catalog import DEFAULT_AGENT_IMAGE
 from conductor.store import ConfigStore
 
 logger = logging.getLogger("conductor")
-
-_DEFAULT_IMAGE = "dem/agent-runner:latest"
 
 
 @dataclass(frozen=True)
@@ -48,7 +47,7 @@ class Dispatcher:
             client = self._docker_factory()
             stdout = await run_container(
                 client,
-                image=cfg.get("agent_image") or _DEFAULT_IMAGE,
+                image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
                 command=_build_command(run),
                 name=f"psa-{run.role.value}-{run.ticket_id}",
                 environment=_build_env(run, cfg),

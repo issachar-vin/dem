@@ -9,13 +9,12 @@ import asyncio
 import logging
 from collections.abc import Callable
 
-from conductor.agents.dockerctl import DockerFactory, run_container
+from conductor.agents.dockerctl import DockerClient, DockerFactory, run_container
+from conductor.catalog import DEFAULT_AGENT_IMAGE
 from conductor.github import GitHubClient, GitHubUser, client_from_resolved
 from conductor.store import ConfigStore
 
 logger = logging.getLogger("conductor")
-
-_DEFAULT_IMAGE = "dem/agent-runner:latest"
 
 
 class VolumeManager:
@@ -39,12 +38,16 @@ class VolumeManager:
 
         repo_vol = f"psa-repo-{ticket_id}"
         claude_vol = f"psa-claude-{ticket_id}"
+        # Idempotent: a prior aborted dispatch can leave a partial clone volume, and `git clone`
+        # then fails on a non-empty /work. Clear any stale volumes so prepare starts clean. (This is
+        # the initial-dispatch setup; the Phase-5 review loop reuses the volume via resume instead.)
+        await self._remove_volumes(client, repo_vol, claude_vol)
         await asyncio.to_thread(client.volumes.create, repo_vol)
         await asyncio.to_thread(client.volumes.create, claude_vol)
 
         await run_container(
             client,
-            image=cfg.get("agent_image") or _DEFAULT_IMAGE,
+            image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
             # Override the agent entrypoint: it asserts a Claude credential before running anything,
             # but this helper only clones (no Claude creds, by design), so it must not run it.
             entrypoint=["bash", "-c"],
@@ -57,12 +60,15 @@ class VolumeManager:
 
     async def destroy(self, *, ticket_id: str) -> None:
         client = self._docker_factory()
-        for name in (f"psa-repo-{ticket_id}", f"psa-claude-{ticket_id}"):
+        await self._remove_volumes(client, f"psa-repo-{ticket_id}", f"psa-claude-{ticket_id}")
+
+    async def _remove_volumes(self, client: DockerClient, *names: str) -> None:
+        for name in names:
             try:
                 volume = await asyncio.to_thread(client.volumes.get, name)
                 await asyncio.to_thread(volume.remove, force=True)
-            except Exception:  # best-effort cleanup; a missing volume is not an error
-                logger.warning("Failed to remove volume %s", name, exc_info=True)
+            except Exception:  # best-effort; a missing volume is not an error
+                logger.debug("Volume %s not removed (likely absent)", name)
 
 
 def _clone_script(github_repo: str, base_branch: str, ticket_id: str, identity: GitHubUser) -> str:

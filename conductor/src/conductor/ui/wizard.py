@@ -8,12 +8,21 @@ from nicegui import ui
 from starlette.requests import Request
 
 from conductor import catalog, plane, verify
-from conductor.mappings import RepoMappingView
+from conductor.mappings import ProjectMappingView, RepoMappingView
+from conductor.models import WorkflowState
 from conductor.plane import PlaneError
 from conductor.store import ConfigFieldView
 from conductor.ui.context import get_context
+from conductor.ui.pages import _render_state_form
 from conductor.ui.shell import _layout, _origin, _page
-from conductor.ui.widgets import _is_owner_name, _is_set, _payload_url_field, _Section, _test_row
+from conductor.ui.widgets import (
+    _bubble,
+    _is_owner_name,
+    _is_set,
+    _payload_url_field,
+    _Section,
+    _test_row,
+)
 
 STEP_ORDER = ("claude", "plane", "github", "notifications", "advanced")
 
@@ -95,51 +104,51 @@ async def _load() -> tuple[dict[str, ConfigFieldView], dict[str, catalog.StepSta
 @ui.refreshable
 async def _claude_panel(tabs: ui.tabs) -> None:
     config, steps = await _load()
-    ui.markdown(
-        "**Step 1 — Claude credential.** Set exactly one: a Pro/Max **subscription token** or an "
-        "**API key**."
-    )
-    with ui.expansion("How do I get these?", icon="help_outline").classes("w-full"):
-        ui.markdown(
-            "- **Subscription token** (Pro/Max): run `claude setup-token` in a terminal with the "
-            "Claude Code CLI installed — it opens a browser, then prints a token starting with "
-            "`sk-ant-oat01-…`.\n"
-            "- **API key** (metered): create one at console.anthropic.com → API keys.\n"
-            "- Set one **or** the other — not both."
-        )
-    creds = _Section()
-    creds.field(config["claude_code_oauth_token"])
-    creds.field(config["anthropic_api_key"])
-    creds.save_button(_claude_panel.refresh)
-    _test_row("claude")
+    creds_ok = _is_set(config["claude_code_oauth_token"]) or _is_set(config["anthropic_api_key"])
 
-    if not (_is_set(config["claude_code_oauth_token"]) or _is_set(config["anthropic_api_key"])):
-        ui.separator()
+    with _bubble("Step 1 — Claude credential (set exactly one)", complete=creds_ok):
+        ui.markdown("A Pro/Max **subscription token** or an **API key** — one, not both.")
+        with ui.expansion("How do I get these?", icon="help_outline").classes("w-full"):
+            ui.markdown(
+                "- **Subscription token** (Pro/Max): run `claude setup-token` in a terminal with "
+                "the Claude Code CLI installed — it opens a browser, then prints a token starting "
+                "with `sk-ant-oat01-…`.\n"
+                "- **API key** (metered): create one at console.anthropic.com → API keys.\n"
+                "- Set one **or** the other — not both."
+            )
+        creds = _Section()
+        creds.field(config["claude_code_oauth_token"])
+        creds.field(config["anthropic_api_key"])
+        creds.save_button(_claude_panel.refresh)
+        _test_row("claude")
+
+    if not creds_ok:
         ui.label("Set a credential above to choose models.").classes("text-sm text-gray-500")
         return
 
-    ui.separator()
-    ui.markdown("**Step 2 — Models.** Choose the model for each agent role.")
-    resolved = await get_context().store.resolved()
-    models = await verify.list_claude_models(
-        oauth_token=resolved.get("claude_code_oauth_token") or None,
-        api_key=resolved.get("anthropic_api_key") or None,
-    )
-    if models:
-        ui.label("Models loaded live from your account.").classes("text-xs text-gray-500")
-    else:
-        ui.label(
-            "Couldn't load models from the API (check the credential above); showing stored values."
-        ).classes("text-xs text-orange-600")
-    model_section = _Section()
-    for role in (
-        "claude_model_engineer",
-        "claude_model_planner",
-        "claude_model_reviewer",
-        "claude_model_qa",
-    ):
-        model_section.model(config[role], models)
-    model_section.save_button(_claude_panel.refresh)
+    with _bubble("Step 2 — Models", complete=True):
+        ui.markdown("Choose the model for each agent role.")
+        resolved = await get_context().store.resolved()
+        models = await verify.list_claude_models(
+            oauth_token=resolved.get("claude_code_oauth_token") or None,
+            api_key=resolved.get("anthropic_api_key") or None,
+        )
+        if models:
+            ui.label("Models loaded live from your account.").classes("text-xs text-gray-500")
+        else:
+            ui.label(
+                "Couldn't load models from the API (check the credential above); showing stored "
+                "values."
+            ).classes("text-xs text-orange-600")
+        model_section = _Section()
+        for role in (
+            "claude_model_engineer",
+            "claude_model_planner",
+            "claude_model_reviewer",
+            "claude_model_qa",
+        ):
+            model_section.model(config[role], models)
+        model_section.save_button(_claude_panel.refresh)
 
     _step_footer(tabs, steps["claude"])
 
@@ -147,82 +156,88 @@ async def _claude_panel(tabs: ui.tabs) -> None:
 @ui.refreshable
 async def _plane_panel(tabs: ui.tabs, origin: str) -> None:
     config, steps = await _load()
-    ui.markdown("**Step 1 — Connect to Plane.** Enter all three, then Test.")
-    with ui.expansion("How do I get these?", icon="help_outline").classes("w-full"):
-        ui.markdown(
-            "- **Base URL** — your Plane root, e.g. `https://plane.eroizzy.com` "
-            "(Plane Cloud: `https://api.plane.so`).\n"
-            "- **API key** — in Plane, open your profile → **Personal Access Tokens** → *Add "
-            "personal access token* → copy it. Sent as the `X-API-Key` header.\n"
-            "- **Workspace slug** — the segment in your Plane URL right after the domain: "
-            "`plane.eroizzy.com/<slug>/…`. It's the lowercased workspace name (workspace *DEM* → "
-            "slug `dem`). Plane's API can't list it, so enter it here; Test verifies it."
-        )
-    connection = _Section()
-    connection.field(config["plane_base_url"])
-    connection.field(config["plane_api_key"])
-    connection.field(config["plane_workspace_slug"])
-    connection.save_button(_plane_panel.refresh)
-    _test_row("plane")
-
     trio = ("plane_base_url", "plane_api_key", "plane_workspace_slug")
-    if not all(_is_set(config[n]) for n in trio):
-        ui.separator()
+    trio_ok = all(_is_set(config[n]) for n in trio)
+
+    with _bubble("Step 1 — Connect to Plane", complete=trio_ok):
+        ui.markdown("Enter all three, then **Test**.")
+        with ui.expansion("How do I get these?", icon="help_outline").classes("w-full"):
+            ui.markdown(
+                "- **Base URL** — your Plane root, e.g. `https://plane.eroizzy.com` "
+                "(Plane Cloud: `https://api.plane.so`).\n"
+                "- **API key** — in Plane, open your profile → **Personal Access Tokens** → *Add "
+                "personal access token* → copy it. Sent as the `X-API-Key` header.\n"
+                "- **Workspace slug** — the segment in your Plane URL right after the domain: "
+                "`plane.eroizzy.com/<slug>/…`. It's the lowercased workspace name (workspace *DEM* "
+                "→ slug `dem`). Plane's API can't list it, so enter it here; Test verifies it."
+            )
+        connection = _Section()
+        connection.field(config["plane_base_url"])
+        connection.field(config["plane_api_key"])
+        connection.field(config["plane_workspace_slug"])
+        connection.save_button(_plane_panel.refresh)
+        _test_row("plane")
+
+    if not trio_ok:
         ui.label("Fill in and test the connection above to continue.").classes(
             "text-sm text-gray-500"
         )
         return
 
-    ui.separator()
-    ui.markdown("**Step 2 — Webhook secret.**")
     resolved = await get_context().store.resolved()
-    payload_url = f"{origin.rstrip('/')}/webhooks/plane"
-    ui.markdown(
-        "1. In Plane → **Workspace Settings → Webhooks → Add webhook**.\n"
-        f"2. **Payload URL:** `{payload_url}`\n"
-        "3. Enable it, select **Issue** events, Save.\n"
-        "4. Plane shows a **Secret key once** — copy it and paste below. The two must match, or "
-        "every delivery returns 401."
-    )
-    _payload_url_field(payload_url)
-    stored_public = (resolved.get("conductor_public_url") or "").rstrip("/")
-    if origin.rstrip("/") != stored_public:
+    with _bubble("Step 2 — Webhook secret", complete=_is_set(config["plane_webhook_secret"])):
+        payload_url = f"{origin.rstrip('/')}/webhooks/plane"
+        ui.markdown(
+            "1. In Plane → **Workspace Settings → Webhooks → Add webhook**.\n"
+            f"2. **Payload URL:** `{payload_url}`\n"
+            "3. Enable it, select **Issue** events, Save.\n"
+            "4. Plane shows a **Secret key once** — copy it and paste below. The two must match, "
+            "or every delivery returns 401."
+        )
+        _payload_url_field(payload_url)
+        stored_public = (resolved.get("conductor_public_url") or "").rstrip("/")
+        if origin.rstrip("/") != stored_public:
 
-        async def save_public() -> None:
-            await get_context().store.set_setting("conductor_public_url", origin.rstrip("/"))
-            ui.notify("Saved public URL")
-            _plane_panel.refresh()
+            async def save_public() -> None:
+                await get_context().store.set_setting("conductor_public_url", origin.rstrip("/"))
+                ui.notify("Saved public URL")
+                _plane_panel.refresh()
 
-        ui.button(
-            f"Save {origin.rstrip('/')} as the conductor's public URL",
-            icon="save",
-            on_click=save_public,
-        ).props("flat color=primary")
-    webhook = _Section()
-    webhook.field(config["plane_webhook_secret"])
-    webhook.save_button(_plane_panel.refresh)
+            ui.button(
+                f"Save {origin.rstrip('/')} as the conductor's public URL",
+                icon="save",
+                on_click=save_public,
+            ).props("flat color=primary")
+        webhook = _Section()
+        webhook.field(config["plane_webhook_secret"])
+        webhook.save_button(_plane_panel.refresh)
 
-    ui.separator()
-    ui.markdown("**Step 3 — Epic detection.** How the conductor recognizes an epic (the trigger).")
-    ui.markdown(
-        "- **label** (recommended, works on Community): an issue is an epic if it carries a label "
-        "named `epic`. Create that label in the project and tag the issues you want built.\n"
-        "- **type**: for a Plane *Epic* work-item type — Community has none, so this falls back to "
-        "the label behavior.\n"
-        "- **parentless**: any issue with no parent becomes an epic (broad; usually too much)."
-    )
-    epic = _Section()
-    epic.field(config["plane_epic_signal"])
-    epic.save_button(_plane_panel.refresh)
+    with _bubble("Step 3 — Epic detection", complete=_is_set(config["plane_epic_signal"])):
+        ui.markdown("How the conductor recognizes an epic (the trigger).")
+        ui.markdown(
+            "- **label** (recommended, works on Community): an issue is an epic if it carries a "
+            "label named `epic`. Create that label in the project and tag the issues you want "
+            "built.\n"
+            "- **type**: for a Plane *Epic* work-item type — Community has none, so this falls "
+            "back to the label behavior.\n"
+            "- **parentless**: any issue with no parent becomes an epic (broad; usually too much)."
+        )
+        epic = _Section()
+        epic.field(config["plane_epic_signal"])
+        epic.save_button(_plane_panel.refresh)
 
-    ui.separator()
-    ui.markdown(
-        "**Step 4 — Projects to manage.** Tick each Plane project the conductor should build. "
-        "Enabling one reveals its repo mapping on the GitHub tab."
-    )
-    await _project_checklist()
+    enabled_projects = [p for p in await get_context().mappings.list_projects() if p.enabled]
+    with _bubble("Step 4 — Projects to manage", complete=bool(enabled_projects)):
+        ui.markdown(
+            "Tick each Plane project the conductor should build. Enabling one reveals its repo "
+            "mapping on the GitHub tab and its state mapping below."
+        )
+        await _project_checklist()
 
-    ui.separator()
+    states_ok = bool(enabled_projects) and await _states_mapped(enabled_projects)
+    with _bubble("Step 5 — Map pipeline states", complete=states_ok):
+        await _state_mapping_section(enabled_projects)
+
     with ui.expansion("Plane Agents & bot token — under construction", icon="construction").classes(
         "w-full"
     ):
@@ -231,6 +246,43 @@ async def _plane_panel(tabs: ui.tabs, origin: str) -> None:
             "now — they have no effect yet."
         )
     _step_footer(tabs, steps["plane"])
+
+
+# The states the pipeline relies on today: the trigger (ready_for_dev) and the two the scheduler
+# moves the card through (in_progress, in_review). Board mirroring skips any that aren't mapped.
+_ESSENTIAL_STATES = (
+    WorkflowState.READY_FOR_DEV,
+    WorkflowState.IN_PROGRESS,
+    WorkflowState.IN_REVIEW,
+)
+
+
+async def _states_mapped(enabled_projects: list[ProjectMappingView]) -> bool:
+    mappings = get_context().mappings
+    for project in enabled_projects:
+        mapped = {m.workflow_state for m in await mappings.list_states(project.plane_project_id)}
+        if not all(s.value in mapped for s in _ESSENTIAL_STATES):
+            return False
+    return True
+
+
+async def _state_mapping_section(enabled_projects: list[ProjectMappingView]) -> None:
+    ui.markdown(
+        "The conductor drives a fixed set of **canonical pipeline states** "
+        "(`ready_for_dev` → `in_progress` → `in_review` → …). Your Plane project has its own state "
+        "names. Map each canonical state onto the matching Plane state so the conductor can:\n"
+        "- **spot the ticket you hand it** — `ready_for_dev` is the trigger, and\n"
+        "- **move the card across your board** as it works — `in_progress` while building, "
+        "`in_review` when the engineer is done.\n\n"
+        "Leave a state unmapped and the conductor simply won't move the card there."
+    )
+    if not enabled_projects:
+        ui.label("Enable a project in Step 4 first.").classes("text-sm text-orange-600")
+        return
+    for project in enabled_projects:
+        pid = project.plane_project_id
+        ui.label(f"{pid} ({len(project.repos)} repo(s))").classes("font-semibold mt-2")
+        await _render_state_form(pid)
 
 
 async def _project_checklist() -> None:
@@ -258,99 +310,103 @@ async def _project_checklist() -> None:
 @ui.refreshable
 async def _github_panel(tabs: ui.tabs, origin: str) -> None:
     config, steps = await _load()
-    ui.markdown("**Step 1 — GitHub token.**")
-    with ui.expansion("How do I create this?", icon="help_outline").classes("w-full"):
-        ui.markdown(
-            "GitHub → **Settings → Developer settings → Fine-grained tokens → Generate new "
-            "token**. Grant it access to the target repos with **Contents: Read and write** and "
-            "**Pull requests: Read and write**. A dedicated machine account is recommended so PRs "
-            "aren't attributed to you.\n\n"
-            "Full walkthrough (machine account, exact token scopes, per-project webhooks, and "
-            "branch protection): [docs/SETUP_GITHUB.md]"
-            "(https://github.com/issachar-vin/dem/blob/main/docs/SETUP_GITHUB.md)."
-        )
-    token_section = _Section()
-    token_section.field(config["github_token"])
-    token_section.save_button(_github_panel.refresh)
-    _test_row("github")
+    token_ok = _is_set(config["github_token"])
 
-    if not _is_set(config["github_token"]):
-        ui.separator()
+    with _bubble("Step 1 — GitHub token", complete=token_ok):
+        with ui.expansion("How do I create this?", icon="help_outline").classes("w-full"):
+            ui.markdown(
+                "GitHub → **Settings → Developer settings → Fine-grained tokens → Generate new "
+                "token**. Grant it access to the target repos with **Contents: Read and write** "
+                "and **Pull requests: Read and write**. A dedicated machine account is recommended "
+                "so PRs aren't attributed to you.\n\n"
+                "Full walkthrough (machine account, exact token scopes, per-project webhooks, and "
+                "branch protection): [docs/SETUP_GITHUB.md]"
+                "(https://github.com/issachar-vin/dem/blob/main/docs/SETUP_GITHUB.md)."
+            )
+        token_section = _Section()
+        token_section.field(config["github_token"])
+        token_section.save_button(_github_panel.refresh)
+        _test_row("github")
+
+    if not token_ok:
         ui.label("Set and test the token above to continue.").classes("text-sm text-gray-500")
         return
 
-    ui.separator()
-    ui.markdown("**Step 2 — Event delivery.** How GitHub events reach the conductor.")
-    with ui.expansion("What do these mean?", icon="help_outline").classes("w-full"):
-        ui.markdown(
-            "- **Event mode** — how PR review/merge events reach the conductor:\n"
-            "  - **webhook** (recommended, needs a public URL): GitHub pushes events instantly. "
-            "Choose it below to reveal the payload URL and secret, then in the repo → **Settings → "
-            "Webhooks → Add webhook** use that payload URL, content type **application/json**, "
-            "a **secret** matching the one you save here, keep **SSL verification enabled**, and "
-            "under **Which events?** pick *Let me select individual events* → **Pull requests**, "
-            "**Pull request reviews**, **Pull request review comments**, and **Pull request review "
-            "threads**.\n"
-            "  - **poll**: the conductor periodically asks GitHub for changes — no webhook needed, "
-            "but slower. Set the interval in seconds."
-        )
-    delivery = _Section()
-    mode_box = delivery.field(config["github_event_mode"])
-    with ui.column().classes("w-full gap-2").bind_visibility_from(mode_box, "value", value="poll"):
-        delivery.field(config["github_poll_interval_seconds"])
-    delivery.save_button(_github_panel.refresh)
+    with _bubble("Step 2 — Event delivery", complete=_is_set(config["github_event_mode"])):
+        ui.markdown("How GitHub events reach the conductor.")
+        with ui.expansion("What do these mean?", icon="help_outline").classes("w-full"):
+            ui.markdown(
+                "- **Event mode** — how PR review/merge events reach the conductor:\n"
+                "  - **webhook** (recommended, needs a public URL): GitHub pushes events "
+                "instantly. Choose it below to reveal the payload URL and secret, then in the repo "
+                "→ **Settings → Webhooks → Add webhook** use that payload URL, content type "
+                "**application/json**, a **secret** matching the one you save here, keep **SSL "
+                "verification enabled**, and under **Which events?** pick *Let me select "
+                "individual events* → **Pull requests**, **Pull request reviews**, **Pull request "
+                "review comments**, and **Pull request review threads**.\n"
+                "  - **poll**: the conductor periodically asks GitHub for changes — no webhook "
+                "needed, but slower. Set the interval in seconds."
+            )
+        delivery = _Section()
+        mode_box = delivery.field(config["github_event_mode"])
+        with (
+            ui.column()
+            .classes("w-full gap-2")
+            .bind_visibility_from(mode_box, "value", value="poll")
+        ):
+            delivery.field(config["github_poll_interval_seconds"])
+        delivery.save_button(_github_panel.refresh)
 
-    ui.separator()
-    ui.markdown(
-        "**Step 3 — Repositories per project.** Map the GitHub repos each enabled project owns. "
-        "The planner assigns every ticket exactly one of them."
-    )
     projects = [p for p in await get_context().mappings.list_projects() if p.enabled]
-    if not projects:
-        ui.label("Enable at least one project on the Plane tab first.").classes(
-            "text-sm text-orange-600"
-        )
-        _step_footer(tabs, steps["github"])
-        return
-
-    resolved = await get_context().store.resolved()
-    repo_defaults = await verify.list_github_repos(token=resolved.get("github_token", ""))
-    names = {p["id"]: p["name"] for p in await _plane_projects()}
-    payload_url = f"{origin.rstrip('/')}/webhooks/github"
-    # Fallback only; each repo's base branch is seeded from its live GitHub default branch below.
-    default_branch = "main"
-    webhook_mode = mode_box.value == "webhook"
-    if webhook_mode:
-        _payload_url_field(payload_url)
+    repos_ok = bool(projects) and all(p.repos for p in projects)
+    with _bubble("Step 3 — Repositories per project", complete=repos_ok):
         ui.markdown(
-            "One payload URL serves every repo below; routing is resolved per delivery. Add it to "
-            "**each** repo's **Settings → Webhooks → Add webhook** with content type "
-            "`application/json`, **SSL verification enabled**, this project's secret, and *Let me "
-            "select individual events* → **Pull requests**, **Pull request reviews**, **Pull "
-            "request review comments**, **Pull request review threads**."
-        ).classes("text-xs text-gray-500")
-
-    savers = [
-        _project_section(
-            project.plane_project_id,
-            names.get(project.plane_project_id, project.plane_project_id),
-            project.repos,
-            project.has_webhook_secret,
-            repo_defaults,
-            default_branch,
-            webhook_mode,
+            "Map the GitHub repos each enabled project owns. The planner assigns every ticket "
+            "exactly one of them."
         )
-        for project in projects
-    ]
+        if not projects:
+            ui.label("Enable at least one project on the Plane tab first.").classes(
+                "text-sm text-orange-600"
+            )
+        else:
+            resolved = await get_context().store.resolved()
+            repo_defaults = await verify.list_github_repos(token=resolved.get("github_token", ""))
+            names = {p["id"]: p["name"] for p in await _plane_projects()}
+            payload_url = f"{origin.rstrip('/')}/webhooks/github"
+            # Fallback only; each repo's base branch is seeded from its live GitHub default below.
+            default_branch = "main"
+            webhook_mode = mode_box.value == "webhook"
+            if webhook_mode:
+                _payload_url_field(payload_url)
+                ui.markdown(
+                    "One payload URL serves every repo below; routing is resolved per delivery. "
+                    "Add it to **each** repo's **Settings → Webhooks → Add webhook** with content "
+                    "type `application/json`, **SSL verification enabled**, this project's secret, "
+                    "and *Let me select individual events* → **Pull requests**, **Pull request "
+                    "reviews**, **Pull request review comments**, **Pull request review threads**."
+                ).classes("text-xs text-gray-500")
 
-    async def save_all() -> None:
-        for saver in savers:
-            if not await saver():
-                return
-        ui.notify("Saved.")
-        _github_panel.refresh()
+            savers = [
+                _project_section(
+                    project.plane_project_id,
+                    names.get(project.plane_project_id, project.plane_project_id),
+                    project.repos,
+                    project.has_webhook_secret,
+                    repo_defaults,
+                    default_branch,
+                    webhook_mode,
+                )
+                for project in projects
+            ]
 
-    ui.button("Save", icon="save", on_click=save_all).props("color=primary")
+            async def save_all() -> None:
+                for saver in savers:
+                    if not await saver():
+                        return
+                ui.notify("Saved.")
+                _github_panel.refresh()
+
+            ui.button("Save", icon="save", on_click=save_all).props("color=primary")
 
     _step_footer(tabs, steps["github"])
 
@@ -494,27 +550,28 @@ def _project_secret_input(has_secret: bool) -> ui.input:
 @ui.refreshable
 async def _notifications_panel(tabs: ui.tabs) -> None:
     config, steps = await _load()
-    ui.markdown("**Notifications** — where the conductor sends alerts (optional).")
-    section = _Section()
-    section.field(config["notify_mode"])
-    mode = config["notify_mode"].value or "none"
-    url_field = {
-        "ntfy": "notify_ntfy_url",
-        "slack": "notify_slack_webhook_url",
-        "webhook": "notify_webhook_url",
-    }.get(mode)
-    if url_field is not None:
-        ui.label(
-            {
-                "ntfy": "Your ntfy topic URL, e.g. https://ntfy.sh/your-topic.",
-                "slack": "A Slack Incoming Webhook URL.",
-                "webhook": "Any URL to receive a JSON POST per notification.",
-            }[mode]
-        ).classes("text-xs text-gray-500")
-        section.field(config[url_field])
-    else:
-        ui.label("No notifications configured.").classes("text-sm text-gray-500")
-    section.save_button(_notifications_panel.refresh)
+    with _bubble("Notifications (optional)", complete=steps["notifications"].complete):
+        ui.markdown("Where the conductor sends alerts.")
+        section = _Section()
+        section.field(config["notify_mode"])
+        mode = config["notify_mode"].value or "none"
+        url_field = {
+            "ntfy": "notify_ntfy_url",
+            "slack": "notify_slack_webhook_url",
+            "webhook": "notify_webhook_url",
+        }.get(mode)
+        if url_field is not None:
+            ui.label(
+                {
+                    "ntfy": "Your ntfy topic URL, e.g. https://ntfy.sh/your-topic.",
+                    "slack": "A Slack Incoming Webhook URL.",
+                    "webhook": "Any URL to receive a JSON POST per notification.",
+                }[mode]
+            ).classes("text-xs text-gray-500")
+            section.field(config[url_field])
+        else:
+            ui.label("No notifications configured.").classes("text-sm text-gray-500")
+        section.save_button(_notifications_panel.refresh)
 
     _step_footer(tabs, steps["notifications"])
 
@@ -523,11 +580,34 @@ async def _notifications_panel(tabs: ui.tabs) -> None:
 async def _advanced_panel(tabs: ui.tabs) -> None:
     config, steps = await _load()
     ui.markdown("**Advanced** — sensible defaults; change only if you know why.")
-    section = _Section()
-    for field in config.values():
-        if field.step == "advanced":
-            section.field(field)
-    section.save_button(_advanced_panel.refresh)
+
+    with _bubble("Agent image (required)", complete=_is_set(config["agent_image"])):
+        ui.markdown(
+            "The Docker image the conductor runs for **every** agent container (clone, engineer, "
+            "reviewer, QA). CI publishes it alongside the conductor, so the default below is the "
+            "one built for this project — accept it unless you maintain your own. **The host "
+            "running the containers must be able to pull this tag**, or every dispatch fails with "
+            "*No such image*."
+        )
+        # Pre-fill the suggested image when unset (the field has no catalog default on purpose, so
+        # this step reads incomplete until you actively save it).
+        current = config["agent_image"].value or catalog.DEFAULT_AGENT_IMAGE
+        image_box = ui.input(label="Agent image", value=current).classes("w-full")
+
+        async def save_image() -> None:
+            await get_context().store.set_setting("agent_image", str(image_box.value or ""))
+            ui.notify("Saved")
+            _advanced_panel.refresh()
+
+        ui.button("Save", icon="save", on_click=save_image).props("color=primary")
+
+    with _bubble("Other advanced settings", complete=True):
+        section = _Section()
+        for field in config.values():
+            if field.step == "advanced" and field.name != "agent_image":
+                section.field(field)
+        section.save_button(_advanced_panel.refresh)
+
     _set_tab_icon(tabs, "advanced", steps["advanced"].complete)
     ui.separator()
     if all(s.complete for s in steps.values()):

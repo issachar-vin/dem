@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from nicegui import ui
@@ -12,6 +13,20 @@ from conductor.store import ConfigFieldView
 from conductor.ui.context import get_context
 
 OnSaved = Callable[[], Any]
+
+
+@contextmanager
+def _bubble(title: str, *, complete: bool) -> Iterator[ui.expansion]:
+    """A collapsible section 'bubble' for the wizard: it shows a completion check and starts
+    collapsed once everything inside is filled (but stays expandable so you can revisit it), and
+    starts expanded while something is still needed."""
+    icon = "check_circle" if complete else "radio_button_unchecked"
+    exp = ui.expansion(title, icon=icon, value=not complete).classes("w-full")
+    if complete:
+        exp.props('header-class="text-green-7"')
+    with exp:
+        yield exp
+
 
 _ACRONYMS = {
     "url": "URL",
