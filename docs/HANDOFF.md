@@ -4,26 +4,35 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.0):** **Phases 1–4 DONE & merged. Phase 5 IN PROGRESS** — Part 1 (engineer
-agent goes real, **PR #51, open**) is the first slice. Phases 1–3 and Phase 4 (agent image PR #39,
+**Status (VERSION 0.5.1):** **Phases 1–4 DONE & merged. Phase 5 IN PROGRESS** — Part 1 (engineer
+agent real, **PR #51 merged**) and Part 2 (reviewer/QA review loop, **PR #52, open**) done; Part 3
+(planner) and Part 4 (merged-PR cleanup) remain. Phases 1–3 and Phase 4 (agent image PR #39,
 dispatcher/volumes/contracts PR #40, scheduler/Job consumer PR #41, image publishing PR #42, live-
 deploy fixes PRs #43–#45, plus the UI work PRs #46–#50) are all merged. The conductor consumes intake
-`Job`s end-to-end **live on barad-dur**: a ticket entering `ready_for_dev` is dispatched to an
-engineer container and the card is moved across the Plane board.
+`Job`s end-to-end **live on barad-dur**.
 
-**Phase 5 Part 1 — engineer agent real (PR #51, open):** replaces the placeholder engineer prompt
-with a real one and makes the dispatch produce an actual PR. New `prompts.render()` loader +
-`conductor/src/conductor/prompts/engineer.md` (rendered with the ticket title + Plane description;
-CE has no separate criteria field). After the container commits, the scheduler runs
-`VolumeManager.push()` (credentialed root helper, token from `$CLONE_TOKEN`, remote stays
-token-stripped) → `github.create_pull_request()` (base = the ticket repo's `base_branch`) →
-`tickets.set_pr(number, url)`, and only **then** advances the ticket to `in_review`; a push/PR
-failure marks the job `failed` + ticket `error` and never moves the board. **Deviation from PLAN:**
-prompt templates live under the **conductor** package (`conductor/src/conductor/prompts/`), not
-`agent/prompts/` — the conductor assembles the full prompt string and passes it to `claude -p` (agent
-stays credential-free), and only the conductor image bundles `src/`; the built wheel includes the
-`.md` (hatchling package-data default, verified). Still queued for later Phase-5 parts: reviewer/QA
-loop, planner, merged-PR cleanup. VERSION 0.5.0.
+**Phase 5 Part 2 — reviewer/QA review loop (PR #52, open):** the whole build→review→resume loop runs
+**synchronously within one engineer job** (matches the existing scheduler shape + the
+`MAX_CONCURRENT_AGENTS=1` default). New prompts `reviewer.md` / `qa.md` / `engineer_followup.md`
+(all use the `Verdict` contract). `Dispatcher.run_parsed(run, parse)` owns the **re-prompt-once**
+policy (malformed output → resume the same session for valid JSON → still bad raises → ticket parked
+at `error`). `VolumeManager.diff_hash()` = `sha256(git diff <base>...HEAD)` for the stall detector.
+After PR creation the scheduler loops reviewer→QA (sequential): **both pass** → `ready_for_approval`
++ notify with PR link, no auto-merge; **any fail** → findings posted as a **Plane ticket comment**,
+`loop_round++`, `changes_requested`, resume the engineer with the findings, re-push, re-review;
+**identical diff two rounds running** → `stalled` + notify. New `notify.py` = best-effort
+ntfy/slack/webhook/none sender (a down notifier never fails a ticket; full observability is Phase 6).
+`_run_engineer` refactored to drive a `_Pipeline` context through `_build` → `_review_loop`. VERSION
+0.5.1.
+
+**Phase 5 Part 1 — engineer agent real (PR #51, merged):** real engineer prompt + `prompts.render()`
+loader; after the container commits, `VolumeManager.push()` (credentialed root helper, token from
+`$CLONE_TOKEN`, remote token-stripped) → `github.create_pull_request()` (base = ticket repo
+`base_branch`) → `tickets.set_pr()`, and only then `in_review`; a push/PR failure → job `failed` +
+ticket `error`. **Deviation from PLAN:** prompt templates live under the **conductor** package
+(`conductor/src/conductor/prompts/`), not `agent/prompts/` — the conductor assembles the full prompt
+string and passes it to `claude -p` (agent stays credential-free), and only the conductor image
+bundles `src/`; the built wheel includes the `.md` (hatchling package-data default, verified).
 
 **Nav icon states (PR #49, merged):** follow-up polish on PR #48's collapsed sidebar. Active page no
 longer shows a background pill when the drawer is collapsed — only the orange icon signals it (the
@@ -110,26 +119,27 @@ queryable directly via Loki's `query_range` API (no Grafana token needed).
 
 ---
 
-## ▶ RESUME: Phase 5 Part 2 — the reviewer/QA review loop
+## ▶ RESUME: Phase 5 Part 3 — the planner
 
-Authoritative spec: `docs/PLAN.md` → **Phase 5** (+ the loop mechanics in **"Work intake, ordering &
-concurrency"**). **Part 1 (engineer real + PR creation) is done in PR #51.** Remaining parts, in
-order:
+Authoritative spec: `docs/PLAN.md` → **Phase 5**. **Parts 1 (engineer real + PR, #51 merged) and 2
+(reviewer/QA loop, #52) are done.** Remaining:
 
-- **Prompt files** `{reviewer,qa,planner}.md` under `conductor/src/conductor/prompts/` (Part 1
-  established this location; engineer.md already lives there) with explicit output contracts (the
-  Pydantic models in `agents/contracts.py` already define the shapes).
-- **Engineer resume**: extend the Part-1 prompt to take findings JSON on `--resume` (the engineer's
-  structured `EngineerResult` contract is defined but still unused until the loop needs it).
-- **Reviewer + QA**: run after PR creation, post findings as **ticket comments**, verdict JSON parsed
-  via `contracts.parse_verdict` (this is where the **re-prompt-once** `MalformedAgentOutput` policy
-  gets exercised); any fail → `changes_requested`, `loop_round++`, diff-hash **stall check**, resume
-  the engineer (`claude -p --resume <engineer_session_id>` — already stored on the ticket) → re-run.
-  Both pass → `ready_for_approval` + notify; **no auto-merge**.
-- **Planner**: consume the `trigger=="planner"` jobs Part 3 leaves queued — decompose the epic, create
-  Plane issues, set blocking relationships (then **wire `_is_blocked`** in `scheduler.py`), drop into
-  `ready_for_dev`.
-- **Cleanup**: merged-PR job → `VolumeManager.destroy` (closes the open Phase-3 acceptance item).
+- **Planner (Part 3)**: consume the `trigger=="planner"` jobs the scheduler already leaves queued
+  (`_select_engineer_job` skips non-engineer triggers today). Add `planner.md` under
+  `conductor/src/conductor/prompts/`; input is the epic title/body **plus the project's repo set**,
+  each repo cloned **read-only** for scoping (Read/Glob/Grep). Output is the `Plan` contract already
+  in `agents/contracts.py` (tickets with `target_repo` + a `blocked_by` graph). The conductor then
+  creates the Plane issues (`plane.create_issue`), records each ticket's target repo, sets the Plane
+  **blocking relationships** from the graph, and drops them in `ready_for_dev`. Then **wire
+  `_is_blocked`** in `scheduler.py` (currently a hardcoded `False` seam) to skip tickets blocked by a
+  not-yet-`done` issue — validate the CE relations endpoint live first.
+- **Cleanup (Part 4)**: merged-PR GitHub event → a cleanup job → `VolumeManager.destroy` (closes the
+  open Phase-3 acceptance item "merged PR → cleanup job *runs*"). GitHub PR-event jobs are currently
+  left queued.
+
+Note on multi-repo: `_resolve_repo` in the scheduler still takes the project's **first** mapped repo
+(fine for human-created single-repo tickets). Once the planner assigns a `target_repo` per ticket,
+route the engineer dispatch off that instead of the first repo.
 
 **Decided for Phase 4 — git commit authorship (do NOT add manual name/email fields).** Derive
 `user.name`/`user.email` from `GET /user` on the existing `github_token` (returns `login`, `name`,

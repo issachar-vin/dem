@@ -2,7 +2,7 @@ from conductor.agents.volumes import VolumeManager
 from conductor.github import GitHubUser
 from conductor.store import ConfigStore
 
-from agents_fakes import FakeDocker
+from agents_fakes import FakeContainer, FakeDocker
 
 
 class FakeGitHub:
@@ -81,6 +81,22 @@ async def test_push_pushes_ticket_branch_with_token(store: ConfigStore) -> None:
         in script
     )
     assert '"ticket/T-4"' in script
+
+
+async def test_diff_hash_runs_git_diff_and_returns_stdout(store: ConfigStore) -> None:
+    docker = FakeDocker(FakeContainer(stdout=b"abc123\n"))
+    user = GitHubUser(login="bot", id=1)
+    result = await _manager(store, docker, user).diff_hash(
+        ticket_id="T-5", base_branch="main"
+    )
+    assert result == "abc123"  # stdout stripped
+
+    image, command, kwargs = docker.containers.calls[0]
+    assert kwargs["name"] == "psa-diff-T-5"
+    assert kwargs["entrypoint"] == ["bash", "-c"]
+    assert kwargs["volumes"] == {"psa-repo-T-5": {"bind": "/work", "mode": "rw"}}
+    script = command[0]
+    assert 'git diff "main...HEAD" | sha256sum' in script
 
 
 async def test_destroy_removes_both_volumes(store: ConfigStore) -> None:

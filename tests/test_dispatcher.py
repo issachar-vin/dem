@@ -80,3 +80,76 @@ async def test_no_otel_env_without_endpoint(store: ConfigStore) -> None:
     await _dispatch(store, docker, _run())
     _, _, kwargs = docker.containers.calls[0]
     assert "OTEL_RESOURCE_ATTRIBUTES" not in kwargs["environment"]
+
+
+class _SeqContainers:
+    """A container collection that returns a different container per run — lets a test drive the
+    re-prompt path where the first agent reply is malformed and the retry is valid."""
+
+    def __init__(self, containers: list[FakeContainer]) -> None:
+        self._it = iter(containers)
+        self.calls: list[tuple[str, list[str], dict[str, object]]] = []
+
+    def run(self, image: str, command: list[str], **kwargs: object) -> FakeContainer:
+        self.calls.append((image, command, kwargs))
+        return next(self._it)
+
+
+class _SeqDocker:
+    def __init__(self, containers: list[FakeContainer]) -> None:
+        self.containers = _SeqContainers(containers)
+        self.volumes = FakeDocker().volumes
+
+
+def _envelope(session_id: str, result: str) -> bytes:
+    return json.dumps({"session_id": session_id, "result": result}).encode()
+
+
+async def test_run_parsed_returns_first_valid(store: ConfigStore) -> None:
+    from conductor.agents.contracts import parse_verdict
+
+    await store.set_secret("claude_code_oauth_token", "sk-oat")
+    docker = _SeqDocker([FakeContainer(stdout=_envelope("s1", '{"pass": true}'))])
+    _, verdict = await Dispatcher(
+        store=store, docker_factory=lambda: docker
+    ).run_parsed(_run(role=AgentRole.REVIEWER), parse_verdict)
+    assert verdict.passed is True
+    assert len(docker.containers.calls) == 1  # no re-prompt needed
+
+
+async def test_run_parsed_reprompts_once_then_succeeds(store: ConfigStore) -> None:
+    from conductor.agents.contracts import parse_verdict
+
+    await store.set_secret("claude_code_oauth_token", "sk-oat")
+    docker = _SeqDocker(
+        [
+            FakeContainer(stdout=_envelope("s1", "not json at all")),
+            FakeContainer(stdout=_envelope("s1", '{"pass": false, "findings": []}')),
+        ]
+    )
+    _, verdict = await Dispatcher(
+        store=store, docker_factory=lambda: docker
+    ).run_parsed(_run(role=AgentRole.QA), parse_verdict)
+    assert verdict.passed is False
+    assert len(docker.containers.calls) == 2  # re-prompted once
+    # The retry resumes the same session and asks for valid JSON.
+    _, retry_cmd, _ = docker.containers.calls[1]
+    assert retry_cmd[:4] == ["claude", "-p", "--resume", "s1"]
+
+
+async def test_run_parsed_raises_after_second_malformed(store: ConfigStore) -> None:
+    import pytest
+
+    from conductor.agents.contracts import MalformedAgentOutput, parse_verdict
+
+    await store.set_secret("claude_code_oauth_token", "sk-oat")
+    docker = _SeqDocker(
+        [
+            FakeContainer(stdout=_envelope("s1", "garbage")),
+            FakeContainer(stdout=_envelope("s1", "still garbage")),
+        ]
+    )
+    with pytest.raises(MalformedAgentOutput):
+        await Dispatcher(store=store, docker_factory=lambda: docker).run_parsed(
+            _run(role=AgentRole.REVIEWER), parse_verdict
+        )

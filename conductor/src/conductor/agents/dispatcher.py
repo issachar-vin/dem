@@ -5,15 +5,22 @@ lives in volumes.py; this module assumes the ticket's volumes already exist."""
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 
 from conductor.agents import contracts
+from conductor.agents.contracts import MalformedAgentOutput
 from conductor.agents.dockerctl import DockerFactory, run_container
 from conductor.agents.roles import AgentRole
 from conductor.catalog import DEFAULT_AGENT_IMAGE
 from conductor.store import ConfigStore
 
 logger = logging.getLogger("conductor")
+
+_REPARSE_PROMPT = (
+    "Your previous reply could not be parsed as the required JSON contract. Reply again with only "
+    "the JSON object the instructions asked for — no prose, no code fences, nothing else."
+)
 
 
 @dataclass(frozen=True)
@@ -40,6 +47,21 @@ class Dispatcher:
         # 1 — serial builds). One agent per role, not one across all roles, so review can run while
         # a different ticket's engineer holds its own slot.
         self._semaphores = {role: asyncio.Semaphore(max_concurrent) for role in AgentRole}
+
+    async def run_parsed[T](
+        self, run: AgentRun, parse: Callable[[str], T]
+    ) -> tuple[contracts.ClaudeEnvelope, T]:
+        """Run an agent and parse its output into a contract. Re-prompt policy (per contracts.py):
+        on malformed output, resume the same session once asking for valid JSON and parse again; a
+        second failure raises `MalformedAgentOutput` for the caller to park the ticket."""
+        envelope = await self.run(run)
+        try:
+            return envelope, parse(envelope.result)
+        except MalformedAgentOutput as exc:
+            logger.warning("Malformed %s output; re-prompting once: %s", run.role.value, exc)
+        retry = replace(run, prompt=_REPARSE_PROMPT, resume_session_id=envelope.session_id)
+        envelope = await self.run(retry)
+        return envelope, parse(envelope.result)
 
     async def run(self, run: AgentRun) -> contracts.ClaudeEnvelope:
         async with self._semaphores[run.role]:
