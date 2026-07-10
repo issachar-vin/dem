@@ -59,6 +59,30 @@ async def test_clone_strips_token_from_remote(store: ConfigStore) -> None:
     assert 'git remote set-url origin "https://github.com/octo/ui.git"' in script
 
 
+async def test_push_pushes_ticket_branch_with_token(store: ConfigStore) -> None:
+    await store.set_secret("github_token", "ghtok")
+    docker = FakeDocker()
+    user = GitHubUser(login="bot", id=1)
+    await _manager(store, docker, user).push(
+        ticket_id="T-4", github_repo="octo/backend"
+    )
+
+    image, command, kwargs = docker.containers.calls[0]
+    assert kwargs["name"] == "psa-push-T-4"
+    assert kwargs["user"] == "root"
+    assert kwargs["entrypoint"] == ["bash", "-c"]
+    assert kwargs["environment"]["CLONE_TOKEN"] == "ghtok"
+    assert kwargs["volumes"] == {"psa-repo-T-4": {"bind": "/work", "mode": "rw"}}
+
+    script = command[0]
+    # Token comes from $CLONE_TOKEN, never the token-stripped stored remote.
+    assert (
+        'git push "https://x-access-token:${CLONE_TOKEN}@github.com/octo/backend.git"'
+        in script
+    )
+    assert '"ticket/T-4"' in script
+
+
 async def test_destroy_removes_both_volumes(store: ConfigStore) -> None:
     await store.set_secret("github_token", "ghtok")
     docker = FakeDocker()

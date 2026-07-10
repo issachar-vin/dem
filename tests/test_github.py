@@ -56,3 +56,28 @@ async def test_get_user_falls_back_to_noreply() -> None:
     user = await _client(httpx.MockTransport(handler)).get_user()
     assert user.git_name == "bot"
     assert user.git_email == "7+bot@users.noreply.github.com"
+
+
+async def test_create_pull_request_posts_and_parses() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == "/repos/octo/backend/pulls"
+        import json
+
+        payload = json.loads(request.content)
+        assert payload == {
+            "head": "ticket/T-1",
+            "base": "main",
+            "title": "Fix bug",
+            "body": "details",
+        }
+        return httpx.Response(
+            201,
+            json={"number": 42, "html_url": "https://github.com/octo/backend/pull/42"},
+        )
+
+    pr = await _client(httpx.MockTransport(handler)).create_pull_request(
+        "octo/backend", head="ticket/T-1", base="main", title="Fix bug", body="details"
+    )
+    assert pr.number == 42
+    assert pr.html_url == "https://github.com/octo/backend/pull/42"

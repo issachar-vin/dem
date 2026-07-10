@@ -28,6 +28,15 @@ class TicketStore:
             )
             await session.commit()
 
+    async def set_pr(self, ticket_id: str, number: int, url: str) -> None:
+        async with self._sessionmaker() as session:
+            await session.execute(
+                update(Ticket)
+                .where(Ticket.ticket_id == ticket_id)
+                .values(pr_number=number, pr_url=url)
+            )
+            await session.commit()
+
     async def set_engineer_session(self, ticket_id: str, session_id: str) -> None:
         async with self._sessionmaker() as session:
             await session.execute(

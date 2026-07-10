@@ -3,9 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from conductor.agents.contracts import ClaudeEnvelope
 from conductor.agents.dispatcher import AgentRun
+from conductor.github import PullRequest
 from conductor.jobs import enqueue_job
 from conductor.mappings import MappingStore
-from conductor.models import Job, WorkflowState
+from conductor.models import Job, Ticket, WorkflowState
 from conductor.plane import PlaneError
 from conductor.scheduler import Scheduler
 from conductor.store import ConfigStore
@@ -30,6 +31,7 @@ class FakeDispatcher:
 class FakeVolumes:
     def __init__(self) -> None:
         self.prepared: list[dict[str, str]] = []
+        self.pushed: list[dict[str, str]] = []
 
     async def prepare(
         self, *, ticket_id: str, github_repo: str, base_branch: str
@@ -42,11 +44,17 @@ class FakeVolumes:
             }
         )
 
+    async def push(self, *, ticket_id: str, github_repo: str) -> None:
+        self.pushed.append({"ticket_id": ticket_id, "github_repo": github_repo})
+
 
 class FakePlane:
     def __init__(self, *, error: Exception | None = None) -> None:
         self._error = error
         self.moves: list[tuple[str, str, str]] = []
+
+    async def get_issue(self, project_id: str, issue_id: str) -> dict[str, str]:
+        return {"name": f"Ticket {issue_id}", "description_stripped": "do the thing"}
 
     async def set_state(
         self, project_id: str, issue_id: str, state_id: str
@@ -57,6 +65,22 @@ class FakePlane:
         return {}
 
 
+class FakeGitHub:
+    def __init__(self, *, error: Exception | None = None) -> None:
+        self._error = error
+        self.created: list[dict[str, str]] = []
+
+    async def create_pull_request(
+        self, repo: str, *, head: str, base: str, title: str, body: str
+    ) -> PullRequest:
+        self.created.append(
+            {"repo": repo, "head": head, "base": base, "title": title, "body": body}
+        )
+        if self._error is not None:
+            raise self._error
+        return PullRequest(number=7, html_url=f"https://github.com/{repo}/pull/7")
+
+
 async def _scheduler(
     store: ConfigStore,
     mappings: MappingStore,
@@ -64,6 +88,7 @@ async def _scheduler(
     dispatcher: FakeDispatcher,
     volumes: FakeVolumes,
     plane: FakePlane | None = None,
+    github: FakeGitHub | None = None,
 ) -> tuple[Scheduler, TicketStore]:
     await mappings.set_project("proj-1", enabled=True)
     await mappings.set_repo(
@@ -77,7 +102,8 @@ async def _scheduler(
         tickets=tickets,
         dispatcher=dispatcher,  # type: ignore[arg-type]
         volumes=volumes,  # type: ignore[arg-type]
-        plane_factory=lambda _cfg: plane,  # type: ignore[arg-type,return-value]
+        plane_factory=lambda _cfg: plane or FakePlane(),  # type: ignore[arg-type,return-value]
+        github_factory=lambda _cfg: github or FakeGitHub(),  # type: ignore[arg-type,return-value]
     )
     return scheduler, tickets
 
@@ -116,8 +142,9 @@ async def test_tick_dispatches_engineer(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     dispatcher, volumes = FakeDispatcher(session_id="s-42"), FakeVolumes()
+    github = FakeGitHub()
     scheduler, tickets = await _scheduler(
-        store, mappings, sessionmaker, dispatcher, volumes
+        store, mappings, sessionmaker, dispatcher, volumes, github=github
     )
     await _enqueue(sessionmaker, "ISSUE-1")
 
@@ -126,9 +153,26 @@ async def test_tick_dispatches_engineer(
     run = dispatcher.runs[0]
     assert run.ticket_id == "ISSUE-1"
     assert run.role.value == "engineer"
+    assert (
+        "ISSUE-1" in run.prompt and "do the thing" in run.prompt
+    )  # real engineer prompt
     assert volumes.prepared[0]["github_repo"] == "octo/backend"
+    # The branch is pushed and a PR opened before the ticket moves to in_review.
+    assert volumes.pushed == [{"ticket_id": "ISSUE-1", "github_repo": "octo/backend"}]
+    assert github.created[0] == {
+        "repo": "octo/backend",
+        "head": "ticket/ISSUE-1",
+        "base": "main",
+        "title": "Ticket ISSUE-1",
+        "body": github.created[0]["body"],
+    }
     assert await _job_status(sessionmaker, "ISSUE-1") == "done"
     assert await tickets.in_flight_ids() == {"ISSUE-1"}  # left in in_review
+    async with sessionmaker() as session:
+        ticket = await session.get(Ticket, "ISSUE-1")
+        assert ticket is not None
+        assert ticket.pr_number == 7
+        assert ticket.pr_url == "https://github.com/octo/backend/pull/7"
 
 
 async def test_no_jobs_returns_false(
@@ -202,6 +246,25 @@ async def test_dispatch_failure_marks_failed(
     await scheduler.tick()
     assert await _job_status(sessionmaker, "ISSUE-1") == "failed"
     assert await tickets.in_flight_ids() == set()  # moved to "error", not in-flight
+
+
+async def test_pr_failure_marks_failed_and_not_in_review(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from conductor.github import GitHubError
+
+    dispatcher, volumes = FakeDispatcher(), FakeVolumes()
+    github = FakeGitHub(error=GitHubError("PR creation failed"))
+    scheduler, tickets = await _scheduler(
+        store, mappings, sessionmaker, dispatcher, volumes, github=github
+    )
+    await _enqueue(sessionmaker, "ISSUE-1")
+
+    await scheduler.tick()
+    assert await _job_status(sessionmaker, "ISSUE-1") == "failed"
+    assert await tickets.in_flight_ids() == set()  # error, never reached in_review
 
 
 async def test_no_repo_marks_failed(
