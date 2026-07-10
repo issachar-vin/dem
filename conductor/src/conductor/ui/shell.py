@@ -84,7 +84,7 @@ def layout(active: str) -> None:
                     item.classes("v2-nav-active")
                 with item:
                     with ui.item_section().props("avatar"):
-                        kit.licon(icon, color=kit.ORANGE if is_active else kit.MUTED, size=18)
+                        kit.licon(icon, color=kit.ORANGE if is_active else kit.FAINT, size=18)
                     with ui.item_section():
                         ui.item_label(label).classes("text-sm font-medium")
         ui.space()
