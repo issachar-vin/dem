@@ -39,7 +39,13 @@ console **Advanced → `agent_image`** to `ghcr.io/issachar-vin/dem-agent:latest
 `dem-agent:latest` is only the locally-built `make agent-build` tag). Each dispatch leaves
 `psa-*-<id>` volumes behind (cleanup is Phase 5) and spends tokens. The clone helper runs the agent
 image with `entrypoint=["bash","-c"]` to **bypass** the agent entrypoint's Claude-credential
-assertion (it clones only, no creds) — PR #43; the engineer dispatch keeps the entrypoint.
+assertion (it clones only, no creds) — PR #43; the engineer dispatch keeps the entrypoint. The clone
+script also runs `git config --global --add safe.directory /work` (PR #44): the helper clones as root
+into an `agent`-owned volume, which git 2.35.2+ rejects as "dubious ownership" until trusted.
+
+**Log access:** barad-dur logs are in Loki (`http://192.168.88.204:3100`, `auth_enabled: false`,
+LAN-only) with label `{container="dem-conductor"}`; this dev machine is on that LAN, so the logs are
+queryable directly via Loki's `query_range` API (no Grafana token needed).
 
 ---
 
