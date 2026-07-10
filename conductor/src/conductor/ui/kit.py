@@ -1,10 +1,14 @@
-"""Console design kit: the shared visual language every page composes from. Tokens live here (one
-place to retune the look), plus small component helpers — panels, section headers, stat tiles, role
-pills, icon tiles, chips, and a kebab menu — so the console reads as one system.
+"""Console design kit — Modern Dark Developer SaaS (docs/UI_DESIGN.md).
 
-Styling uses inline `.style()` for exact token colors (reliable regardless of the Tailwind build)
-and utility `.classes()` for layout. Icons are Material Symbols (NiceGUI default) plus Font Awesome
-(loaded in `load_head`) for brand marks like GitHub."""
+One place for the visual language: tokens, the global stylesheet, and the component helpers every
+page composes from (panels, buttons, labeled fields, pills, tiles, kebab menus, dialogs). The
+palette is the near-black scheme the projects page established; layout, radii, motion, and
+progressive-disclosure patterns follow the design doc, with Linear/Vercel/Railway as the taste
+reference for anything the doc leaves open.
+
+Interface chrome uses the Lucide webfont (`licon`); user-chosen project/repo icons stored in the DB
+keep their `fa:`/`ms:` specs, so Font Awesome and Material Symbols stay loaded and `render_icon`
+still understands them."""
 
 from __future__ import annotations
 
@@ -20,22 +24,30 @@ from conductor.ui import icons_catalog
 
 # ── tokens ──────────────────────────────────────────────────────────────────────
 PAGE_BG = "#0C0C0E"
-SURFACE = "#161619"  # cards / panels
-SURFACE_2 = "#1D1D21"  # nested rows inside a panel
+SIDEBAR_BG = "#101013"
+SURFACE = "#161619"  # main cards
+SURFACE_2 = "#1D1D21"  # nested rows, hover fills, menus
+INPUT_BG = "#111113"  # inset field fill
 BORDER = "#2A2A30"
+BORDER_HOVER = "#3E3E48"
 TEXT = "#E7E7EA"
 MUTED = "#9A9AA3"
+FAINT = "#6B6B76"
 
 ORANGE = "#F97316"
+ORANGE_HOVER = "#FB923C"
 BLUE = "#3B82F6"
 GREEN = "#22C55E"
+YELLOW = "#EAB308"
 RED = "#EF4444"
 PURPLE = "#A855F7"
 
-# Known repo roles → (accent colour, icon). Any other (custom) key falls back to CUSTOM_STYLE.
+SHADOW = "0 4px 18px rgba(0,0,0,.22)"
+
+# Known repo roles → (accent colour, Lucide icon). Any other (custom) key → CUSTOM_STYLE.
 ROLE_STYLE: dict[str, tuple[str, str]] = {
-    "frontend": (ORANGE, "desktop_windows"),
-    "backend": (BLUE, "dns"),
+    "frontend": (ORANGE, "monitor"),
+    "backend": (BLUE, "server"),
 }
 CUSTOM_STYLE: tuple[str, str] = (PURPLE, "folder")
 
@@ -47,37 +59,196 @@ def role_style(role: str) -> tuple[str, str]:
     return ROLE_STYLE.get(role, CUSTOM_STYLE)
 
 
+# ── global stylesheet ───────────────────────────────────────────────────────────
+_CSS = f"""
+body {{ font-family: 'Inter', sans-serif; background: {PAGE_BG}; color: {TEXT}; }}
+::-webkit-scrollbar {{ width: 10px; height: 10px; }}
+::-webkit-scrollbar-track {{ background: transparent; }}
+::-webkit-scrollbar-thumb {{ background: {BORDER}; border-radius: 999px; }}
+::-webkit-scrollbar-thumb:hover {{ background: {BORDER_HOVER}; }}
+
+[class^="icon-"], [class*=" icon-"] {{ line-height: 1; }}
+.material-symbols-outlined {{
+  font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal;
+  line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block;
+  white-space: nowrap; direction: ltr; }}
+
+/* cards */
+.v2-panel {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 16px;
+  box-shadow: {SHADOW}; }}
+.v2-row {{ background: {SURFACE_2}; border: 1px solid {BORDER}; border-radius: 12px;
+  transition: border-color 150ms ease-out, transform 150ms ease-out, box-shadow 150ms ease-out; }}
+.v2-row:hover {{ border-color: {ORANGE}66; }}
+.v2-lift {{ transition: border-color 150ms ease-out, transform 150ms ease-out,
+  box-shadow 150ms ease-out; }}
+.v2-lift:hover {{ transform: translateY(-2px); border-color: {ORANGE}66;
+  box-shadow: 0 8px 24px rgba(0,0,0,.3); }}
+
+/* buttons */
+.v2-btn {{ border-radius: 10px !important; font-weight: 500; min-height: 40px;
+  padding: 0 16px; transition: all 150ms ease-out; }}
+.v2-btn-primary {{ background: {ORANGE} !important; color: #fff !important; }}
+.v2-btn-primary:hover {{ background: {ORANGE_HOVER} !important;
+  box-shadow: 0 6px 20px rgba(249,115,22,.25); }}
+.v2-btn-secondary {{ background: transparent !important; color: {TEXT} !important;
+  border: 1px solid {BORDER}; }}
+.v2-btn-secondary:hover {{ border-color: {BORDER_HOVER}; background: {SURFACE_2} !important; }}
+.v2-btn-ghost {{ background: transparent !important; color: {MUTED} !important; }}
+.v2-btn-ghost:hover {{ color: {TEXT} !important; background: {SURFACE_2} !important; }}
+.v2-btn-danger {{ background: transparent !important; color: {RED} !important;
+  border: 1px solid rgba(239,68,68,.35); }}
+.v2-btn-danger:hover {{ background: rgba(239,68,68,.08) !important; }}
+
+/* fields */
+.v2-field .q-field__control {{ background: {INPUT_BG}; border-radius: 10px; min-height: 48px;
+  color: {TEXT}; }}
+.v2-field .q-field__control:before {{ border: 1px solid {BORDER};
+  transition: border-color 150ms ease-out; }}
+.v2-field:hover .q-field__control:before {{ border-color: {BORDER_HOVER}; }}
+.v2-field.q-field--focused .q-field__control:after {{ border: 1px solid {ORANGE};
+  transform: scale(1); }}
+.v2-field .q-field__native, .v2-field .q-field__input {{ color: {TEXT}; }}
+.v2-field .q-field__native::placeholder, .v2-field .q-field__input::placeholder {{
+  color: {FAINT}; }}
+.v2-field .q-field__marginal {{ color: {MUTED}; }}
+
+/* dropdown + context menus */
+.q-menu {{ background: {SURFACE_2}; color: {TEXT}; border: 1px solid {BORDER};
+  border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }}
+.q-menu .q-item {{ color: {TEXT}; min-height: 40px; border-radius: 8px; margin: 2px 6px; }}
+.q-menu .q-item:hover, .q-menu .q-item--active {{ background: {SURFACE}; }}
+.q-menu .q-item[aria-selected="true"] {{ color: {ORANGE}; }}
+
+/* tabs */
+.v2-tabs .q-tab {{ text-transform: none; border-radius: 10px; min-height: 40px;
+  padding: 0 16px; margin: 4px 2px; color: {MUTED}; transition: all 150ms ease-out; }}
+.v2-tabs .q-tab:hover {{ color: {TEXT}; }}
+.v2-tabs .q-tab--active {{ color: {TEXT}; background: {SURFACE_2}; }}
+.v2-tabs .q-tab__indicator {{ display: none; }}
+.v2-tabs .q-tab__label {{ font-weight: 500; font-size: 14px; }}
+
+/* collapsible section bubbles */
+.v2-bubble {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 16px;
+  box-shadow: {SHADOW}; }}
+.v2-bubble > .q-expansion-item__container > .q-item {{ padding: 16px 24px; min-height: 0; }}
+.v2-bubble .q-expansion-item__content {{ padding: 0 24px 24px; }}
+.v2-bubble .q-item__section--side .q-icon {{ color: {MUTED}; }}
+
+/* inline help disclosure */
+.v2-help {{ border: 1px dashed {BORDER}; border-radius: 10px; }}
+.v2-help > .q-expansion-item__container > .q-item {{ padding: 8px 16px; min-height: 0;
+  color: {MUTED}; font-size: 13px; }}
+.v2-help .q-expansion-item__content {{ padding: 0 16px 12px; }}
+.v2-help .q-item__section--side .q-icon {{ color: {FAINT}; font-size: 18px; }}
+
+/* markdown body text */
+.v2-md {{ color: {MUTED}; font-size: 14px; line-height: 1.6; }}
+.v2-md strong {{ color: {TEXT}; font-weight: 600; }}
+.v2-md code {{ background: {SURFACE_2}; border: 1px solid {BORDER}; border-radius: 6px;
+  padding: 1px 6px; color: {TEXT}; font-size: 13px; }}
+.v2-md a {{ color: {ORANGE}; text-decoration: none; }}
+.v2-md a:hover {{ color: {ORANGE_HOVER}; }}
+
+/* uploads */
+.v2-upload {{ width: 100%; background: {INPUT_BG}; border: 1px dashed {BORDER};
+  border-radius: 12px; box-shadow: none; }}
+.v2-upload .q-uploader__header {{ background: transparent; color: {MUTED}; }}
+.v2-upload .q-uploader__list {{ color: {MUTED}; }}
+
+/* data table */
+.v2-table {{ background: transparent; border: 1px solid {BORDER}; border-radius: 14px;
+  color: {TEXT}; }}
+.v2-table thead tr {{ background: {SURFACE}; }}
+.v2-table th {{ color: {MUTED}; font-weight: 500; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .05em; border-color: {BORDER}; }}
+.v2-table tbody td {{ border-color: #1F1F24; font-size: 14px; }}
+.v2-table tbody tr {{ transition: background 150ms ease-out; }}
+.v2-table tbody tr:hover {{ background: {SURFACE_2}; }}
+.v2-table .q-table__bottom {{ color: {MUTED}; border-color: {BORDER}; }}
+
+.q-separator {{ background: {BORDER}; }}
+.q-checkbox__label {{ color: {TEXT}; }}
+
+/* sidebar nav */
+.v2-nav .q-item {{ border-radius: 10px; margin: 2px 10px; min-height: 40px; color: {MUTED};
+  transition: all 150ms ease-out; }}
+.v2-nav .q-item:hover {{ background: {SURFACE}; color: {TEXT}; }}
+.v2-nav .v2-nav-active {{ background: {SURFACE_2}; color: {TEXT}; }}
+.v2-nav .q-item__section--avatar {{ min-width: 34px; }}
+
+/* collapsed (mini) drawer: the avatar section is the only one shown — kill Quasar's side
+   padding and min-width so each icon sits dead-center in the rail */
+.q-drawer--mini .v2-nav .q-item {{ justify-content: center; padding: 8px 0; }}
+.q-drawer--mini .v2-nav .q-item__section--avatar {{ min-width: 0; padding: 0; }}
+.q-drawer--mini .v2-brand {{ justify-content: center; padding-left: 0; padding-right: 0; }}
+.q-drawer--mini .v2-brand-text {{ display: none; }}
+"""
+
+
 def load_head() -> None:
-    """Load Font Awesome (brand icons like GitHub) and the Inter font. Called once per page from
-    the shell layout."""
+    """Fonts (Inter), icon webfonts (Lucide for chrome; FA + Material Symbols so stored icon
+    specs keep rendering), and the global stylesheet. Called once per page from the shell."""
     ui.add_head_html(
-        '<link rel="stylesheet" '
-        'href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">'
         '<link rel="preconnect" href="https://fonts.googleapis.com">'
         '<link rel="stylesheet" '
         'href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">'
-        # Material Symbols — our icon catalog uses Symbol names, which the default Material Icons
-        # font doesn't cover (missing glyphs render as overflowing raw text). Load the real font.
+        '<link rel="stylesheet" '
+        'href="https://unpkg.com/lucide-static@0.462.0/font/lucide.css">'
+        '<link rel="stylesheet" '
+        'href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">'
         '<link rel="stylesheet" '
         'href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined">'
-        f"<style>body {{ font-family: 'Inter', sans-serif; background: {PAGE_BG}; }}"
-        ".material-symbols-outlined {"
-        " font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal;"
-        " line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block;"
-        " white-space: nowrap; direction: ltr; }"
-        f".dem-panel {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 14px; }}"
-        f".dem-row {{ background: {SURFACE_2}; border: 1px solid {BORDER}; border-radius: 12px; }}"
-        "</style>"
+        f"<style>{_CSS}</style>"
     )
+
+
+# ── icons ────────────────────────────────────────────────────────────────────────
+def licon(name: str, *, color: str | None = None, size: int = 18) -> ui.html:
+    """A Lucide glyph (webfont) for interface chrome. The wrapper is a flex box sized to the
+    glyph so the icon centers exactly against neighbouring text (no baseline drift)."""
+    style = f"font-size:{size}px;" + (f"color:{color};" if color else "")
+    return (
+        ui.html(f'<i class="icon-{name}" style="{style}"></i>')
+        .classes("flex items-center justify-center shrink-0")
+        .style(f"width:{size}px;height:{size}px;line-height:1")
+    )
+
+
+def render_icon(spec: str, *, color: str, size: int = 24) -> None:
+    """Render a stored icon spec: `fa:<classes>` via Font Awesome, `lc:<name>` via Lucide,
+    otherwise a Material Symbol (`ms:<name>` or bare name)."""
+    if spec.startswith("fa:"):
+        ui.html(f'<i class="{spec[3:]}" style="font-size:{size}px;color:{color}"></i>')
+    elif spec.startswith("lc:"):
+        licon(spec[3:], color=color, size=size)
+    else:
+        name = spec.removeprefix("ms:")
+        ui.html(
+            f'<span class="material-symbols-outlined" '
+            f'style="font-size:{size}px;color:{color}">{name}</span>'
+        )
+
+
+def icon_search_name(spec: str) -> str:
+    body = spec.split(":", 1)[1] if ":" in spec else spec
+    if body.startswith("fa-"):
+        return body.split()[-1].removeprefix("fa-")  # "fa-solid fa-chess-rook" → "chess-rook"
+    return body
 
 
 # ── layout primitives ───────────────────────────────────────────────────────────
 @contextmanager
 def panel() -> Iterator[ui.card]:
-    """A standard content panel (dark surface, hairline border, rounded)."""
-    card = ui.card().classes("dem-panel w-full gap-4 p-6").props("flat")
+    """A main content card: dark surface, hairline border, 16px radius, soft shadow."""
+    card = ui.card().classes("v2-panel w-full gap-4 p-6").props("flat")
     with card:
         yield card
+
+
+def page_header(title: str, subtitle: str) -> None:
+    with ui.column().classes("gap-1"):
+        ui.label(title).classes("text-2xl font-bold").style(f"color:{TEXT}")
+        ui.label(subtitle).classes("text-sm").style(f"color:{MUTED}")
 
 
 def section_header(
@@ -94,89 +265,88 @@ def section_header(
             if subtitle:
                 ui.label(subtitle).classes("text-sm").style(f"color:{MUTED}")
         if action_label and on_action:
-            primary_button(action_label, icon=action_icon or "add", on_click=on_action)
+            primary_button(action_label, icon=action_icon or "plus", on_click=on_action)
 
 
 def stat_tile(icon: str, title: str, caption: str, *, dot: str | None = None) -> None:
     with ui.row().classes("items-start gap-3 no-wrap"):
-        ui.icon(icon).classes("text-2xl mt-1").style(f"color:{MUTED}")
+        with ui.element("div").classes("mt-1"):
+            licon(icon, color=MUTED, size=22)
         with ui.column().classes("gap-0"):
             with ui.row().classes("items-center gap-2 no-wrap"):
                 if dot:
-                    ui.element("div").classes("rounded-full").style(
-                        f"width:9px;height:9px;background:{dot}"
-                    )
+                    status_dot(dot)
                 ui.label(title).classes("font-semibold").style(f"color:{TEXT}")
             ui.label(caption).classes("text-xs leading-snug").style(f"color:{MUTED}")
 
 
+def status_dot(color: str) -> None:
+    ui.element("div").classes("rounded-full shrink-0").style(
+        f"width:9px;height:9px;background:{color};box-shadow:0 0 6px {color}66"
+    )
+
+
 # ── small components ─────────────────────────────────────────────────────────────
 def pill(text: str, *, color: str) -> None:
-    ui.label(text.upper()).classes(
-        "px-2 py-0.5 rounded-full text-xs font-bold tracking-wide"
-    ).style(f"background:{color}22;color:{color}")
+    ui.label(text.upper()).classes("px-2.5 py-0.5 rounded-full text-xs font-semibold").style(
+        f"background:{color}22;color:{color};letter-spacing:.06em"
+    )
 
 
 def _tile(size: int, bg: str, *, on_click: Callable[[], object] | None = None) -> ui.element:
     tile = (
         ui.element("div")
-        .classes("flex items-center justify-center rounded-xl overflow-hidden")
+        .classes("flex items-center justify-center rounded-xl overflow-hidden shrink-0")
         .style(f"width:{size}px;height:{size}px;background:{bg}")
     )
     if on_click is not None:
-        tile.classes("cursor-pointer").on("click", on_click)
+        tile.classes("cursor-pointer v2-lift").style(f"border:1px solid {BORDER}")
     return tile
 
 
 def emoji_tile(emoji: str, *, size: int = 64, on_click: Callable[[], object] | None = None) -> None:
-    with _tile(size, SURFACE_2, on_click=on_click).style(f"border:1px solid {BORDER}"):
+    tile = _tile(size, SURFACE_2, on_click=on_click).style(f"border:1px solid {BORDER}")
+    if on_click is not None:
+        tile.on("click", on_click)
+    with tile:
         ui.label(emoji).classes("text-3xl")
 
 
 def icon_tile(
     icon: str, *, color: str, size: int = 52, on_click: Callable[[], object] | None = None
 ) -> None:
-    with _tile(size, f"{color}22", on_click=on_click):
-        ui.icon(icon).classes("text-2xl").style(f"color:{color}")
-
-
-def render_icon(spec: str, *, color: str, size_class: str = "text-2xl") -> None:
-    """Render an icon spec: `fa:<class>` via a Font Awesome `<i>`, otherwise a Material Symbol
-    (`ms:<name>` or a bare name) via a `material-symbols-outlined` span (the font our catalog
-    targets — `ui.icon`'s default Material Icons font is missing many Symbol glyphs)."""
-    if spec.startswith("fa:"):
-        ui.html(f'<i class="{spec[3:]}"></i>').classes(size_class).style(f"color:{color}")
-    else:
-        name = spec[3:] if spec.startswith("ms:") else spec
-        ui.html(f'<span class="material-symbols-outlined">{name}</span>').classes(size_class).style(
-            f"color:{color}"
-        )
-
-
-def icon_search_name(spec: str) -> str:
-    body = spec.split(":", 1)[1] if ":" in spec else spec
-    if body.startswith("fa-"):
-        return body.split()[-1].removeprefix("fa-")  # "fa-solid fa-chess-rook" → "chess-rook"
-    return body
+    """A rounded tile holding a Lucide icon on a translucent accent fill."""
+    tile = _tile(size, f"{color}22", on_click=on_click)
+    if on_click is not None:
+        tile.on("click", on_click)
+    with tile:
+        licon(icon, color=color, size=max(20, size // 2 - 4))
 
 
 def icon_tile_spec(
     spec: str, *, color: str, size: int = 52, on_click: Callable[[], object] | None = None
 ) -> None:
-    with _tile(size, f"{color}22", on_click=on_click):
-        render_icon(spec, color=color)
+    """A tile rendering a stored icon spec (`fa:`/`ms:`/`lc:`)."""
+    tile = _tile(size, f"{color}22", on_click=on_click)
+    if on_click is not None:
+        tile.on("click", on_click)
+    with tile:
+        render_icon(spec, color=color, size=max(20, size // 2 - 4))
 
 
 def icon_picker(on_select: Callable[[str], object]) -> None:
-    """A searchable icon picker over the bundled Material Symbols + Font Awesome catalog. Renders
+    """Searchable icon picker over the bundled Material Symbols + Font Awesome catalog. Renders
     only the filtered matches (capped) so it stays responsive. `on_select` may be sync or async."""
     with (
         ui.dialog() as dialog,
-        ui.card().classes("dem-panel p-4 gap-3").style("width:640px;max-width:92vw"),
+        ui.card().classes("v2-panel p-6 gap-3").props("flat").style("width:640px;max-width:92vw"),
     ):
         ui.label("Choose an icon").classes("text-lg font-semibold").style(f"color:{TEXT}")
-        search = ui.input(placeholder="Search icons…").props("clearable autofocus debounce=200")
-        search.classes("w-full")
+        search = (
+            ui.input(placeholder="Search icons…")
+            .props("clearable autofocus debounce=200 outlined dense")
+            .classes("w-full v2-field")
+        )
         grid = ui.row().classes("w-full gap-2 flex-wrap").style("max-height:52vh;overflow-y:auto")
 
         async def pick(spec: str) -> None:
@@ -201,17 +371,14 @@ def icon_picker(on_select: Callable[[str], object]) -> None:
                         ui.element("div")
                         .classes(
                             "flex items-center justify-center rounded-lg cursor-pointer "
-                            "overflow-hidden"
+                            "overflow-hidden v2-row"
                         )
-                        .style(
-                            f"width:44px;height:44px;background:{SURFACE_2};"
-                            f"border:1px solid {BORDER}"
-                        )
+                        .style("width:44px;height:44px")
                         .tooltip(icon_search_name(spec))
                     )
                     cell.on("click", lambda s=spec: pick(s))
                     with cell:
-                        render_icon(spec, color=TEXT, size_class="text-xl")
+                        render_icon(spec, color=TEXT, size=20)
 
         search.on_value_change(render)
         render()
@@ -221,16 +388,16 @@ def icon_picker(on_select: Callable[[str], object]) -> None:
 def branch_chip(branch: str) -> None:
     with (
         ui.row()
-        .classes("items-center gap-1 px-2 py-1 rounded-lg")
+        .classes("items-center gap-1.5 px-2.5 py-1 rounded-lg no-wrap w-fit")
         .style(f"background:{SURFACE_2};border:1px solid {BORDER}")
     ):
-        ui.icon("account_tree").classes("text-sm").style(f"color:{GREEN}")
+        licon("git-branch", color=GREEN, size=13)
         ui.label(branch).classes("text-sm font-mono").style(f"color:{TEXT}")
 
 
 def gh_repo(repo: str) -> None:
     with ui.row().classes("items-center gap-2 no-wrap"):
-        ui.html('<i class="fa-brands fa-github"></i>').classes("text-lg").style(f"color:{TEXT}")
+        licon("github", color=TEXT, size=18)
         ui.label(repo).classes("text-base font-medium").style(f"color:{TEXT}")
 
 
@@ -239,62 +406,96 @@ def copy_chip(text: str) -> None:
         ui.run_javascript(f"navigator.clipboard.writeText({json.dumps(text)})")
         ui.notify("Copied")
 
-    with (
+    chip = (
         ui.row()
-        .classes("items-center gap-2 px-2 py-1 rounded-lg w-fit")
+        .classes("items-center gap-2 px-2.5 py-1 rounded-lg w-fit cursor-pointer no-wrap")
         .style(f"background:{SURFACE_2};border:1px solid {BORDER}")
-    ):
-        ui.icon("content_copy").classes("text-xs cursor-pointer").style(f"color:{MUTED}").on(
-            "click", copy
-        )
+        .tooltip("Copy")
+    )
+    chip.on("click", copy)
+    with chip:
+        licon("copy", color=FAINT, size=12)
         ui.label(text).classes("text-xs font-mono").style(f"color:{MUTED}")
 
 
 @dataclass
 class MenuAction:
     label: str
-    icon: str
+    icon: str  # Lucide name
     on_click: Callable[[], object]
     danger: bool = False
 
 
 def kebab(actions: Sequence[MenuAction]) -> None:
     with (
-        ui.button(icon="more_vert").props("flat round dense").style(f"color:{MUTED}"),
-        ui.menu().classes("dem-panel"),
+        ui.button()
+        .props("flat round dense no-caps")
+        .classes("v2-btn-ghost")
+        .style("min-height:36px;width:36px"),
     ):
-        for action in actions:
-            color = RED if action.danger else TEXT
-            with (
-                ui.menu_item(on_click=action.on_click),
-                ui.row().classes("items-center gap-2 no-wrap"),
-            ):
-                ui.icon(action.icon).style(f"color:{color}")
-                ui.label(action.label).style(f"color:{color}")
+        licon("ellipsis-vertical", color=MUTED, size=18)
+        with ui.menu():
+            for action in actions:
+                color = RED if action.danger else TEXT
+                with (
+                    ui.menu_item(on_click=action.on_click),
+                    ui.row().classes("items-center gap-3 no-wrap"),
+                ):
+                    licon(action.icon, color=color, size=16)
+                    ui.label(action.label).style(f"color:{color}")
 
 
 # ── buttons ──────────────────────────────────────────────────────────────────────
+def _button(
+    label: str, *, icon: str | None, on_click: Callable[[], object], variant: str
+) -> ui.button:
+    # color=None keeps Quasar from adding its `bg-primary !important` class, which would beat
+    # the variant styles below; the kit CSS owns the button colors entirely.
+    button = (
+        ui.button(on_click=on_click, color=None)
+        .props("unelevated no-caps")
+        .classes(f"v2-btn {variant}")
+    )
+    with button, ui.row().classes("items-center gap-2 no-wrap"):
+        if icon:
+            licon(icon, size=16)
+        ui.label(label)
+    return button
+
+
 def primary_button(
     label: str, *, icon: str | None = None, on_click: Callable[[], object]
 ) -> ui.button:
-    return ui.button(label, icon=icon, on_click=on_click).props("unelevated no-caps color=primary")
+    return _button(label, icon=icon, on_click=on_click, variant="v2-btn-primary")
+
+
+def secondary_button(
+    label: str, *, icon: str | None = None, on_click: Callable[[], object]
+) -> ui.button:
+    return _button(label, icon=icon, on_click=on_click, variant="v2-btn-secondary")
 
 
 def ghost_button(
     label: str, *, icon: str | None = None, on_click: Callable[[], object]
 ) -> ui.button:
-    return (
-        ui.button(label, icon=icon, on_click=on_click)
-        .props("flat no-caps")
-        .style(f"color:{TEXT};border:1px solid {BORDER}")
-    )
+    return _button(label, icon=icon, on_click=on_click, variant="v2-btn-ghost")
 
 
 def danger_button(
     label: str, *, icon: str | None = None, on_click: Callable[[], object]
 ) -> ui.button:
-    return (
-        ui.button(label, icon=icon, on_click=on_click)
-        .props("flat no-caps")
-        .style(f"color:{RED};border:1px solid {RED}55")
-    )
+    return _button(label, icon=icon, on_click=on_click, variant="v2-btn-danger")
+
+
+@contextmanager
+def dialog_card(title: str, *, min_width: int = 420) -> Iterator[ui.dialog]:
+    """A styled modal: panel look, titled, caller fills the body and closes the dialog."""
+    with (
+        ui.dialog() as dialog,
+        ui.card()
+        .classes("v2-panel p-6 gap-4")
+        .props("flat")
+        .style(f"min-width:{min_width}px;max-width:92vw"),
+    ):
+        ui.label(title).classes("text-lg font-semibold").style(f"color:{TEXT}")
+        yield dialog

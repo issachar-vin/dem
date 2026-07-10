@@ -1,3 +1,8 @@
+"""Console pages: /config (all fields + migration), /projects (the design exemplar — project
+cards with stat tiles, repo resource rows, kebab menus, a collapsed add-repository form), /states
+(canonical → Plane state mapping), and /jobs (the intake queue — data-dense, so the one
+legitimate table, restyled)."""
+
 from __future__ import annotations
 
 import binascii
@@ -16,18 +21,16 @@ from conductor.mappings import MappingStore, RepoMappingView
 from conductor.models import WorkflowState
 from conductor.plane import PlaneError
 from conductor.store import ConfigFieldView, ConfigStore
-from conductor.ui import kit
+from conductor.ui import kit, widgets
 from conductor.ui.context import get_context
-from conductor.ui.shell import _layout, _page
-from conductor.ui.widgets import _is_owner_name, _Section, _test_row, github_repo_field
+from conductor.ui.shell import layout, page
 
 logger = logging.getLogger("conductor")
 
 
 async def _apply_targets_upload(mappings: MappingStore, file: Any) -> int:
     """Read an uploaded targets.yml and import it, returning the count. `file` is NiceGUI 3.x's
-    `FileUpload` (async `.text()`/`.read()`); the old `event.content.read()` API is gone, so this
-    seam keeps the adapter in one testable place."""
+    `FileUpload` (async `.text()`/`.read()`); this seam keeps the adapter in one testable place."""
     return await mappings.import_targets_text(await file.text())
 
 
@@ -35,9 +38,10 @@ async def _apply_bundle_upload(store: ConfigStore, file: Any, passphrase: str) -
     return await store.import_bundle(await file.read(), passphrase)
 
 
+# ── configuration ────────────────────────────────────────────────────────────────
 @ui.page("/config")
 async def config_page() -> None:
-    _layout("/config")
+    layout("/config")
     by_step: dict[str, list[ConfigFieldView]] = defaultdict(list)
     for field in await get_context().store.list_config():
         by_step[str(field.step)].append(field)
@@ -48,23 +52,22 @@ async def config_page() -> None:
         api_key=resolved.get("anthropic_api_key") or None,
     )
 
-    with _page():
-        ui.label("Configuration").classes("text-2xl font-bold").style(f"color:{kit.TEXT}")
-        ui.label("Every field in one place. The wizard is the guided version of this page.").style(
-            f"color:{kit.MUTED}"
+    with page():
+        kit.page_header(
+            "Configuration",
+            "Every field in one place. The wizard is the guided version of this page.",
         )
-        with kit.panel():
-            steps = list(by_step)
-            with ui.tabs().classes("w-full") as tabs:
-                for step in steps:
-                    ui.tab(step, label=step.title())
-                ui.tab("migration", label="Migration")
-            with ui.tab_panels(tabs, value=steps[0]).classes("w-full"):
-                for step, fields in by_step.items():
-                    with ui.tab_panel(step):
-                        _config_section(step, fields, models)
-                with ui.tab_panel("migration"):
-                    _migration_panel()
+        steps = list(by_step)
+        with ui.tabs().classes("w-full v2-tabs") as tabs:
+            for step in steps:
+                ui.tab(step, label=step.title())
+            ui.tab("migration", label="Migration")
+        with ui.tab_panels(tabs, value=steps[0]).classes("w-full").style("background:transparent"):
+            for step, fields in by_step.items():
+                with ui.tab_panel(step).classes("px-0"), kit.panel():
+                    _config_section(step, fields, models)
+            with ui.tab_panel("migration").classes("px-0"):
+                _migration_panel()
 
 
 # notify mode → the URL field it needs; used to show only the relevant one (parity with the wizard).
@@ -79,7 +82,7 @@ def _config_section(step: str, fields: list[ConfigFieldView], models: list[str])
     """Render one config tab with the same behaviours as the wizard, reusing the same widgets:
     live model dropdowns on Claude, mode-driven visibility on GitHub (poll interval) and
     notifications (the selected URL), and a Test-connection button on the verifiable steps."""
-    section = _Section()
+    section = widgets.Section()
     boxes: dict[str, Any] = {}
     for field in fields:
         if field.name.startswith("claude_model_"):
@@ -96,88 +99,123 @@ def _config_section(step: str, fields: list[ConfigFieldView], models: list[str])
                 boxes[url_name].bind_visibility_from(boxes["notify_mode"], "value", value=mode)
     section.save_button(ui.navigate.reload)
     if step in ("claude", "plane", "github"):
-        _test_row(step)
+        widgets.test_row(step)
+
+
+def _export_row(icon: str, title: str, caption: str, label: str, on_click: Any) -> None:
+    with (
+        ui.element("div").classes("v2-row w-full p-4"),
+        ui.row().classes("w-full items-center justify-between no-wrap gap-4"),
+    ):
+        with ui.row().classes("items-center gap-3 no-wrap"):
+            kit.icon_tile(icon, color=kit.ORANGE, size=40)
+            with ui.column().classes("gap-0"):
+                ui.label(title).classes("font-medium").style(f"color:{kit.TEXT}")
+                ui.label(caption).classes("text-xs").style(f"color:{kit.MUTED}")
+        kit.secondary_button(label, icon="download", on_click=on_click)
 
 
 def _migration_panel() -> None:
-    """Export and import the whole configuration. Split into two clear sections: everything you can
-    download on top, everything you can upload below."""
-    ui.label("Export").classes("text-lg font-semibold")
-    ui.label(".env — plaintext secrets; handle carefully.").classes("text-sm text-gray-500")
+    """Export and import the whole configuration. Two cards: everything you can download on top,
+    everything you can upload below."""
+    with ui.column().classes("w-full gap-4"):
+        with kit.panel():
+            kit.section_header("Export", "Take the configuration with you.")
 
-    async def download_env() -> None:
-        ui.download.content(await get_context().store.export_env(), "dem.env")
+            async def download_env() -> None:
+                ui.download.content(await get_context().store.export_env(), "dem.env")
 
-    ui.button("Download .env", on_click=download_env)
-
-    ui.label("Encrypted bundle — passphrase-protected, safe to store.").classes(
-        "text-sm text-gray-500"
-    )
-    export_pass = ui.input("Passphrase (export)", password=True)
-
-    async def download_bundle() -> None:
-        if not export_pass.value:
-            ui.notify("Enter an export passphrase first.", color="negative")
-            return
-        blob = await get_context().store.export_bundle(export_pass.value)
-        ui.download.content(blob, "dem.bundle")
-
-    ui.button("Download bundle", on_click=download_bundle)
-
-    ui.label(
-        "targets.yml — full project→repos mapping incl. secrets; plaintext, handle carefully."
-    ).classes("text-sm text-gray-500")
-
-    async def download_targets() -> None:
-        ctx = get_context()
-        workspace = (await ctx.store.resolved()).get("plane_workspace_slug", "")
-        ui.download.content(await ctx.mappings.export_targets(workspace), "targets.yml")
-
-    ui.button("Download targets.yml", on_click=download_targets)
-
-    ui.separator()
-    ui.label("Import").classes("text-lg font-semibold mt-2")
-    ui.label("Encrypted bundle").classes("text-sm text-gray-500")
-    import_pass = ui.input("Passphrase (import)", password=True)
-
-    async def on_upload(event: Any) -> None:
-        if not import_pass.value:
-            ui.notify("Enter the import passphrase first.", color="negative")
-            return
-        try:
-            imported = await _apply_bundle_upload(
-                get_context().store, event.file, import_pass.value
+            _export_row(
+                "file-down",
+                ".env",
+                "Plaintext secrets; handle carefully.",
+                "Download .env",
+                download_env,
             )
-        except (InvalidToken, binascii.Error, ValueError, json.JSONDecodeError):
-            ui.notify("Wrong passphrase or corrupt bundle.", color="negative")
-            return
-        except Exception:  # never let an upload fail silently with no toast
-            logger.exception("Bundle import failed")
-            ui.notify("Bundle import failed — check server logs.", color="negative")
-            return
-        ui.notify(f"Imported {imported} value(s).")
-        ui.navigate.reload()
 
-    ui.upload(label="Bundle file", auto_upload=True, on_upload=on_upload)
+            export_pass = widgets.text_input(
+                "Passphrase (export)",
+                placeholder="Protects the bundle below",
+                password=True,
+            )
 
-    ui.label("targets.yml").classes("text-sm text-gray-500")
+            async def download_bundle() -> None:
+                if not export_pass.value:
+                    ui.notify("Enter an export passphrase first.", color="negative")
+                    return
+                blob = await get_context().store.export_bundle(export_pass.value)
+                ui.download.content(blob, "dem.bundle")
 
-    async def on_targets_upload(event: Any) -> None:
-        try:
-            imported = await _apply_targets_upload(get_context().mappings, event.file)
-        except (yaml.YAMLError, ValueError):
-            ui.notify("Invalid targets.yml.", color="negative")
-            return
-        except Exception:  # never let an upload fail silently with no toast
-            logger.exception("targets.yml import failed")
-            ui.notify("targets.yml import failed — check server logs.", color="negative")
-            return
-        ui.notify(f"Imported {imported} project mapping(s).")
-        ui.navigate.to("/projects")
+            _export_row(
+                "lock",
+                "Encrypted bundle",
+                "Passphrase-protected, safe to store.",
+                "Download bundle",
+                download_bundle,
+            )
 
-    ui.upload(label="targets.yml file", auto_upload=True, on_upload=on_targets_upload)
+            async def download_targets() -> None:
+                ctx = get_context()
+                workspace = (await ctx.store.resolved()).get("plane_workspace_slug", "")
+                ui.download.content(await ctx.mappings.export_targets(workspace), "targets.yml")
+
+            _export_row(
+                "package",
+                "targets.yml",
+                "Full project→repos mapping incl. secrets; plaintext, handle carefully.",
+                "Download targets.yml",
+                download_targets,
+            )
+
+        with kit.panel():
+            kit.section_header("Import", "Restore configuration from a previous export.")
+            import_pass = widgets.text_input(
+                "Passphrase (import)", placeholder="The bundle's passphrase", password=True
+            )
+
+            async def on_upload(event: Any) -> None:
+                if not import_pass.value:
+                    ui.notify("Enter the import passphrase first.", color="negative")
+                    return
+                try:
+                    imported = await _apply_bundle_upload(
+                        get_context().store, event.file, import_pass.value
+                    )
+                except (InvalidToken, binascii.Error, ValueError, json.JSONDecodeError):
+                    ui.notify("Wrong passphrase or corrupt bundle.", color="negative")
+                    return
+                except Exception:  # never let an upload fail silently with no toast
+                    logger.exception("Bundle import failed")
+                    ui.notify("Bundle import failed — check server logs.", color="negative")
+                    return
+                ui.notify(f"Imported {imported} value(s).")
+                ui.navigate.reload()
+
+            with widgets.labeled("Encrypted bundle"):
+                ui.upload(label="Bundle file", auto_upload=True, on_upload=on_upload).classes(
+                    "v2-upload"
+                ).props("flat")
+
+            async def on_targets_upload(event: Any) -> None:
+                try:
+                    imported = await _apply_targets_upload(get_context().mappings, event.file)
+                except (yaml.YAMLError, ValueError):
+                    ui.notify("Invalid targets.yml.", color="negative")
+                    return
+                except Exception:  # never let an upload fail silently with no toast
+                    logger.exception("targets.yml import failed")
+                    ui.notify("targets.yml import failed — check server logs.", color="negative")
+                    return
+                ui.notify(f"Imported {imported} project mapping(s).")
+                ui.navigate.to("/projects")
+
+            with widgets.labeled("targets.yml"):
+                ui.upload(
+                    label="targets.yml file", auto_upload=True, on_upload=on_targets_upload
+                ).classes("v2-upload").props("flat")
 
 
+# ── projects ─────────────────────────────────────────────────────────────────────
 async def _plane_project_meta() -> dict[str, dict[str, str]]:
     """id → {name, emoji} from Plane, best-effort (empty on failure), so a project card can show
     its real name and icon instead of a bare UUID."""
@@ -198,9 +236,9 @@ async def _plane_project_meta() -> dict[str, dict[str, str]]:
 
 
 def _plane_emoji(logo_props: Any) -> str:
-    """Render a Plane project's emoji logo. Plane stores it as a **decimal** Unicode codepoint (e.g.
-    9822 → ♞); parsing it as hex yields the wrong glyph (a CJK character). Empty for an icon-type
-    logo or anything unparseable — the card falls back to a generic tile."""
+    """Render a Plane project's emoji logo. Plane stores it as a **decimal** Unicode codepoint
+    (e.g. 9822 → ♞); parsing it as hex yields the wrong glyph. Empty for an icon-type logo or
+    anything unparseable — the card falls back to a generic tile."""
     if isinstance(logo_props, dict) and logo_props.get("in_use") == "emoji":
         value = (logo_props.get("emoji") or {}).get("value")
         try:
@@ -212,7 +250,7 @@ def _plane_emoji(logo_props: Any) -> str:
 
 @ui.page("/projects")
 async def projects_page() -> None:
-    _layout("/projects")
+    layout("/projects")
     ctx = get_context()
     projects = await ctx.mappings.list_projects()
     meta = await _plane_project_meta()
@@ -220,11 +258,10 @@ async def projects_page() -> None:
         token=(await ctx.store.resolved()).get("github_token", "")
     )
 
-    with _page(wide=True):
-        ui.label("Projects").classes("text-2xl font-bold").style(f"color:{kit.TEXT}")
-        ui.label(
-            "Plane projects the conductor manages and the GitHub repositories they own."
-        ).style(f"color:{kit.MUTED}")
+    with page(wide=True):
+        kit.page_header(
+            "Projects", "Plane projects the conductor manages and the GitHub repositories they own."
+        )
         if not projects:
             with kit.panel():
                 ui.label(
@@ -258,7 +295,7 @@ def _project_card(project: Any, meta: dict[str, str], repo_defaults: dict[str, s
                     kit.emoji_tile(emoji, on_click=pick_project_icon)
                 else:
                     kit.icon_tile(
-                        "dashboard", color=kit.ORANGE, size=64, on_click=pick_project_icon
+                        "layout-grid", color=kit.ORANGE, size=64, on_click=pick_project_icon
                     )
                 with ui.column().classes("gap-1"):
                     ui.label(name).classes("text-2xl font-bold").style(f"color:{kit.TEXT}")
@@ -278,19 +315,19 @@ def _project_card(project: Any, meta: dict[str, str], repo_defaults: dict[str, s
                 ui.separator().props("vertical")
                 count = len(project.repos)
                 kit.stat_tile(
-                    "inventory_2",
+                    "package",
                     f"{count} Repositor{'y' if count == 1 else 'ies'}",
                     "The GitHub repositories connected to this project.",
                 )
 
-        ui.separator().style(f"background:{kit.BORDER}")
+        ui.separator()
 
         add_form_holder: list[ui.element] = []
         kit.section_header(
             "Repositories",
             "GitHub repositories attached to this project.",
             action_label="Add Repository",
-            action_icon="add",
+            action_icon="plus",
             on_action=lambda: add_form_holder[0].set_visibility(True),
         )
         for repo in project.repos:
@@ -299,19 +336,20 @@ def _project_card(project: Any, meta: dict[str, str], repo_defaults: dict[str, s
         form.set_visibility(False)
         add_form_holder.append(form)
 
-        ui.separator().style(f"background:{kit.BORDER}")
+        ui.separator()
         with ui.row().classes("w-full items-center justify-between"):
-            kit.ghost_button(
-                "Import from Plane", icon="download", on_click=lambda: ui.navigate.to("/config")
+            kit.secondary_button(
+                "Import from Plane",
+                icon="download",
+                on_click=lambda: ui.navigate.to("/config"),
             )
             kit.danger_button(
-                "Delete Project", icon="delete", on_click=lambda: _delete_project(pid)
+                "Delete Project", icon="trash-2", on_click=lambda: _delete_project(pid)
             )
 
 
 def _repo_row(pid: str, repo: RepoMappingView) -> None:
     color, fallback_icon = kit.role_style(repo.key)
-    spec = repo.icon or f"ms:{fallback_icon}"
 
     async def change_icon(new_spec: str) -> None:
         await get_context().mappings.set_repo(
@@ -324,11 +362,18 @@ def _repo_row(pid: str, repo: RepoMappingView) -> None:
         ui.navigate.reload()
 
     with (
-        ui.element("div").classes("dem-row w-full p-4"),
+        ui.element("div").classes("v2-row w-full p-4"),
         ui.row().classes("w-full items-center justify-between no-wrap"),
     ):
         with ui.row().classes("items-center gap-4 no-wrap"):
-            kit.icon_tile_spec(spec, color=color, on_click=lambda: kit.icon_picker(change_icon))
+            if repo.icon:
+                kit.icon_tile_spec(
+                    repo.icon, color=color, on_click=lambda: kit.icon_picker(change_icon)
+                )
+            else:
+                kit.icon_tile(
+                    fallback_icon, color=color, on_click=lambda: kit.icon_picker(change_icon)
+                )
             with ui.column().classes("gap-2"):
                 kit.pill(repo.key, color=color)
                 kit.gh_repo(repo.github_repo)
@@ -338,15 +383,15 @@ def _repo_row(pid: str, repo: RepoMappingView) -> None:
                 kit.branch_chip(repo.base_branch)
             kit.kebab(
                 [
-                    kit.MenuAction("Edit Repository", "edit", lambda: _repo_dialog(pid, repo)),
+                    kit.MenuAction("Edit Repository", "pencil", lambda: _repo_dialog(pid, repo)),
                     kit.MenuAction(
                         "Change Branch",
-                        "account_tree",
+                        "git-branch",
                         lambda: _repo_dialog(pid, repo, branch_only=True),
                     ),
                     kit.MenuAction(
                         "Remove Repository",
-                        "delete",
+                        "trash-2",
                         lambda: _remove_repo(pid, repo.key),
                         danger=True,
                     ),
@@ -361,22 +406,41 @@ def _add_repo_form(pid: str, repo_defaults: dict[str, str]) -> ui.element:
         .style(f"border:1px dashed {kit.ORANGE}")
     )
     with form:
-        ui.label("Add Repository").classes("font-semibold").style(f"color:{kit.ORANGE}")
-        with ui.row().classes("w-full gap-4"):
-            # A combobox: `frontend`/`backend` are suggestions but any identifier can be typed.
-            key_in = (
-                ui.select(
-                    options=list(kit.ROLE_SUGGESTIONS),
-                    label="Repository Identifier",
-                    with_input=True,
-                    new_value_mode="add-unique",
+        with ui.row().classes("items-center gap-2 no-wrap"):
+            kit.licon("plus", color=kit.ORANGE, size=16)
+            ui.label("Add Repository").classes("font-semibold").style(f"color:{kit.ORANGE}")
+        with ui.row().classes("w-full gap-4 items-start"):
+            with (
+                ui.column().classes("grow"),
+                widgets.labeled(
+                    "Repository Identifier",
+                    helper="Unique name used by the system. Examples: frontend, backend, docs",
+                ),
+            ):
+                # A combobox: `frontend`/`backend` are suggestions but any value can be typed.
+                key_in = (
+                    ui.select(
+                        options=list(kit.ROLE_SUGGESTIONS),
+                        with_input=True,
+                        new_value_mode="add-unique",
+                    )
+                    .props("outlined dense options-dark")
+                    .classes("w-full v2-field")
                 )
-                .classes("grow")
-                .props("hint='e.g. frontend, backend, docs'")
-            )
-            # Live-fetched GitHub repo picker (shared with the wizard), falls back to free text.
-            repo_in = github_repo_field(list(repo_defaults)).classes("grow")
-            branch_in = ui.input(label="Base Branch", placeholder="e.g. main").classes("grow")
+            with ui.column().classes("grow"):
+                # Live-fetched GitHub repo picker (shared with the wizard), falls back to text.
+                repo_in = widgets.github_repo_field(list(repo_defaults))
+            with (
+                ui.column().classes("grow"),
+                widgets.labeled(
+                    "Base Branch", helper="The default branch to use for this repository."
+                ),
+            ):
+                branch_in = (
+                    ui.input(placeholder="e.g. main")
+                    .props("outlined dense")
+                    .classes("w-full v2-field")
+                )
 
         if repo_defaults:  # seed the base branch from the picked repo's default branch
 
@@ -397,7 +461,7 @@ def _add_repo_form(pid: str, repo_defaults: dict[str, str]) -> ui.element:
             if not repo:
                 ui.notify("A GitHub repository is required.", color="negative")
                 return
-            if not _is_owner_name(repo):
+            if not widgets.is_owner_name(repo):
                 ui.notify("Repository must be in owner/name form.", color="negative")
                 return
             await get_context().mappings.set_repo(
@@ -406,26 +470,21 @@ def _add_repo_form(pid: str, repo_defaults: dict[str, str]) -> ui.element:
             ui.navigate.reload()
 
         with ui.row().classes("w-full justify-end gap-2"):
-            kit.ghost_button("Cancel", on_click=lambda: form.set_visibility(False))
-            kit.primary_button("Add Repository", icon="add", on_click=save)
+            kit.secondary_button("Cancel", on_click=lambda: form.set_visibility(False))
+            kit.primary_button("Add Repository", icon="plus", on_click=save)
     return form
 
 
 def _repo_dialog(pid: str, repo: RepoMappingView, *, branch_only: bool = False) -> None:
-    with ui.dialog() as dialog, ui.card().classes("dem-panel p-6 gap-4").style("min-width:420px"):
-        ui.label("Change Branch" if branch_only else "Edit Repository").classes(
-            "text-lg font-semibold"
-        ).style(f"color:{kit.TEXT}")
+    with kit.dialog_card("Change Branch" if branch_only else "Edit Repository") as dialog:
         repo_in = (
-            None
-            if branch_only
-            else ui.input(label="GitHub Repository", value=repo.github_repo).classes("w-full")
+            None if branch_only else widgets.text_input("GitHub Repository", value=repo.github_repo)
         )
-        branch_in = ui.input(label="Base Branch", value=repo.base_branch).classes("w-full")
+        branch_in = widgets.text_input("Base Branch", value=repo.base_branch)
 
         async def save() -> None:
             github_repo = (repo_in.value if repo_in else repo.github_repo).strip()
-            if not _is_owner_name(github_repo):
+            if not widgets.is_owner_name(github_repo):
                 ui.notify("Repository must be in owner/name form.", color="negative")
                 return
             await get_context().mappings.set_repo(
@@ -435,7 +494,7 @@ def _repo_dialog(pid: str, repo: RepoMappingView, *, branch_only: bool = False) 
             ui.navigate.reload()
 
         with ui.row().classes("w-full justify-end gap-2"):
-            kit.ghost_button("Cancel", on_click=dialog.close)
+            kit.secondary_button("Cancel", on_click=dialog.close)
             kit.primary_button("Save", icon="save", on_click=save)
     dialog.open()
 
@@ -456,8 +515,11 @@ def _add_project_card() -> None:
             "Add a project", "Register a Plane project by its ID (or use the wizard)."
         )
         with ui.row().classes("w-full gap-4 items-end"):
-            pid_in = ui.input(label="Plane project ID").classes("grow")
-            enabled_in = ui.checkbox("Enabled")
+            with ui.column().classes("grow"):
+                pid_in = widgets.text_input(
+                    "Plane project ID", placeholder="e.g. 4c0c03e2-9314-42d7-…"
+                )
+            enabled_in = ui.checkbox("Enabled").props("dense")
 
             async def add_project() -> None:
                 if not pid_in.value:
@@ -465,30 +527,34 @@ def _add_project_card() -> None:
                 await get_context().mappings.set_project(pid_in.value, enabled=enabled_in.value)
                 ui.navigate.reload()
 
-            kit.primary_button("Add Project", icon="add", on_click=add_project)
+            kit.primary_button("Add Project", icon="plus", on_click=add_project)
 
 
+# ── states ───────────────────────────────────────────────────────────────────────
 @ui.page("/states")
 async def states_page() -> None:
-    _layout("/states")
+    layout("/states")
     ctx = get_context()
     status = await ctx.store.status()
     plane_step = next((s for s in status.steps if s.step == "plane"), None)
 
-    with _page():
-        ui.label("State mappings").classes("text-2xl font-bold").style(f"color:{kit.TEXT}")
-        ui.label(
-            "Map each canonical pipeline state onto one of the project's live Plane states."
-        ).style(f"color:{kit.MUTED}")
+    with page():
+        kit.page_header(
+            "State mappings",
+            "Map each canonical pipeline state onto one of the project's live Plane states.",
+        )
         if plane_step is None or not plane_step.complete:
-            ui.label("Complete and verify the Plane step in the wizard first.").classes(
-                "text-orange-600"
-            )
+            with kit.panel(), ui.row().classes("items-center gap-2 no-wrap"):
+                kit.status_dot(kit.YELLOW)
+                ui.label("Complete and verify the Plane step in the wizard first.").style(
+                    f"color:{kit.YELLOW}"
+                )
             return
 
         projects = await ctx.mappings.list_projects()
         if not projects:
-            ui.label("Add a project mapping first.").style(f"color:{kit.MUTED}")
+            with kit.panel():
+                ui.label("Add a project mapping first.").style(f"color:{kit.MUTED}")
             return
 
         with kit.panel():
@@ -496,24 +562,30 @@ async def states_page() -> None:
                 p.plane_project_id: f"{p.plane_project_id} ({len(p.repos)} repo(s))"
                 for p in projects
             }
-            picker = ui.select(options=labels, label="Project", value=next(iter(labels)))
-            form = ui.column().classes("w-full")
+            with widgets.labeled("Project"):
+                picker = (
+                    ui.select(options=labels, value=next(iter(labels)))
+                    .props("outlined dense options-dark")
+                    .classes("w-full v2-field")
+                )
+            form = ui.column().classes("w-full gap-4")
 
             async def load() -> None:
                 form.clear()
                 with form:
-                    await _render_state_form(str(picker.value))
+                    await render_state_form(str(picker.value))
 
             picker.on_value_change(load)
             await load()
 
 
-async def _render_state_form(project_id: str) -> None:
+async def render_state_form(project_id: str) -> None:
+    """One project's canonical→Plane state selects + save. Shared with the wizard's Step 5."""
     ctx = get_context()
     try:
         scanned = await _scan_states(project_id)
     except PlaneError as exc:
-        ui.label(f"Could not scan Plane states: {exc.detail}").classes("text-red-600")
+        ui.label(f"Could not scan Plane states: {exc.detail}").style(f"color:{kit.RED}")
         return
 
     unmapped = "— unmapped —"
@@ -527,11 +599,12 @@ async def _render_state_form(project_id: str) -> None:
     selects: dict[str, ui.select] = {}
     for ws in WorkflowState:
         current = existing.get(ws.value)
-        selects[ws.value] = ui.select(
-            options=options,
-            value=current if current in options else unmapped,
-            label=ws.value,
-        ).classes("w-full")
+        with widgets.labeled(ws.value):
+            selects[ws.value] = (
+                ui.select(options=options, value=current if current in options else unmapped)
+                .props("outlined dense options-dark")
+                .classes("w-full v2-field")
+            )
 
     async def save() -> None:
         saved = 0
@@ -544,7 +617,8 @@ async def _render_state_form(project_id: str) -> None:
             saved += 1
         ui.notify(f"Saved {saved} mapping(s).")
 
-    ui.button("Save mappings", on_click=save)
+    with ui.row().classes("w-full justify-end"):
+        kit.primary_button("Save mappings", icon="save", on_click=save)
 
 
 async def _scan_states(project_id: str) -> list[dict[str, Any]]:
@@ -553,6 +627,7 @@ async def _scan_states(project_id: str) -> list[dict[str, Any]]:
     return [{"id": s.get("id"), "name": s.get("name"), "group": s.get("group")} for s in states]
 
 
+# ── jobs ─────────────────────────────────────────────────────────────────────────
 _JOB_COLUMNS: list[dict[str, Any]] = [
     {"name": "id", "label": "ID", "field": "id", "align": "left", "sortable": True},
     {"name": "source", "label": "Source", "field": "source", "align": "left", "sortable": True},
@@ -582,22 +657,30 @@ _JOB_COLUMNS: list[dict[str, Any]] = [
     {"name": "actions", "label": "", "field": "actions", "align": "right"},
 ]
 
+_STATUS_COLOR = {
+    "queued": kit.MUTED,
+    "running": kit.ORANGE,
+    "done": kit.GREEN,
+    "failed": kit.RED,
+}
+
 
 @ui.page("/jobs")
 async def jobs_page() -> None:
-    _layout("/jobs")
+    layout("/jobs")
     jobs = await jobs_mod.list_jobs(get_context().sessionmaker)
-    with _page(wide=True):
-        ui.label("Jobs").classes("text-2xl font-bold").style(f"color:{kit.TEXT}")
-        ui.label(
-            "Intake queue — webhook/poll deliveries turned into work, consumed by the scheduler."
-        ).style(f"color:{kit.MUTED}")
+    with page(wide=True):
+        kit.page_header(
+            "Jobs",
+            "Intake queue — webhook/poll deliveries turned into work, consumed by the scheduler.",
+        )
         if not jobs:
-            ui.label("No jobs yet.").classes("text-sm").style(f"color:{kit.MUTED}")
+            with kit.panel():
+                ui.label("No jobs yet.").classes("text-sm").style(f"color:{kit.MUTED}")
             return
 
-        # Keep the (potentially large) payloads server-side, keyed by id, rather than shipping them
-        # into every table row; the info modal looks them up on click.
+        # Keep the (potentially large) payloads server-side, keyed by id, rather than shipping
+        # them into every table row; the info modal looks them up on click.
         payloads = {job.id: job.raw_payloads for job in jobs}
         rows = [
             {
@@ -605,6 +688,7 @@ async def jobs_page() -> None:
                 "source": job.source,
                 "event_type": job.event_type,
                 "status": job.status,
+                "status_color": _STATUS_COLOR.get(job.status, kit.MUTED),
                 "dedupe_key": job.dedupe_key or "—",
                 "deliveries": len(job.raw_payloads),
                 "created_at": job.created_at.strftime("%Y-%m-%d %H:%M"),
@@ -613,11 +697,27 @@ async def jobs_page() -> None:
         ]
         table = (
             ui.table(columns=_JOB_COLUMNS, rows=rows, row_key="id", pagination=25)
-            .classes("w-full")
-            .props("flat bordered")
+            .classes("w-full v2-table")
+            .props("flat")
+        )
+        # Status as a pill-shaped badge with a leading dot, per the design system.
+        table.add_slot(
+            "body-cell-status",
+            r"""
+            <q-td :props="props">
+                <span :style="'display:inline-flex;align-items:center;gap:6px;padding:2px 10px;'
+                    + 'border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.06em;'
+                    + 'text-transform:uppercase;background:' + props.row.status_color + '22;'
+                    + 'color:' + props.row.status_color">
+                    <span :style="'width:7px;height:7px;border-radius:999px;background:'
+                        + props.row.status_color"></span>
+                    {{ props.value }}
+                </span>
+            </q-td>
+            """,
         )
         # Long UUID dedupe keys: truncate per-cell with an ellipsis + hover tooltip, so the column
-        # can't overflow into its neighbours (the bug in the hand-rolled row layout).
+        # can't overflow into its neighbours.
         table.add_slot(
             "body-cell-dedupe_key",
             r"""
@@ -647,12 +747,14 @@ async def jobs_page() -> None:
 
 
 def _show_payloads(job_id: int, raw_payloads: list[dict[str, Any]]) -> None:
-    with ui.dialog() as dialog, ui.card().classes("w-full max-w-4xl"):
-        ui.label(f"Job {job_id} — raw payloads ({len(raw_payloads)})").classes("text-lg font-bold")
+    with kit.dialog_card(
+        f"Job {job_id} — raw payloads ({len(raw_payloads)})", min_width=720
+    ) as dialog:
         ui.json_editor(
             {"content": {"json": raw_payloads}, "readOnly": True, "mode": "tree"}
         ).classes("w-full")
-        ui.button("Close", on_click=dialog.close)
+        with ui.row().classes("w-full justify-end"):
+            kit.secondary_button("Close", on_click=dialog.close)
     dialog.open()
 
 
