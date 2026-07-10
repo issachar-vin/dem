@@ -1,0 +1,47 @@
+"""Conductor-side ticket state. The Plane board stays the human source of truth; this table is the
+durable local mirror the scheduler drives. `agent_status` holds the pipeline state the scheduler
+cares about (Phase 5 will also push it to Plane custom properties)."""
+
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from conductor.models import Ticket
+
+# Tickets past the ready_for_dev gate — the scheduler finishes these before pulling a new ticket.
+IN_FLIGHT_STATUSES = frozenset({"in_progress", "in_review", "changes_requested"})
+
+
+class TicketStore:
+    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]) -> None:
+        self._sessionmaker = sessionmaker
+
+    async def get_or_create(self, ticket_id: str, project_id: str) -> None:
+        async with self._sessionmaker() as session:
+            if await session.get(Ticket, ticket_id) is None:
+                session.add(Ticket(ticket_id=ticket_id, project_id=project_id))
+                await session.commit()
+
+    async def set_status(self, ticket_id: str, status: str) -> None:
+        async with self._sessionmaker() as session:
+            await session.execute(
+                update(Ticket).where(Ticket.ticket_id == ticket_id).values(agent_status=status)
+            )
+            await session.commit()
+
+    async def set_engineer_session(self, ticket_id: str, session_id: str) -> None:
+        async with self._sessionmaker() as session:
+            await session.execute(
+                update(Ticket)
+                .where(Ticket.ticket_id == ticket_id)
+                .values(engineer_session_id=session_id)
+            )
+            await session.commit()
+
+    async def in_flight_ids(self) -> set[str]:
+        async with self._sessionmaker() as session:
+            rows = (
+                await session.execute(
+                    select(Ticket.ticket_id).where(Ticket.agent_status.in_(IN_FLIGHT_STATUSES))
+                )
+            ).scalars()
+            return set(rows)
