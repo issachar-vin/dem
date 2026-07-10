@@ -42,3 +42,23 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      # The agent image the scheduler's dispatcher runs per ticket. Published alongside the
+      # conductor so the deployment host can pull it (point the `agent_image` config at this tag).
+      - name: Derive agent image metadata
+        id: meta-agent
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/dem-agent
+          tags: |
+            type=raw,value=${{ steps.ver.outputs.version }}
+            type=raw,value=latest
+            type=sha,format=long
+
+      - name: Build and push agent image
+        uses: docker/build-push-action@v6
+        with:
+          context: agent
+          push: true
+          tags: ${{ steps.meta-agent.outputs.tags }}
+          labels: ${{ steps.meta-agent.outputs.labels }}
