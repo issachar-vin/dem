@@ -28,9 +28,16 @@ relations until Phase 5, and the CE relations endpoint must be validated live fi
 atomically (`jobs.claim_job`/`complete_job`), then drives get-or-create ticket → `prepare` →
 `Dispatcher.run(engineer, **placeholder prompt**)` → record `session_id` → ticket `in_review` → job
 `done`; failure → job `failed` + ticket `error`. `tickets.py` = small `TicketStore`. Non-engineer
-triggers (planner, GitHub) are left **queued** for Phase 5. **Deploy note:** the conductor container
-needs the Docker socket mounted and the `agent_image` present on that host, or every dispatch fails;
-each dispatch leaves `psa-*-<id>` volumes behind (cleanup is Phase 5) and spends tokens.
+triggers (planner, GitHub) are left **queued** for Phase 5.
+
+**Deploy note (live-tested on barad-dur):** the conductor container must (1) **mount the host Docker
+socket** (`- /var/run/docker.sock:/var/run/docker.sock` in the DEM Portainer stack — added; a missing
+mount is a `FileNotFoundError` on dispatch, the scheduler runs as root so no docker-group setup is
+needed), and (2) use an `agent_image` that host can pull. `release.yml` now publishes
+`ghcr.io/<owner>/dem-agent` (`:latest`/`:<version>`/`:sha`) alongside the conductor, so set the
+console **Advanced → `agent_image`** to `ghcr.io/issachar-vin/dem-agent:latest` (the catalog default
+`dem-agent:latest` is only the locally-built `make agent-build` tag). Each dispatch leaves
+`psa-*-<id>` volumes behind (cleanup is Phase 5) and spends tokens.
 
 ---
 
