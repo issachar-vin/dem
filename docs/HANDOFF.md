@@ -4,12 +4,30 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.4.2):** **Phases 1–3 DONE & merged. Phase 4 nearly done — Part 1 (agent image,
-PR #39) & Part 2 (dispatcher + volumes + contracts, PR #40) DONE & merged; Part 3 (scheduler + Job
-consumer) DONE, PR #41 open.** The conductor now consumes intake `Job`s: the scheduler dispatches an
-engineer container for a ticket entering `ready_for_dev`. **Next is Phase 5** (the real role prompts
-+ review loop), which also closes the still-open Phase-3 acceptance item ("merged PR → cleanup job
-*runs*") — no ticket carries a `pr_number` until Phase 5 creates PRs.
+**Status (VERSION 0.4.7):** **Phases 1–3 DONE & merged. Phase 4 DONE & merged** — Part 1 (agent
+image, PR #39), Part 2 (dispatcher + volumes + contracts, PR #40), Part 3 (scheduler + Job consumer,
+PR #41), agent-image publishing (PR #42), and the live-deploy fixes below (PRs #43–#45). The
+conductor consumes intake `Job`s end-to-end **live on barad-dur**: a ticket entering `ready_for_dev`
+is dispatched to an engineer container (placeholder prompt), and the card is moved across the Plane
+board. **Next is Phase 5** (the real role prompts + review loop), which also closes the still-open
+Phase-3 acceptance item ("merged PR → cleanup job *runs*") — no ticket carries a `pr_number` until
+Phase 5 creates PRs.
+
+**Live-hardening + wizard PR (open):** found while running the pipeline on barad-dur —
+- **Board mirroring**: the scheduler now moves the Plane card `ready_for_dev → in_progress →
+  in_review` (`scheduler._set_state` → `plane.set_state`, best-effort; unmapped state / Plane error
+  logs and continues; no self-trigger since only `ready_for_dev` fires a job).
+- **Idempotent `prepare`**: clears any stale `psa-*-<id>` volume before cloning (a prior aborted
+  dispatch otherwise blocks retries with "destination path /work already exists").
+- **Orphaned-job requeue**: `scheduler.recover()` resets `RUNNING → QUEUED` on startup
+  (`jobs.requeue_running`) — a redeploy mid-dispatch left a stuck job that also blocked re-triggers
+  via the active-dedupe index.
+- **`agent_image` is now required with no catalog default** (`catalog.DEFAULT_AGENT_IMAGE =
+  ghcr.io/issachar-vin/dem-agent:latest` is the code fallback + wizard pre-fill); the wizard's
+  Advanced step reads incomplete until it's set, so a wrong/blank image is caught before dispatch.
+- **Wizard**: every section is a collapsible `_bubble` (check when complete, still expandable); a new
+  Plane **Step 5 — Map pipeline states** surfaces the state-mapping form inline with an explanation;
+  `agent_image` gets its own prominent bubble in Advanced.
 
 `agent/` image (Part 1): `Dockerfile` + `entrypoint.sh` + `seed-claude.json` + `make agent-smoke`,
 accepted live (containerized `claude -p`, same-`session_id` resume, kill-on-timeout).
