@@ -13,7 +13,19 @@ board. **Next is Phase 5** (the real role prompts + review loop), which also clo
 Phase-3 acceptance item ("merged PR → cleanup job *runs*") — no ticket carries a `pr_number` until
 Phase 5 creates PRs.
 
-**Console UI makeover (PR #47, open):** Phase-4-closing visual pass. A shared design system
+**Console redesign (PR #48, open):** the whole console rebuilt to `docs/UI_DESIGN.md` ("Modern
+Dark Developer SaaS" — Linear/Vercel-style) and the **original UI removed**; the redesigned pages
+serve the root paths. `ui/kit.py` is now the full design kit (tokens, global stylesheet, **Lucide**
+webfont for interface chrome — FA + Material Symbols stay loaded so stored `fa:`/`ms:` icon-picker
+specs keep rendering — buttons/cards/pills/tiles/kebab/dialog helpers), `ui/widgets.py` the form
+language (labeled 48px fields, `Section` save semantics, collapsible `bubble` steps, test rows).
+Every screen redone with functional parity: login + first-run admin, wizard, config + migration,
+projects (the design exemplar), states, jobs. No schema changes — deploys over production data
+as-is. Fixed en route: Quasar's default `color=primary` painting secondary/danger buttons orange
+(`color=None` in the kit's button factory), mini-drawer icons off-center (Quasar side-section
+padding), Lucide baseline drift in buttons (fixed-size flex wrapper in `licon`). VERSION 0.4.9.
+
+**Console UI makeover (PR #47, merged):** Phase-4-closing visual pass. A shared design system
 (`ui/kit.py`: tokens, Font Awesome + Inter + Material Symbols, panel/section_header/stat_tile/pill/
 icon_tile/kebab/buttons); the projects page rebuilt to the mockup (project card, stat tiles, repo
 rows with a ⋮ kebab, dashed add-form); **searchable icon pickers** for both repo and project icons
