@@ -138,6 +138,8 @@ class ProjectMapping(Base):
     enabled: Mapped[bool] = mapped_column(default=False)
     # Fernet ciphertext (keyed by DEM_SECRET_KEY); one secret per project, shared by its repos.
     webhook_secret: Mapped[str | None] = mapped_column(String, default=None)
+    # Chosen display icon spec (`ms:<name>` or `fa:<class>`); None → Plane emoji or a default tile.
+    icon: Mapped[str | None] = mapped_column(String(64), default=None)
     source: Mapped[str] = mapped_column(String(16), default="ui")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -157,6 +159,8 @@ class RepoMapping(Base):
     key: Mapped[str] = mapped_column(String(64))
     github_repo: Mapped[str] = mapped_column(String(255))
     base_branch: Mapped[str] = mapped_column(String(255), default="main")
+    # Chosen display icon spec (`ms:<name>` or `fa:<class>`); None → derive from the key.
+    icon: Mapped[str | None] = mapped_column(String(64), default=None)
     source: Mapped[str] = mapped_column(String(16), default="ui")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -1,0 +1,6339 @@
+"""Generated icon catalog for the repo icon picker — do not edit by hand.
+
+Material Symbols names (rendered with `ui.icon`) and Font Awesome v6 free classes (rendered as
+`<i class=...>`). Regenerated from the upstream Material Symbols codepoints + Font Awesome
+`metadata/icons.json`. Each entry is a store-ready spec: `ms:<name>` or `fa:<class>`."""
+
+_MATERIAL = """\
+10k
+10mp
+11mp
+123
+12mp
+13mp
+14mp
+15mp
+16mp
+17mp
+18_up_rating
+18mp
+19mp
+1k
+1k_plus
+1x_mobiledata
+1x_mobiledata_badge
+20mp
+21mp
+22mp
+23mp
+24fps_select
+24mp
+2d
+2d_2
+2k
+2k_plus
+2mp
+30fps
+30fps_select
+360
+3d
+3d_2
+3d_rotation
+3g_mobiledata
+3g_mobiledata_badge
+3k
+3k_plus
+3mp
+3p
+4g_mobiledata
+4g_mobiledata_badge
+4g_plus_mobiledata
+4k
+4k_plus
+4mp
+50mp
+5g
+5g_mobiledata_badge
+5k
+5k_plus
+5mp
+60fps
+60fps_select
+6_ft_apart
+6k
+6k_plus
+6mp
+7k
+7k_plus
+7mp
+8k
+8k_plus
+8mp
+9k
+9k_plus
+9mp
+abc
+ac_unit
+access_alarm
+access_alarms
+access_time
+access_time_filled
+accessibility
+accessibility_new
+accessible
+accessible_forward
+accessible_menu
+account_balance
+account_balance_wallet
+account_box
+account_child
+account_child_invert
+account_circle
+account_circle_filled
+account_circle_off
+account_tree
+action_key
+activity_zone
+acupuncture
+acute
+ad
+ad_group
+ad_group_off
+ad_off
+ad_units
+adaptive_audio_mic
+adaptive_audio_mic_off
+adb
+add
+add_2
+add_a_photo
+add_ad
+add_alarm
+add_alert
+add_box
+add_business
+add_call
+add_card
+add_chart
+add_circle
+add_circle_outline
+add_column_left
+add_column_right
+add_comment
+add_diamond
+add_home
+add_home_work
+add_ic_call
+add_link
+add_location
+add_location_alt
+add_moderator
+add_notes
+add_photo_alternate
+add_reaction
+add_road
+add_row_above
+add_row_below
+add_shopping_cart
+add_task
+add_to_drive
+add_to_home_screen
+add_to_photos
+add_to_queue
+add_triangle
+addchart
+adf_scanner
+adjust
+admin_meds
+admin_panel_settings
+ads_click
+agender
+agriculture
+air
+air_freshener
+air_purifier
+air_purifier_gen
+airline_seat_flat
+airline_seat_flat_angled
+airline_seat_individual_suite
+airline_seat_legroom_extra
+airline_seat_legroom_normal
+airline_seat_legroom_reduced
+airline_seat_recline_extra
+airline_seat_recline_normal
+airline_stops
+airlines
+airplane_ticket
+airplanemode_active
+airplanemode_inactive
+airplay
+airport_shuttle
+airware
+airwave
+alarm
+alarm_add
+alarm_off
+alarm_on
+alarm_pause
+alarm_smart_wake
+album
+align_center
+align_end
+align_flex_center
+align_flex_end
+align_flex_start
+align_horizontal_center
+align_horizontal_left
+align_horizontal_right
+align_items_stretch
+align_justify_center
+align_justify_flex_end
+align_justify_flex_start
+align_justify_space_around
+align_justify_space_between
+align_justify_space_even
+align_justify_stretch
+align_self_stretch
+align_space_around
+align_space_between
+align_space_even
+align_start
+align_stretch
+align_vertical_bottom
+align_vertical_center
+align_vertical_top
+all_inbox
+all_inclusive
+all_match
+all_out
+allergies
+allergy
+alt_route
+alternate_email
+altitude
+ambient_screen
+ambulance
+amend
+amp_stories
+analytics
+anchor
+android
+android_cell_4_bar
+android_cell_4_bar_alert
+android_cell_4_bar_off
+android_cell_4_bar_plus
+android_cell_5_bar
+android_cell_5_bar_alert
+android_cell_5_bar_off
+android_cell_5_bar_plus
+android_cell_dual_4_bar
+android_cell_dual_4_bar_alert
+android_cell_dual_4_bar_plus
+android_cell_dual_5_bar
+android_cell_dual_5_bar_alert
+android_cell_dual_5_bar_plus
+android_wifi_3_bar
+android_wifi_3_bar_alert
+android_wifi_3_bar_lock
+android_wifi_3_bar_off
+android_wifi_3_bar_plus
+android_wifi_3_bar_question
+android_wifi_4_bar
+android_wifi_4_bar_alert
+android_wifi_4_bar_lock
+android_wifi_4_bar_off
+android_wifi_4_bar_plus
+android_wifi_4_bar_question
+animated_images
+animation
+announcement
+antigravity
+aod
+aod_tablet
+aod_watch
+apartment
+api
+apk_document
+apk_install
+app_badging
+app_blocking
+app_promo
+app_registration
+app_settings_alt
+app_shortcut
+apparel
+approval
+approval_delegation
+approval_delegation_off
+apps
+apps_outage
+aq
+aq_indoor
+ar_on_you
+ar_stickers
+architecture
+archive
+area_chart
+arming_countdown
+arrow_and_edge
+arrow_back
+arrow_back_2
+arrow_back_ios
+arrow_back_ios_new
+arrow_circle_down
+arrow_circle_left
+arrow_circle_right
+arrow_circle_up
+arrow_cool_down
+arrow_downward
+arrow_downward_alt
+arrow_drop_down
+arrow_drop_down_circle
+arrow_drop_up
+arrow_forward
+arrow_forward_ios
+arrow_insert
+arrow_left
+arrow_left_alt
+arrow_menu_close
+arrow_menu_open
+arrow_or_edge
+arrow_outward
+arrow_range
+arrow_right
+arrow_right_alt
+arrow_selector_tool
+arrow_shape_up
+arrow_shape_up_stack
+arrow_shape_up_stack_2
+arrow_split
+arrow_top_left
+arrow_top_right
+arrow_upload_progress
+arrow_upload_ready
+arrow_upward
+arrow_upward_alt
+arrow_warm_up
+arrows_input
+arrows_left_right_circle
+arrows_more_down
+arrows_more_up
+arrows_output
+arrows_outward
+arrows_up_down_circle
+art_track
+article
+article_person
+article_shortcut
+artist
+aspect_ratio
+assessment
+assignment
+assignment_add
+assignment_globe
+assignment_ind
+assignment_late
+assignment_return
+assignment_returned
+assignment_turned_in
+assist_walker
+assistant
+assistant_device
+assistant_direction
+assistant_navigation
+assistant_on_hub
+assistant_photo
+assured_workload
+asterisk
+astrophotography_auto
+astrophotography_off
+atm
+atr
+attach_email
+attach_file
+attach_file_add
+attach_file_off
+attach_money
+attachment
+attractions
+attribution
+audio_capture
+audio_description
+audio_file
+audio_video_receiver
+audiotrack
+auto_activity_zone
+auto_awesome
+auto_awesome_mosaic
+auto_awesome_motion
+auto_delete
+auto_detect_voice
+auto_draw_solid
+auto_fix
+auto_fix_high
+auto_fix_normal
+auto_fix_off
+auto_graph
+auto_label
+auto_meeting_room
+auto_mode
+auto_read_pause
+auto_read_play
+auto_schedule
+auto_stories
+auto_stories_off
+auto_timer
+auto_towing
+auto_transmission
+auto_videocam
+autofps_select
+automation
+autopause
+autopay
+autoplay
+autorenew
+autostop
+av1
+av_timer
+avc
+avg_pace
+avg_time
+avocado_bean
+award_meal
+award_star
+azm
+b_circle
+baby_changing_station
+back_hand
+back_to_tab
+background_dot_large
+background_dot_small
+background_grid_small
+background_replace
+backlight_high
+backlight_high_off
+backlight_low
+backpack
+backspace
+backup
+backup_table
+badge
+badge_critical_battery
+badminton
+bakery_dining
+balance
+balcony
+ballot
+bar_chart
+bar_chart_4_bars
+bar_chart_off
+barcode
+barcode_reader
+barcode_scanner
+barefoot
+batch_prediction
+bath_bedrock
+bath_outdoor
+bath_private
+bath_public_large
+bath_soak
+bathroom
+bathtub
+battery_0_bar
+battery_1_bar
+battery_20
+battery_2_bar
+battery_30
+battery_3_bar
+battery_4_bar
+battery_50
+battery_5_bar
+battery_60
+battery_6_bar
+battery_80
+battery_90
+battery_alert
+battery_android_0
+battery_android_1
+battery_android_2
+battery_android_3
+battery_android_4
+battery_android_5
+battery_android_6
+battery_android_alert
+battery_android_bolt
+battery_android_frame_1
+battery_android_frame_2
+battery_android_frame_3
+battery_android_frame_4
+battery_android_frame_5
+battery_android_frame_6
+battery_android_frame_alert
+battery_android_frame_bolt
+battery_android_frame_full
+battery_android_frame_plus
+battery_android_frame_question
+battery_android_frame_share
+battery_android_frame_shield
+battery_android_full
+battery_android_plus
+battery_android_question
+battery_android_share
+battery_android_shield
+battery_change
+battery_charging_20
+battery_charging_20_2
+battery_charging_30
+battery_charging_30_2
+battery_charging_50
+battery_charging_50_2
+battery_charging_60
+battery_charging_60_2
+battery_charging_80
+battery_charging_80_2
+battery_charging_90
+battery_charging_full
+battery_charging_full_2
+battery_error
+battery_full
+battery_full_alt
+battery_horiz_000
+battery_horiz_050
+battery_horiz_075
+battery_low
+battery_plus
+battery_profile
+battery_saver
+battery_share
+battery_status_good
+battery_std
+battery_unknown
+battery_vert_005
+battery_vert_020
+battery_vert_050
+battery_very_low
+beach_access
+bed
+bedroom_baby
+bedroom_child
+bedroom_parent
+bedtime
+bedtime_off
+beenhere
+beer_meal
+bento
+bia
+bid_landscape
+bid_landscape_disabled
+bigtop_updates
+bike_dock
+bike_lane
+bike_scooter
+biotech
+blanket
+blender
+blind
+blinds
+blinds_2
+blinds_2_closed
+blinds_closed
+block
+blood_pressure
+bloodtype
+bluetooth
+bluetooth_audio
+bluetooth_connected
+bluetooth_disabled
+bluetooth_drive
+bluetooth_searching
+blur_circular
+blur_linear
+blur_medium
+blur_off
+blur_on
+blur_short
+boat_bus
+boat_railway
+body_fat
+body_system
+bolt
+bolt_boost
+bomb
+book
+book_2
+book_3
+book_4
+book_5
+book_6
+book_online
+book_ribbon
+bookmark
+bookmark_add
+bookmark_added
+bookmark_bag
+bookmark_border
+bookmark_check
+bookmark_flag
+bookmark_heart
+bookmark_manager
+bookmark_remove
+bookmark_stacks
+bookmark_star
+bookmarks
+books_movies_and_music
+border_all
+border_bottom
+border_clear
+border_color
+border_horizontal
+border_inner
+border_left
+border_outer
+border_right
+border_style
+border_top
+border_vertical
+borg
+bottom_app_bar
+bottom_drawer
+bottom_navigation
+bottom_panel_close
+bottom_panel_open
+bottom_right_click
+bottom_sheets
+box
+box_add
+box_edit
+boy
+brand_awareness
+brand_family
+branding_watermark
+breakfast_dining
+breaking_news
+breaking_news_alt_1
+breastfeeding
+brick
+briefcase_meal
+brightness_1
+brightness_2
+brightness_3
+brightness_4
+brightness_5
+brightness_6
+brightness_7
+brightness_alert
+brightness_auto
+brightness_empty
+brightness_high
+brightness_low
+brightness_medium
+bring_your_own_ip
+broadcast_on_home
+broadcast_on_personal
+broken_image
+browse
+browse_activity
+browse_gallery
+browser_not_supported
+browser_updated
+brunch_dining
+brush
+bubble
+bubble_chart
+bubbles
+bucket_check
+bug_report
+build
+build_circle
+bungalow
+burst_mode
+bus_alert
+bus_map_pin
+bus_railway
+business
+business_center
+business_chip
+business_messages
+buttons_alt
+cabin
+cable
+cable_car
+cached
+cadence
+cake
+cake_add
+calculate
+calendar_add_on
+calendar_apps_script
+calendar_check
+calendar_clock
+calendar_lock
+calendar_meal
+calendar_meal_2
+calendar_month
+calendar_today
+calendar_view_day
+calendar_view_month
+calendar_view_week
+call
+call_end
+call_end_alt
+call_log
+call_made
+call_merge
+call_missed
+call_missed_outgoing
+call_quality
+call_received
+call_split
+call_to_action
+camera
+camera_alt
+camera_enhance
+camera_front
+camera_indoor
+camera_outdoor
+camera_rear
+camera_roll
+camera_video
+cameraswitch
+campaign
+camping
+cancel
+cancel_presentation
+cancel_schedule_send
+candle
+candlestick_chart
+cannabis
+captive_portal
+capture
+car_crash
+car_defrost_left
+car_defrost_low_left
+car_defrost_low_right
+car_defrost_mid_left
+car_defrost_mid_low_left
+car_defrost_mid_low_right
+car_defrost_mid_right
+car_defrost_right
+car_fan_low_left
+car_fan_low_mid_left
+car_fan_low_right
+car_fan_mid_left
+car_fan_mid_low_right
+car_fan_mid_right
+car_fan_recirculate
+car_fan_recirculate_2
+car_gear
+car_lock
+car_mirror_heat
+car_rental
+car_repair
+car_tag
+card_giftcard
+card_membership
+card_travel
+cardio_load
+cardiology
+cards
+cards_stack
+cards_star
+carpenter
+carry_on_bag
+carry_on_bag_checked
+carry_on_bag_inactive
+carry_on_bag_question
+cases
+casino
+cast
+cast_connected
+cast_for_education
+cast_pause
+cast_warning
+castle
+category
+category_search
+celebration
+cell_merge
+cell_tower
+cell_wifi
+center_focus_strong
+center_focus_weak
+chair
+chair_alt
+chair_counter
+chair_fireplace
+chair_umbrella
+chalet
+change_circle
+change_history
+charger
+charging_station
+chart_data
+chat
+chat_add_on
+chat_apps_script
+chat_bubble
+chat_bubble_off
+chat_bubble_outline
+chat_dashed
+chat_error
+chat_info
+chat_paste_go
+chat_paste_go_2
+check
+check_alert
+check_box
+check_box_outline_blank
+check_circle
+check_circle_filled
+check_circle_outline
+check_circle_unread
+check_in_out
+check_indeterminate_small
+check_small
+checkbook
+checked_bag
+checked_bag_question
+checklist
+checklist_rtl
+checkroom
+cheer
+chef_hat
+chess
+chess_bishop
+chess_bishop_2
+chess_king
+chess_king_2
+chess_knight
+chess_pawn
+chess_pawn_2
+chess_queen
+chess_rook
+chevron_backward
+chevron_forward
+chevron_left
+chevron_line_up
+chevron_right
+child_care
+child_friendly
+child_hat
+chip_extraction
+chips
+chrome_reader_mode
+chromecast_2
+chromecast_device
+chronic
+church
+cinematic_blur
+circle
+circle_circle
+circle_notifications
+circles
+circles_ext
+clarify
+class
+clean_hands
+cleaning
+cleaning_bucket
+cleaning_services
+clear
+clear_all
+clear_day
+clear_night
+climate_mini_split
+clinical_notes
+clock_arrow_down
+clock_arrow_up
+clock_loader_10
+clock_loader_20
+clock_loader_40
+clock_loader_60
+clock_loader_80
+clock_loader_90
+close
+close_fullscreen
+close_small
+closed_caption
+closed_caption_add
+closed_caption_disabled
+closed_caption_off
+cloud
+cloud_alert
+cloud_circle
+cloud_done
+cloud_download
+cloud_lock
+cloud_off
+cloud_queue
+cloud_sync
+cloud_upload
+cloudy
+cloudy_filled
+cloudy_snowing
+co2
+co_present
+code
+code_blocks
+code_off
+code_xml
+coffee
+coffee_maker
+cognition
+cognition_2
+collapse_all
+collapse_content
+collections
+collections_bookmark
+color_lens
+colorize
+colors
+combine_columns
+comedy_mask
+comic_bubble
+comment
+comment_bank
+comments_disabled
+commit
+communication
+communities
+communities_filled
+commute
+compare
+compare_arrows
+compass_calibration
+component_exchange
+compost
+compress
+computer
+computer_arrow_up
+computer_cancel
+computer_sound
+concierge
+conditions
+confirmation_number
+congenital
+connect_without_contact
+connected_tv
+connecting_airports
+construction
+contact_emergency
+contact_mail
+contact_page
+contact_phone
+contact_phone_filled
+contact_support
+contactless
+contactless_off
+contacts
+contacts_product
+content_copy
+content_cut
+content_paste
+content_paste_go
+content_paste_off
+content_paste_search
+contextual_token
+contextual_token_add
+contract
+contract_delete
+contract_edit
+contrast
+contrast_circle
+contrast_rtl_off
+contrast_square
+control_camera
+control_point
+control_point_duplicate
+controller_gen
+conversation
+conversion_path
+conversion_path_off
+convert_to_text
+conveyor_belt
+cookie
+cookie_off
+cooking
+cool_to_dry
+copy_all
+copyright
+coronavirus
+corporate_fare
+cottage
+counter_0
+counter_1
+counter_2
+counter_3
+counter_4
+counter_5
+counter_6
+counter_7
+counter_8
+counter_9
+countertops
+create
+create_new_folder
+credit_card
+credit_card_clock
+credit_card_gear
+credit_card_heart
+credit_card_off
+credit_score
+crib
+crisis_alert
+crop
+crop_16_9
+crop_21_9
+crop_2_3
+crop_3_2
+crop_5_4
+crop_7_5
+crop_9_16
+crop_din
+crop_free
+crop_landscape
+crop_original
+crop_portrait
+crop_rotate
+crop_square
+crossword
+crowdsource
+crown
+cruelty_free
+css
+csv
+currency_bitcoin
+currency_exchange
+currency_franc
+currency_lira
+currency_pound
+currency_ruble
+currency_rupee
+currency_rupee_circle
+currency_yen
+currency_yuan
+curtains
+curtains_closed
+custom_typography
+cut
+cycle
+cyclone
+dangerous
+dark_mode
+dashboard
+dashboard_2
+dashboard_2_add
+dashboard_2_edit
+dashboard_2_gear
+dashboard_customize
+data_alert
+data_array
+data_check
+data_exploration
+data_info_alert
+data_loss_prevention
+data_object
+data_saver_off
+data_saver_on
+data_table
+data_thresholding
+data_usage
+database
+database_off
+database_search
+database_upload
+dataset
+dataset_linked
+date_range
+deblur
+deceased
+decimal_decrease
+decimal_increase
+deck
+dehaze
+delete
+delete_forever
+delete_history
+delete_outline
+delete_sweep
+delivery_dining
+delivery_truck_bolt
+delivery_truck_speed
+demography
+density_large
+density_medium
+density_small
+dentistry
+departure_board
+deployed_code
+deployed_code_account
+deployed_code_alert
+deployed_code_history
+deployed_code_update
+dermatology
+description
+deselect
+design_services
+desk
+deskphone
+desktop_access_disabled
+desktop_cloud
+desktop_cloud_stack
+desktop_landscape
+desktop_landscape_add
+desktop_mac
+desktop_portrait
+desktop_windows
+destruction
+details
+detection_and_zone
+detection_and_zone_off
+detector
+detector_alarm
+detector_battery
+detector_co
+detector_offline
+detector_smoke
+detector_status
+developer_board
+developer_board_off
+developer_guide
+developer_mode
+developer_mode_tv
+device_band
+device_hub
+device_reset
+device_thermostat
+device_unknown
+devices
+devices_fold
+devices_fold_2
+devices_off
+devices_other
+devices_wearables
+dew_point
+diagnosis
+diagonal_line
+dialer_sip
+dialogs
+dialpad
+diamond
+diamond_shine
+dictionary
+difference
+digital_out_of_home
+digital_wellbeing
+dine_heart
+dine_in
+dine_lamp
+dining
+dinner_dining
+directions
+directions_alt
+directions_alt_off
+directions_bike
+directions_boat
+directions_boat_filled
+directions_bus
+directions_bus_filled
+directions_car
+directions_car_filled
+directions_off
+directions_railway
+directions_railway_2
+directions_railway_filled
+directions_run
+directions_subway
+directions_subway_filled
+directions_transit
+directions_transit_filled
+directions_walk
+directory_sync
+dirty_lens
+disabled_by_default
+disabled_visible
+disc_full
+discover_tune
+dishwasher
+dishwasher_gen
+display_external_input
+display_settings
+distance
+diversity_1
+diversity_2
+diversity_3
+diversity_4
+dns
+do_disturb
+do_disturb_alt
+do_disturb_off
+do_disturb_on
+do_not_disturb
+do_not_disturb_alt
+do_not_disturb_off
+do_not_disturb_on
+do_not_disturb_on_total_silence
+do_not_step
+do_not_touch
+dock
+dock_to_bottom
+dock_to_left
+dock_to_right
+docs
+docs_add_on
+docs_apps_script
+document_scanner
+document_search
+domain
+domain_add
+domain_disabled
+domain_verification
+domain_verification_off
+domino_mask
+done
+done_all
+done_outline
+donut_large
+donut_small
+door_back
+door_front
+door_open
+door_sensor
+door_sliding
+doorbell
+doorbell_3p
+doorbell_chime
+double_arrow
+downhill_skiing
+download
+download_2
+download_done
+download_for_offline
+downloading
+draft
+draft_orders
+drafts
+drag_click
+drag_handle
+drag_indicator
+drag_pan
+draw
+draw_abstract
+draw_collage
+drawing_recognition
+dresser
+drive_eta
+drive_export
+drive_file_move
+drive_file_move_outline
+drive_file_move_rtl
+drive_file_rename
+drive_file_rename_outline
+drive_folder_upload
+drive_fusiontable
+drone
+drone_2
+dropdown
+dropdown_menu
+dropper_eye
+dry
+dry_cleaning
+dual_screen
+duo
+dvr
+dynamic_feed
+dynamic_form
+e911_avatar
+e911_emergency
+e_mobiledata
+e_mobiledata_badge
+ear_sound
+earbud_case
+earbud_left
+earbud_right
+earbuds
+earbuds_2
+earbuds_battery
+early_on
+earthquake
+east
+ecg
+ecg_heart
+eco
+eda
+edgesensor_high
+edgesensor_low
+edit
+edit_arrow_down
+edit_arrow_up
+edit_attributes
+edit_audio
+edit_calendar
+edit_document
+edit_location
+edit_location_alt
+edit_note
+edit_notifications
+edit_off
+edit_road
+edit_square
+editor_choice
+egg
+egg_alt
+eject
+elderly
+elderly_woman
+electric_bike
+electric_bolt
+electric_car
+electric_meter
+electric_moped
+electric_rickshaw
+electric_scooter
+electrical_services
+elevation
+elevator
+email
+emergency
+emergency_heat
+emergency_heat_2
+emergency_home
+emergency_recording
+emergency_share
+emergency_share_off
+emoji_emotions
+emoji_events
+emoji_flags
+emoji_food_beverage
+emoji_language
+emoji_nature
+emoji_objects
+emoji_people
+emoji_symbols
+emoji_transportation
+emoticon
+empty_dashboard
+enable
+encrypted
+encrypted_add
+encrypted_add_circle
+encrypted_minus_circle
+encrypted_off
+endocrinology
+energy
+energy_program_saving
+energy_program_time_used
+energy_savings_leaf
+engineering
+enhanced_encryption
+ent
+enterprise
+enterprise_off
+equal
+equalizer
+eraser_size_1
+eraser_size_2
+eraser_size_3
+eraser_size_4
+eraser_size_5
+error
+error_circle_rounded
+error_med
+error_outline
+escalator
+escalator_warning
+euro
+euro_symbol
+ev_charger
+ev_mobiledata_badge
+ev_shadow
+ev_shadow_add
+ev_shadow_minus
+ev_station
+event
+event_available
+event_busy
+event_list
+event_note
+event_repeat
+event_seat
+event_upcoming
+exclamation
+exercise
+exit_to_app
+expand
+expand_all
+expand_circle_down
+expand_circle_right
+expand_circle_up
+expand_content
+expand_less
+expand_more
+expansion_panels
+expension_panels
+experiment
+explicit
+explore
+explore_nearby
+explore_off
+explosion
+export_notes
+exposure
+exposure_neg_1
+exposure_neg_2
+exposure_plus_1
+exposure_plus_2
+exposure_zero
+extension
+extension_off
+eye_tracking
+eyebrow
+eyeglasses
+eyeglasses_2
+eyeglasses_2_sound
+eyeglasses_3
+face
+face_2
+face_3
+face_4
+face_5
+face_6
+face_down
+face_left
+face_nod
+face_retouching_natural
+face_retouching_off
+face_right
+face_shake
+face_unlock
+face_up
+fact_check
+factory
+falling
+familiar_face_and_zone
+family_group
+family_history
+family_home
+family_link
+family_restroom
+family_star
+fan_focus
+fan_indirect
+farsight_digital
+fast_forward
+fast_rewind
+fastfood
+faucet
+favorite
+favorite_border
+fax
+feature_search
+featured_play_list
+featured_seasonal_and_gifts
+featured_video
+feed
+feedback
+female
+femur
+femur_alt
+fence
+fertile
+festival
+fiber_dvr
+fiber_manual_record
+fiber_new
+fiber_pin
+fiber_smart_record
+file_copy
+file_copy_off
+file_download
+file_download_done
+file_download_off
+file_export
+file_json
+file_map
+file_map_stack
+file_open
+file_png
+file_present
+file_save
+file_save_off
+file_upload
+file_upload_off
+files
+filter
+filter_1
+filter_2
+filter_3
+filter_4
+filter_5
+filter_6
+filter_7
+filter_8
+filter_9
+filter_9_plus
+filter_alt
+filter_alt_off
+filter_arrow_right
+filter_b_and_w
+filter_center_focus
+filter_drama
+filter_frames
+filter_hdr
+filter_list
+filter_list_alt
+filter_list_off
+filter_none
+filter_retrolux
+filter_tilt_shift
+filter_vintage
+finance
+finance_chip
+finance_mode
+find_in_page
+find_replace
+fingerprint
+fingerprint_off
+fire_check
+fire_extinguisher
+fire_hydrant
+fire_truck
+fireplace
+first_page
+fit_page
+fit_page_height
+fit_page_width
+fit_screen
+fit_width
+fitness_center
+fitness_tracker
+fitness_trackers
+flag
+flag_2
+flag_check
+flag_circle
+flag_filled
+flaky
+flare
+flash_auto
+flash_off
+flash_on
+flashlight_off
+flashlight_on
+flatware
+flex_direction
+flex_no_wrap
+flex_wrap
+flight
+flight_class
+flight_land
+flight_takeoff
+flights_and_hotels
+flightsmode
+flip
+flip_camera_android
+flip_camera_ios
+flip_to_back
+flip_to_front
+float_landscape_2
+float_portrait_2
+flood
+floor
+floor_lamp
+flourescent
+flowchart
+flowsheet
+fluid
+fluid_balance
+fluid_med
+fluorescent
+flutter
+flutter_dash
+flyover
+fmd_bad
+fmd_good
+foggy
+folded_hands
+folder
+folder_check
+folder_check_2
+folder_code
+folder_copy
+folder_data
+folder_delete
+folder_eye
+folder_info
+folder_limited
+folder_managed
+folder_match
+folder_off
+folder_open
+folder_shared
+folder_special
+folder_supervised
+folder_zip
+follow_the_signs
+font_download
+font_download_off
+food_bank
+foot_bones
+footprint
+for_you
+forest
+fork_chart
+fork_left
+fork_right
+fork_spoon
+forklift
+format_align_center
+format_align_justify
+format_align_left
+format_align_right
+format_bold
+format_clear
+format_color_fill
+format_color_reset
+format_color_text
+format_h1
+format_h2
+format_h3
+format_h4
+format_h5
+format_h6
+format_image_back
+format_image_break_left
+format_image_break_right
+format_image_front
+format_image_inline_left
+format_image_inline_right
+format_image_left
+format_image_right
+format_indent_decrease
+format_indent_increase
+format_ink_highlighter
+format_italic
+format_letter_spacing
+format_letter_spacing_2
+format_letter_spacing_standard
+format_letter_spacing_wide
+format_letter_spacing_wider
+format_line_spacing
+format_list_bulleted
+format_list_bulleted_add
+format_list_numbered
+format_list_numbered_rtl
+format_overline
+format_paint
+format_paint_off
+format_paragraph
+format_quote
+format_quote_off
+format_shapes
+format_size
+format_strikethrough
+format_text_clip
+format_text_overflow
+format_text_wrap
+format_textdirection_l_to_r
+format_textdirection_r_to_l
+format_textdirection_vertical
+format_underlined
+format_underlined_squiggle
+forms_add_on
+forms_apps_script
+fort
+forum
+forward
+forward_10
+forward_30
+forward_5
+forward_circle
+forward_media
+forward_to_inbox
+foundation
+fragrance
+frame_bug
+frame_exclamation
+frame_inspect
+frame_person
+frame_person_mic
+frame_person_off
+frame_reload
+frame_source
+free_breakfast
+free_cancellation
+front_hand
+front_loader
+full_coverage
+full_hd
+full_stacked_bar_chart
+fullscreen
+fullscreen_exit
+fullscreen_portrait
+function
+functions
+funicular
+g_mobiledata
+g_mobiledata_badge
+g_translate
+gallery_thumbnail
+game_bumper_left
+game_bumper_right
+game_button_l
+game_button_l1
+game_button_l2
+game_button_r
+game_button_r1
+game_button_r2
+game_button_zl
+game_button_zr
+game_stick_l3
+game_stick_left
+game_stick_r3
+game_stick_right
+game_trigger_left
+game_trigger_right
+gamepad
+gamepad_circle_down
+gamepad_circle_left
+gamepad_circle_right
+gamepad_circle_up
+gamepad_down
+gamepad_left
+gamepad_right
+gamepad_up
+games
+garage
+garage_check
+garage_door
+garage_door_open
+garage_home
+garage_money
+garden_cart
+gas_meter
+gastroenterology
+gate
+gavel
+general_device
+generating_tokens
+genetics
+genres
+gesture
+gesture_select
+get_app
+gif
+gif_2
+gif_box
+girl
+gite
+glass_cup
+globe
+globe_2_cancel
+globe_2_question
+globe_asia
+globe_book
+globe_location_pin
+globe_uk
+glucose
+glyphs
+go_to_line
+golf_course
+gondola_lift
+google_home_devices
+google_plus_reshare
+google_tv_remote
+google_wifi
+gpp_bad
+gpp_good
+gpp_maybe
+gps_fixed
+gps_not_fixed
+gps_off
+grade
+gradient
+grading
+grain
+graph_1
+graph_2
+graph_3
+graph_4
+graph_5
+graph_6
+graph_7
+graph_8
+graphic_eq
+graphic_eq_off
+grass
+grid_3x3
+grid_3x3_off
+grid_4x4
+grid_goldenratio
+grid_guides
+grid_layout_side
+grid_off
+grid_on
+grid_view
+grocery
+group
+group_add
+group_off
+group_remove
+group_search
+group_work
+grouped_bar_chart
+groups
+groups_2
+groups_3
+guardian
+gynecology
+h_mobiledata
+h_mobiledata_badge
+h_plus_mobiledata
+h_plus_mobiledata_badge
+hail
+hallway
+hanami_dango
+hand_bones
+hand_gesture
+hand_gesture_off
+hand_meal
+hand_package
+handheld_controller
+handshake
+handwriting_recognition
+handyman
+hangout_video
+hangout_video_off
+hard_disk
+hard_drive
+hard_drive_2
+hardware
+hd
+hdr_auto
+hdr_auto_select
+hdr_enhanced_select
+hdr_off
+hdr_off_select
+hdr_on
+hdr_on_select
+hdr_plus
+hdr_plus_off
+hdr_strong
+hdr_weak
+head_mounted_device
+headphones
+headphones_battery
+headset
+headset_mic
+headset_off
+healing
+health_and_beauty
+health_and_safety
+health_cross
+health_metrics
+heap_snapshot_large
+heap_snapshot_multiple
+heap_snapshot_thumbnail
+hearing
+hearing_aid
+hearing_aid_disabled
+hearing_aid_disabled_left
+hearing_aid_left
+hearing_disabled
+heart_broken
+heart_check
+heart_minus
+heart_plus
+heart_smile
+heat
+heat_pump
+heat_pump_balance
+height
+helicopter
+help
+help_center
+help_clinic
+help_outline
+hematology
+hevc
+hexagon
+hide
+hide_image
+hide_source
+high_chair
+high_density
+high_quality
+high_res
+highlight
+highlight_alt
+highlight_keyboard_focus
+highlight_mouse_cursor
+highlight_off
+highlight_text_cursor
+highlighter_size_1
+highlighter_size_2
+highlighter_size_3
+highlighter_size_4
+highlighter_size_5
+hiking
+history
+history_2
+history_edu
+history_off
+history_toggle_off
+hive
+hls
+hls_off
+holiday_village
+home
+home_and_garden
+home_app_logo
+home_filled
+home_health
+home_improvement_and_tools
+home_iot_device
+home_max
+home_max_dots
+home_mini
+home_pin
+home_repair_service
+home_speaker
+home_storage
+home_storage_gear
+home_work
+horizontal_align_center
+horizontal_align_left
+horizontal_align_right
+horizontal_distribute
+horizontal_rule
+horizontal_split
+host
+hot_tub
+hotel
+hotel_class
+hourglass
+hourglass_arrow_down
+hourglass_arrow_up
+hourglass_bottom
+hourglass_check
+hourglass_disabled
+hourglass_empty
+hourglass_full
+hourglass_pause
+hourglass_top
+house
+house_siding
+house_with_shield
+houseboat
+household_supplies
+hov
+how_to_reg
+how_to_vote
+hr_resting
+html
+http
+https
+hub
+humerus
+humerus_alt
+humidity_high
+humidity_indoor
+humidity_low
+humidity_mid
+humidity_percentage
+hvac
+hvac_max_defrost
+ice_skating
+icecream
+id_card
+id_card_2
+identity_aware_proxy
+identity_platform
+ifl
+iframe
+iframe_off
+image
+image_arrow_up
+image_aspect_ratio
+image_inset
+image_not_supported
+image_search
+imagesearch_roller
+imagesmode
+immunology
+import_contacts
+import_export
+important_devices
+in_home_mode
+inactive_order
+inbox
+inbox_customize
+inbox_text
+inbox_text_asterisk
+inbox_text_person
+inbox_text_share
+incomplete_circle
+indeterminate_check_box
+indeterminate_question_box
+info
+info_i
+infrared
+ink_eraser
+ink_eraser_off
+ink_highlighter
+ink_highlighter_move
+ink_highlighter_off
+ink_marker
+ink_pen
+ink_selection
+inpatient
+input
+input_circle
+insert_chart
+insert_chart_filled
+insert_chart_outlined
+insert_comment
+insert_drive_file
+insert_emoticon
+insert_invitation
+insert_link
+insert_page_break
+insert_photo
+insert_text
+insights
+install_desktop
+install_mobile
+instant_mix
+integration_instructions
+interactive_space
+interests
+interpreter_mode
+inventory
+inventory_2
+invert_colors
+invert_colors_off
+ios
+ios_share
+iron
+iso
+jamboard_kiosk
+japanese_curry
+japanese_flag
+javascript
+jewelry
+join
+join_full
+join_inner
+join_left
+join_right
+joystick
+jump_to_element
+kanji_alcohol
+kayaking
+kebab_dining
+keep
+keep_off
+keep_pin
+keep_public
+kettle
+key
+key_off
+key_vertical
+key_visualizer
+keyboard
+keyboard_alt
+keyboard_arrow_down
+keyboard_arrow_left
+keyboard_arrow_right
+keyboard_arrow_up
+keyboard_backspace
+keyboard_capslock
+keyboard_capslock_badge
+keyboard_command_key
+keyboard_control_key
+keyboard_double_arrow_down
+keyboard_double_arrow_left
+keyboard_double_arrow_right
+keyboard_double_arrow_up
+keyboard_external_input
+keyboard_full
+keyboard_hide
+keyboard_keys
+keyboard_lock
+keyboard_lock_off
+keyboard_off
+keyboard_onscreen
+keyboard_option_key
+keyboard_previous_language
+keyboard_return
+keyboard_tab
+keyboard_tab_rtl
+keyboard_voice
+kid_star
+king_bed
+kitchen
+kitesurfing
+lab_panel
+lab_profile
+lab_research
+label
+label_important
+label_important_outline
+label_off
+label_outline
+labs
+lan
+landscape
+landscape_2
+landscape_2_edit
+landscape_2_off
+landslide
+language
+language_chinese_array
+language_chinese_cangjie
+language_chinese_dayi
+language_chinese_pinyin
+language_chinese_quick
+language_chinese_wubi
+language_french
+language_gb_english
+language_international
+language_japanese_kana
+language_korean_latin
+language_pinyin
+language_spanish
+language_us
+language_us_colemak
+language_us_dvorak
+laps
+laptop
+laptop_car
+laptop_chromebook
+laptop_mac
+laptop_windows
+lasso_select
+last_page
+launch
+laundry
+layers
+layers_clear
+lda
+leaderboard
+leak_add
+leak_remove
+left_click
+left_panel_close
+left_panel_open
+legend_toggle
+lens
+lens_blur
+letter_switch
+library_add
+library_add_check
+library_books
+library_music
+license
+lift_to_talk
+light
+light_group
+light_group_2
+light_mode
+light_mode_auto
+light_off
+lightbulb
+lightbulb_2
+lightbulb_circle
+lightbulb_outline
+lightning_stand
+lightstrip
+line_axis
+line_curve
+line_end
+line_end_arrow
+line_end_arrow_notch
+line_end_circle
+line_end_diamond
+line_end_square
+line_start
+line_start_arrow
+line_start_arrow_notch
+line_start_circle
+line_start_diamond
+line_start_square
+line_style
+line_weight
+linear_scale
+link
+link_2
+link_off
+linked_camera
+linked_services
+lips
+liquor
+list
+list_alt
+list_alt_add
+list_alt_check
+list_arrow
+lists
+live_help
+live_tv
+living
+local_activity
+local_airport
+local_atm
+local_bar
+local_cafe
+local_car_wash
+local_convenience_store
+local_dining
+local_drink
+local_fire_department
+local_florist
+local_gas_station
+local_grocery_store
+local_hospital
+local_hotel
+local_laundry_service
+local_library
+local_mall
+local_movies
+local_offer
+local_parking
+local_pharmacy
+local_phone
+local_pizza
+local_play
+local_police
+local_post_office
+local_printshop
+local_see
+local_shipping
+local_taxi
+location_automation
+location_away
+location_chip
+location_city
+location_disabled
+location_home
+location_off
+location_on
+location_pin
+location_searching
+locator_tag
+lock
+lock_clock
+lock_open
+lock_open_circle
+lock_open_right
+lock_outline
+lock_person
+lock_reset
+login
+logo_dev
+logout
+looks
+looks_3
+looks_4
+looks_5
+looks_6
+looks_one
+looks_two
+loop
+loupe
+low_density
+low_priority
+lowercase
+loyalty
+lte_mobiledata
+lte_mobiledata_badge
+lte_plus_mobiledata
+lte_plus_mobiledata_badge
+luggage
+lunch_dining
+lyrics
+macro_auto
+macro_off
+magic_button
+magic_exchange
+magic_tether
+magnification_large
+magnification_small
+magnify_docked
+magnify_fullscreen
+mail
+mail_asterisk
+mail_lock
+mail_off
+mail_outline
+mail_shield
+male
+man
+man_2
+man_3
+man_4
+manage_accounts
+manage_history
+manage_search
+manga
+manufacturing
+map
+map_pin_heart
+map_pin_review
+map_search
+maps_home_work
+maps_ugc
+margin
+mark_as_unread
+mark_chat_read
+mark_chat_unread
+mark_email_read
+mark_email_unread
+mark_unread_chat_alt
+markdown
+markdown_copy
+markdown_paste
+markunread
+markunread_mailbox
+masked_transitions
+masked_transitions_add
+masks
+massage
+match_case
+match_case_off
+match_word
+matter
+maximize
+meal_dinner
+meal_lunch
+measuring_tape
+media_bluetooth_off
+media_bluetooth_on
+media_link
+media_output
+media_output_off
+mediation
+medical_information
+medical_mask
+medical_services
+medication
+medication_liquid
+meeting_room
+memory
+memory_alt
+menstrual_health
+menu
+menu_book
+menu_book_2
+menu_open
+merge
+merge_type
+message
+metabolism
+metro
+mfg_nest_yale_lock
+mic
+mic_alert
+mic_double
+mic_external_off
+mic_external_on
+mic_gear
+mic_none
+mic_off
+microbiology
+microwave
+microwave_gen
+military_tech
+mimo
+mimo_disconnect
+mindfulness
+minimize
+minor_crash
+mintmark
+missed_video_call
+missed_video_call_filled
+missing_controller
+mist
+mitre
+mixture_med
+mms
+mobile
+mobile_2
+mobile_3
+mobile_alert
+mobile_arrow_down
+mobile_arrow_right
+mobile_arrow_up_right
+mobile_block
+mobile_camera
+mobile_camera_front
+mobile_camera_rear
+mobile_cancel
+mobile_cast
+mobile_charge
+mobile_chat
+mobile_check
+mobile_code
+mobile_dock
+mobile_dots
+mobile_friendly
+mobile_gear
+mobile_hand
+mobile_hand_left
+mobile_hand_left_off
+mobile_hand_off
+mobile_info
+mobile_landscape
+mobile_layout
+mobile_lock_landscape
+mobile_lock_portrait
+mobile_loupe
+mobile_menu
+mobile_off
+mobile_question
+mobile_rotate
+mobile_rotate_lock
+mobile_screen_share
+mobile_screensaver
+mobile_sensor_hi
+mobile_sensor_lo
+mobile_share
+mobile_share_stack
+mobile_sound
+mobile_sound_2
+mobile_sound_off
+mobile_speaker
+mobile_text
+mobile_text_2
+mobile_theft
+mobile_ticket
+mobile_unlock
+mobile_vibrate
+mobile_wrench
+mobiledata_arrows
+mobiledata_off
+mode
+mode_comment
+mode_cool
+mode_cool_off
+mode_dual
+mode_edit
+mode_edit_outline
+mode_fan
+mode_fan_2
+mode_fan_off
+mode_heat
+mode_heat_cool
+mode_heat_off
+mode_night
+mode_of_travel
+mode_off_on
+mode_standby
+model_training
+modeling
+monetization_on
+money
+money_bag
+money_off
+money_off_csred
+money_range
+monitor
+monitor_heart
+monitor_weight
+monitor_weight_gain
+monitor_weight_loss
+monitoring
+monochrome_photos
+monorail
+mood
+mood_bad
+mood_heart
+moon_stars
+mop
+moped
+moped_package
+more
+more_down
+more_horiz
+more_time
+more_up
+more_vert
+mosque
+motion_blur
+motion_mode
+motion_photos_auto
+motion_photos_off
+motion_photos_on
+motion_photos_pause
+motion_photos_paused
+motion_play
+motion_sensor_active
+motion_sensor_alert
+motion_sensor_idle
+motion_sensor_urgent
+motorcycle
+mountain_flag
+mountain_steam
+mouse
+mouse_lock
+mouse_lock_off
+move
+move_down
+move_group
+move_item
+move_location
+move_selection_down
+move_selection_left
+move_selection_right
+move_selection_up
+move_to_inbox
+move_up
+moved_location
+movie
+movie_creation
+movie_edit
+movie_edit_off
+movie_filter
+movie_info
+movie_off
+movie_speaker
+moving
+moving_beds
+moving_ministry
+mp
+multicooker
+multiline_chart
+multimodal_hand_eye
+multiple_airports
+multiple_stop
+museum
+music_cast
+music_history
+music_note
+music_note_2
+music_note_add
+music_off
+music_video
+my_location
+mystery
+nat
+nature
+nature_people
+navigate_before
+navigate_next
+navigation
+near_me
+near_me_disabled
+nearby
+nearby_error
+nearby_off
+nephrology
+nest_audio
+nest_cam_floodlight
+nest_cam_indoor
+nest_cam_iq
+nest_cam_iq_outdoor
+nest_cam_magnet_mount
+nest_cam_outdoor
+nest_cam_stand
+nest_cam_wall_mount
+nest_cam_wired_stand
+nest_clock_farsight_analog
+nest_clock_farsight_digital
+nest_connect
+nest_detect
+nest_display
+nest_display_max
+nest_doorbell_visitor
+nest_eco_leaf
+nest_farsight_cool
+nest_farsight_dual
+nest_farsight_eco
+nest_farsight_heat
+nest_farsight_seasonal
+nest_farsight_weather
+nest_found_savings
+nest_gale_wifi
+nest_heat_link_e
+nest_heat_link_gen_3
+nest_hello_doorbell
+nest_locator_tag
+nest_mini
+nest_multi_room
+nest_protect
+nest_remote
+nest_remote_comfort_sensor
+nest_secure_alarm
+nest_sunblock
+nest_tag
+nest_thermostat
+nest_thermostat_e_eu
+nest_thermostat_gen_3
+nest_thermostat_sensor
+nest_thermostat_sensor_eu
+nest_thermostat_zirconium_eu
+nest_true_radiant
+nest_wake_on_approach
+nest_wake_on_press
+nest_wifi_gale
+nest_wifi_mistral
+nest_wifi_point
+nest_wifi_point_vento
+nest_wifi_pro
+nest_wifi_pro_2
+nest_wifi_router
+network_cell
+network_check
+network_intel_node
+network_intelligence
+network_intelligence_history
+network_intelligence_update
+network_locked
+network_manage
+network_node
+network_ping
+network_wifi
+network_wifi_1_bar
+network_wifi_1_bar_locked
+network_wifi_2_bar
+network_wifi_2_bar_locked
+network_wifi_3_bar
+network_wifi_3_bar_locked
+network_wifi_locked
+neurology
+new_label
+new_releases
+new_window
+news
+newsmode
+newspaper
+newsstand
+next_plan
+next_week
+nfc
+nfc_off
+night_shelter
+night_sight_auto
+night_sight_auto_off
+night_sight_max
+nightlife
+nightlight
+nightlight_round
+nights_stay
+no_accounts
+no_adult_content
+no_backpack
+no_crash
+no_drinks
+no_encryption
+no_encryption_gmailerrorred
+no_flash
+no_food
+no_luggage
+no_meals
+no_meeting_room
+no_photography
+no_sim
+no_sound
+no_stroller
+no_transfer
+noise_aware
+noise_control_off
+noise_control_on
+nordic_walking
+north
+north_east
+north_west
+not_accessible
+not_accessible_forward
+not_interested
+not_listed_location
+not_started
+note
+note_add
+note_alt
+note_stack
+note_stack_add
+notes
+notification_add
+notification_audio
+notification_audio_off
+notification_important
+notification_multiple
+notification_settings
+notification_sound
+notifications
+notifications_active
+notifications_none
+notifications_off
+notifications_paused
+notifications_unread
+numbers
+nutrition
+ods
+odt
+offline_bolt
+offline_pin
+offline_pin_off
+offline_share
+oil_barrel
+okonomiyaki
+on_device_training
+on_hub_device
+oncology
+ondemand_video
+online_prediction
+onsen
+opacity
+open_in_browser
+open_in_full
+open_in_new
+open_in_new_down
+open_in_new_off
+open_in_phone
+open_jam
+open_run
+open_with
+ophthalmology
+oral_disease
+orbit
+order_approve
+order_play
+orders
+orthopedics
+other_admission
+other_houses
+outbound
+outbox
+outbox_alt
+outdoor_garden
+outdoor_grill
+outgoing_mail
+outlet
+outlined_flag
+outpatient
+outpatient_med
+output
+output_circle
+oven
+oven_gen
+overview
+overview_key
+owl
+oxygen_saturation
+p2p
+pace
+pacemaker
+package
+package_2
+padding
+padel
+page_control
+page_footer
+page_header
+page_info
+page_menu_ios
+pageless
+pages
+pageview
+paid
+palette
+pallet
+pan_tool
+pan_tool_alt
+pan_zoom
+panorama
+panorama_fish_eye
+panorama_horizontal
+panorama_photosphere
+panorama_vertical
+panorama_wide_angle
+paragliding
+parent_child_dining
+park
+parking_meter
+parking_sign
+parking_valet
+partly_cloudy_day
+partly_cloudy_night
+partner_exchange
+partner_heart
+partner_reports
+party_mode
+passkey
+passport
+password
+password_2
+password_2_off
+patient_list
+pattern
+pause
+pause_circle
+pause_circle_filled
+pause_circle_outline
+pause_presentation
+payment
+payment_arrow_down
+payment_card
+payments
+pedal_bike
+pediatrics
+pen_size_1
+pen_size_2
+pen_size_3
+pen_size_4
+pen_size_5
+pending
+pending_actions
+pentagon
+people
+people_alt
+people_outline
+percent
+percent_discount
+performance_max
+pergola
+perm_camera_mic
+perm_contact_calendar
+perm_data_setting
+perm_device_information
+perm_identity
+perm_media
+perm_phone_msg
+perm_scan_wifi
+person
+person_2
+person_3
+person_4
+person_add
+person_add_alt
+person_add_disabled
+person_alert
+person_apron
+person_book
+person_cancel
+person_celebrate
+person_check
+person_edit
+person_filled
+person_heart
+person_off
+person_outline
+person_pin
+person_pin_circle
+person_play
+person_raised_hand
+person_remove
+person_search
+person_shield
+person_text
+personal_bag
+personal_bag_off
+personal_bag_question
+personal_injury
+personal_places
+personal_video
+pest_control
+pest_control_rodent
+pet_supplies
+pets
+phishing
+phone
+phone_alt
+phone_android
+phone_bluetooth_speaker
+phone_callback
+phone_cancel
+phone_disabled
+phone_enabled
+phone_forwarded
+phone_in_talk
+phone_iphone
+phone_locked
+phone_missed
+phone_paused
+phonelink
+phonelink_erase
+phonelink_lock
+phonelink_off
+phonelink_ring
+phonelink_ring_off
+phonelink_setup
+photo
+photo_album
+photo_auto_merge
+photo_camera
+photo_camera_back
+photo_camera_front
+photo_filter
+photo_frame
+photo_library
+photo_prints
+photo_size_select_actual
+photo_size_select_large
+photo_size_select_small
+php
+physical_therapy
+piano
+piano_off
+pickleball
+picture_as_pdf
+picture_in_picture
+picture_in_picture_alt
+picture_in_picture_center
+picture_in_picture_large
+picture_in_picture_medium
+picture_in_picture_mobile
+picture_in_picture_off
+picture_in_picture_small
+pie_chart
+pie_chart_filled
+pie_chart_outline
+pie_chart_outlined
+pill
+pill_off
+pin
+pin_drop
+pin_end
+pin_history
+pin_invoke
+pin_road
+pin_road_2
+pinboard
+pinboard_unread
+pinch
+pinch_zoom_in
+pinch_zoom_out
+pip
+pip_exit
+pivot_table_chart
+place
+place_item
+plagiarism
+plane_contrails
+planet
+planner_banner_ad_pt
+planner_review
+play_arrow
+play_circle
+play_disabled
+play_for_work
+play_lesson
+play_music
+play_pause
+play_shapes
+playground
+playground_2
+playing_cards
+playlist_add
+playlist_add_check
+playlist_add_check_circle
+playlist_add_circle
+playlist_play
+playlist_remove
+plug_connect
+plumbing
+plus_one
+podcasts
+podiatry
+podium
+point_of_sale
+point_scan
+poker_chip
+policy
+policy_alert
+poll
+polyline
+polymer
+pool
+portable_wifi_off
+portrait
+position_bottom_left
+position_bottom_right
+position_top_right
+post
+post_add
+potted_plant
+power
+power_input
+power_off
+power_rounded
+power_settings_circle
+power_settings_new
+prayer_times
+precision_manufacturing
+pregnancy
+pregnant_woman
+preliminary
+prescriptions
+present_to_all
+preview
+preview_off
+price_change
+price_check
+print
+print_add
+print_connect
+print_disabled
+print_error
+print_lock
+priority
+priority_high
+privacy
+privacy_tip
+private_connectivity
+problem
+procedure
+process_chart
+production_quantity_limits
+productivity
+progress_activity
+prompt_suggestion
+propane
+propane_tank
+psychiatry
+psychology
+psychology_alt
+public
+public_off
+publish
+published_with_changes
+pulmonology
+pulse_alert
+punch_clock
+push_pin
+qr_code
+qr_code_2
+qr_code_2_add
+qr_code_scanner
+query_builder
+query_stats
+question_answer
+question_exchange
+question_mark
+queue
+queue_music
+queue_play_next
+quick_phrases
+quick_reference
+quick_reference_all
+quick_reorder
+quickreply
+quiet_time
+quiet_time_active
+quiz
+r_mobiledata
+radar
+radio
+radio_button_checked
+radio_button_partial
+radio_button_unchecked
+radiology
+railway_alert
+railway_alert_2
+rainy
+rainy_heavy
+rainy_light
+rainy_snow
+ramen_dining
+ramp_left
+ramp_right
+range_hood
+rate_review
+rate_review_rtl
+raven
+raw_off
+raw_on
+read_more
+readiness_score
+real_estate_agent
+rear_camera
+rebase
+rebase_edit
+receipt
+receipt_long
+receipt_long_off
+recent_actors
+recent_patient
+recenter
+recommend
+record_voice_over
+rectangle
+rectangle_add
+recycling
+redeem
+redo
+reduce_capacity
+refresh
+regular_expression
+relax
+release_alert
+remember_me
+reminder
+reminders_alt
+remote_gen
+remove
+remove_circle
+remove_circle_outline
+remove_done
+remove_from_queue
+remove_moderator
+remove_red_eye
+remove_road
+remove_selection
+remove_shopping_cart
+reopen_window
+reorder
+repartition
+repeat
+repeat_on
+repeat_one
+repeat_one_on
+replace_audio
+replace_image
+replace_video
+replay
+replay_10
+replay_30
+replay_5
+replay_circle_filled
+reply
+reply_all
+report
+report_gmailerrorred
+report_off
+report_problem
+request_page
+request_quote
+reset_brightness
+reset_colors
+reset_exposure
+reset_focus
+reset_image
+reset_iso
+reset_settings
+reset_shadow
+reset_shutter_speed
+reset_tv
+reset_white_balance
+reset_wrench
+resize
+resize_window
+respiratory_rate
+responsive_layout
+rest_area
+restart_alt
+restaurant
+restaurant_menu
+restore
+restore_from_trash
+restore_page
+resume
+reviews
+rewarded_ads
+rheumatology
+rib_cage
+rice_bowl
+right_click
+right_panel_close
+right_panel_open
+ring_volume
+ring_volume_filled
+ripples
+road
+robot
+robot_2
+rocket
+rocket_launch
+roller_shades
+roller_shades_closed
+roller_skating
+roofing
+room
+room_preferences
+room_service
+rotate_90_degrees_ccw
+rotate_90_degrees_cw
+rotate_auto
+rotate_left
+rotate_right
+roundabout_left
+roundabout_right
+rounded_corner
+route
+router
+router_off
+routine
+rowing
+rss_feed
+rsvp
+rtt
+rubric
+rule
+rule_folder
+rule_settings
+run_circle
+running_with_errors
+rv_hookup
+safety_check
+safety_check_off
+safety_divider
+sailing
+salinity
+sanitizer
+satellite
+satellite_alt
+sauna
+save
+save_alt
+save_as
+save_clock
+saved_search
+savings
+scale
+scan
+scan_delete
+scanner
+scatter_plot
+scene
+schedule
+schedule_send
+schema
+school
+science
+science_off
+scooter
+score
+scoreboard
+screen_lock_landscape
+screen_lock_portrait
+screen_lock_rotation
+screen_record
+screen_rotation
+screen_rotation_alt
+screen_rotation_up
+screen_search_desktop
+screen_share
+screenshot
+screenshot_frame
+screenshot_frame_2
+screenshot_keyboard
+screenshot_monitor
+screenshot_region
+screenshot_tablet
+script
+scrollable_header
+scuba_diving
+sd
+sd_card
+sd_card_alert
+sd_storage
+sdk
+search
+search_activity
+search_check
+search_check_2
+search_gear
+search_hands_free
+search_insights
+search_off
+seat_cool_left
+seat_cool_right
+seat_heat_left
+seat_heat_right
+seat_read
+seat_vent_left
+seat_vent_right
+seat_window
+security
+security_key
+security_update
+security_update_good
+security_update_warning
+segment
+select
+select_all
+select_check_box
+select_to_speak
+select_window
+select_window_2
+select_window_off
+self_care
+self_improvement
+sell
+sell_cloud
+send
+send_and_archive
+send_money
+send_time_extension
+send_to_mobile
+sensor_door
+sensor_occupied
+sensor_window
+sensors
+sensors_krx
+sensors_krx_off
+sensors_off
+sentiment_calm
+sentiment_content
+sentiment_dissatisfied
+sentiment_excited
+sentiment_extremely_dissatisfied
+sentiment_frustrated
+sentiment_neutral
+sentiment_sad
+sentiment_satisfied
+sentiment_satisfied_alt
+sentiment_stressed
+sentiment_very_dissatisfied
+sentiment_very_satisfied
+sentiment_worried
+serif
+server_person
+service_toolbox
+set_meal
+settings
+settings_accessibility
+settings_account_box
+settings_alert
+settings_applications
+settings_b_roll
+settings_backup_restore
+settings_bluetooth
+settings_brightness
+settings_cell
+settings_cinematic_blur
+settings_ethernet
+settings_heart
+settings_input_antenna
+settings_input_component
+settings_input_composite
+settings_input_hdmi
+settings_input_svideo
+settings_motion_mode
+settings_night_sight
+settings_overscan
+settings_panorama
+settings_phone
+settings_photo_camera
+settings_power
+settings_remote
+settings_screen
+settings_seating
+settings_slow_motion
+settings_suggest
+settings_system_daydream
+settings_timelapse
+settings_video_camera
+settings_voice
+settop_component
+severe_cold
+shades
+shades_closed
+shadow
+shadow_add
+shadow_minus
+shape_line
+shape_recognition
+shapes
+share
+share_eta
+share_location
+share_off
+share_reviews
+share_windows
+shaved_ice
+sheets_rtl
+shelf_auto_hide
+shelf_position
+shelves
+shield
+shield_card
+shield_lock
+shield_locked
+shield_moon
+shield_person
+shield_question
+shield_radar
+shield_toggle
+shield_watch
+shield_with_heart
+shield_with_house
+shift
+shift_lock
+shift_lock_off
+shoe_cleats
+shop
+shop_2
+shop_two
+shopping_bag
+shopping_bag_speed
+shopping_basket
+shopping_cart
+shopping_cart_checkout
+shopping_cart_off
+shoppingmode
+short_stay
+short_text
+shortcut
+show_chart
+shower
+shuffle
+shuffle_on
+shutter_speed
+shutter_speed_add
+shutter_speed_minus
+sick
+side_navigation
+sign_language
+sign_language_2
+sign_language_off
+signal_cellular_0_bar
+signal_cellular_1_bar
+signal_cellular_2_bar
+signal_cellular_3_bar
+signal_cellular_4_bar
+signal_cellular_add
+signal_cellular_alt
+signal_cellular_alt_1_bar
+signal_cellular_alt_2_bar
+signal_cellular_alt_off
+signal_cellular_connected_no_internet_0_bar
+signal_cellular_connected_no_internet_4_bar
+signal_cellular_no_sim
+signal_cellular_nodata
+signal_cellular_null
+signal_cellular_off
+signal_cellular_pause
+signal_disconnected
+signal_wifi_0_bar
+signal_wifi_4_bar
+signal_wifi_4_bar_lock
+signal_wifi_bad
+signal_wifi_connected_no_internet_4
+signal_wifi_off
+signal_wifi_statusbar_4_bar
+signal_wifi_statusbar_not_connected
+signal_wifi_statusbar_null
+signature
+signpost
+sim_card
+sim_card_alert
+sim_card_download
+simulation
+single_bed
+sip
+siren
+siren_check
+siren_open
+siren_question
+skateboarding
+skeleton
+skillet
+skillet_cooktop
+skip_next
+skip_previous
+skull
+skull_list
+slab_serif
+sledding
+sleep
+sleep_score
+slide_library
+sliders
+slideshow
+slow_motion_video
+smart_button
+smart_card_reader
+smart_card_reader_off
+smart_display
+smart_outlet
+smart_screen
+smart_toy
+smartphone
+smartphone_camera
+smb_share
+smoke_free
+smoking_rooms
+sms
+sms_failed
+snail
+snippet_folder
+snooze
+snowboarding
+snowflake
+snowing
+snowing_heavy
+snowmobile
+snowshoeing
+soap
+soba
+social_distance
+social_leaderboard
+solar_power
+solo_dining
+sort
+sort_by_alpha
+sos
+sound_detection_dog_barking
+sound_detection_glass_break
+sound_detection_loud_sound
+sound_sampler
+soundbar
+soup_kitchen
+source
+source_environment
+source_notes
+south
+south_america
+south_east
+south_west
+spa
+space_bar
+space_dashboard
+space_dashboard_2
+spatial_audio
+spatial_audio_off
+spatial_speaker
+spatial_tracking
+speaker
+speaker_2
+speaker_group
+speaker_notes
+speaker_notes_off
+speaker_phone
+special_character
+specific_gravity
+speech_to_text
+speed
+speed_0_25
+speed_0_2x
+speed_0_5
+speed_0_5x
+speed_0_75
+speed_0_7x
+speed_1_2
+speed_1_25
+speed_1_2x
+speed_1_5
+speed_1_5x
+speed_1_75
+speed_1_7x
+speed_2
+speed_2x
+speed_3
+speed_4
+speed_camera
+spellcheck
+split_scene
+split_scene_2
+split_scene_down
+split_scene_left
+split_scene_right
+split_scene_up
+splitscreen
+splitscreen_add
+splitscreen_bottom
+splitscreen_landscape
+splitscreen_landscape_add
+splitscreen_left
+splitscreen_portrait
+splitscreen_right
+splitscreen_top
+splitscreen_vertical_add
+spo2
+spoke
+sports
+sports_and_outdoors
+sports_bar
+sports_baseball
+sports_basketball
+sports_cricket
+sports_esports
+sports_football
+sports_golf
+sports_gymnastics
+sports_handball
+sports_hockey
+sports_kabaddi
+sports_martial_arts
+sports_mma
+sports_motorsports
+sports_rugby
+sports_score
+sports_soccer
+sports_tennis
+sports_volleyball
+sprinkler
+sprint
+sql
+square
+square_circle
+square_dot
+square_foot
+ssid_chart
+stack
+stack_group
+stack_hexagon
+stack_off
+stack_star
+stacked_bar_chart
+stacked_email
+stacked_inbox
+stacked_line_chart
+stacks
+stadia_controller
+stadium
+stairs
+stairs_2
+star
+star_border
+star_border_purple500
+star_half
+star_outline
+star_purple500
+star_rate
+star_rate_half
+star_shine
+stars
+stars_2
+start
+stat_0
+stat_1
+stat_2
+stat_3
+stat_minus_1
+stat_minus_2
+stat_minus_3
+stay_current_landscape
+stay_current_portrait
+stay_primary_landscape
+stay_primary_portrait
+steering_wheel_heat
+step
+step_into
+step_out
+step_over
+steppers
+steps
+stethoscope
+stethoscope_arrow
+stethoscope_check
+sticker
+sticker_add
+sticky_note
+sticky_note_2
+stock_media
+stockpot
+stop
+stop_circle
+stop_screen_share
+storage
+store
+store_mall_directory
+storefront
+storm
+straight
+straighten
+strategy
+stream
+stream_apps
+streetview
+stress_management
+strikethrough_s
+stroke_full
+stroke_partial
+stroller
+style
+styler
+stylus
+stylus_brush
+stylus_fountain_pen
+stylus_highlighter
+stylus_laser_pointer
+stylus_note
+stylus_pen
+stylus_pencil
+subdirectory_arrow_left
+subdirectory_arrow_right
+subheader
+subject
+subscript
+subscriptions
+subtitles
+subtitles_gear
+subtitles_off
+subway
+subway_walk
+subwoofer
+summarize
+sunny
+sunny_snowing
+superscript
+supervised_user_circle
+supervised_user_circle_off
+supervisor_account
+support
+support_agent
+surfing
+surgical
+surround_sound
+swap_calls
+swap_driving_apps
+swap_driving_apps_wheel
+swap_horiz
+swap_horizontal_circle
+swap_vert
+swap_vertical_circle
+sweep
+swipe
+swipe_down
+swipe_down_alt
+swipe_left
+swipe_left_2
+swipe_left_alt
+swipe_right
+swipe_right_2
+swipe_right_alt
+swipe_up
+swipe_up_alt
+swipe_vertical
+switch
+switch_access
+switch_access_2
+switch_access_3
+switch_access_shortcut
+switch_access_shortcut_add
+switch_account
+switch_camera
+switch_left
+switch_off
+switch_right
+switch_video
+switches
+sword_rose
+swords
+symptoms
+synagogue
+sync
+sync_alt
+sync_arrow_down
+sync_arrow_up
+sync_desktop
+sync_disabled
+sync_lock
+sync_problem
+sync_saved_locally
+sync_saved_locally_off
+syringe
+system_security_update
+system_security_update_good
+system_security_update_warning
+system_update
+system_update_alt
+tab
+tab_close
+tab_close_inactive
+tab_close_right
+tab_duplicate
+tab_group
+tab_inactive
+tab_move
+tab_new_right
+tab_recent
+tab_search
+tab_unselected
+table
+table_bar
+table_chart
+table_chart_view
+table_convert
+table_edit
+table_eye
+table_lamp
+table_large
+table_restaurant
+table_rows
+table_rows_narrow
+table_sign
+table_view
+tablet
+tablet_android
+tablet_camera
+tablet_mac
+tabs
+tactic
+tag
+tag_faces
+takeout_dining
+takeout_dining_2
+tamper_detection_off
+tamper_detection_on
+tap_and_play
+tapas
+target
+task
+task_alt
+tatami_seat
+taunt
+taxi_alert
+team_dashboard
+temp_preferences_custom
+temp_preferences_eco
+temple_buddhist
+temple_hindu
+tenancy
+terminal
+terminal_2
+terrain
+text_ad
+text_ad_off
+text_compare
+text_decrease
+text_fields
+text_fields_alt
+text_format
+text_increase
+text_rotate_up
+text_rotate_vertical
+text_rotation_angledown
+text_rotation_angleup
+text_rotation_down
+text_rotation_none
+text_select_end
+text_select_jump_to_beginning
+text_select_jump_to_end
+text_select_move_back_character
+text_select_move_back_word
+text_select_move_down
+text_select_move_forward_character
+text_select_move_forward_word
+text_select_move_up
+text_select_start
+text_snippet
+text_to_speech
+text_up
+textsms
+texture
+texture_add
+texture_minus
+theater_comedy
+theaters
+thermometer
+thermometer_add
+thermometer_alert
+thermometer_gain
+thermometer_loss
+thermometer_minus
+thermostat
+thermostat_arrow_down
+thermostat_arrow_up
+thermostat_auto
+thermostat_carbon
+things_to_do
+thread_unread
+threat_intelligence
+thumb_down
+thumb_down_alt
+thumb_down_filled
+thumb_down_off
+thumb_down_off_alt
+thumb_up
+thumb_up_alt
+thumb_up_filled
+thumb_up_off
+thumb_up_off_alt
+thumbnail_bar
+thumbs_up_double
+thumbs_up_down
+thunderstorm
+tibia
+tibia_alt
+tile_large
+tile_medium
+tile_small
+tilt_arrow_down
+tilt_arrow_up
+time_auto
+time_to_leave
+timelapse
+timeline
+timer
+timer_1
+timer_10
+timer_10_alt_1
+timer_10_select
+timer_2
+timer_3
+timer_3_alt_1
+timer_3_select
+timer_5
+timer_5_shutter
+timer_arrow_down
+timer_arrow_up
+timer_off
+timer_pause
+timer_play
+tips_and_updates
+tire_repair
+title
+titlecase
+toast
+toc
+today
+toggle_off
+toggle_on
+token
+toll
+tonality
+tonality_2
+toolbar
+tools_flat_head
+tools_installation_kit
+tools_ladder
+tools_level
+tools_phillips
+tools_pliers_wire_stripper
+tools_power_drill
+tools_wrench
+tooltip
+tooltip_2
+top_panel_close
+top_panel_open
+topic
+tornado
+total_dissolved_solids
+touch_app
+touch_double
+touch_double_2
+touch_long
+touch_triple
+touchpad_mouse
+touchpad_mouse_off
+tour
+toys
+toys_and_games
+toys_fan
+track_changes
+trackpad_input
+trackpad_input_2
+trackpad_input_3
+traffic
+traffic_jam
+trail_length
+trail_length_medium
+trail_length_short
+train
+tram
+transcribe
+transfer_within_a_station
+transform
+transgender
+transit_enterexit
+transit_ticket
+transition_chop
+transition_dissolve
+transition_fade
+transition_push
+transition_slide
+translate
+translate_indic
+transportation
+travel
+travel_explore
+travel_luggage_and_bags
+trending_down
+trending_flat
+trending_up
+triangle_circle
+trip
+trip_origin
+trolley
+trolley_cable_car
+trophy
+troubleshoot
+try
+tsunami
+tsv
+tty
+tune
+tungsten
+turn_left
+turn_right
+turn_sharp_left
+turn_sharp_right
+turn_slight_left
+turn_slight_right
+turned_in
+turned_in_not
+tv
+tv_displays
+tv_gen
+tv_guide
+tv_next
+tv_off
+tv_options_edit_channels
+tv_options_input_settings
+tv_remote
+tv_signin
+tv_with_assistant
+two_pager
+two_pager_store
+two_wheeler
+type_specimen
+u_turn_left
+u_turn_right
+udon
+ulna_radius
+ulna_radius_alt
+umbrella
+unarchive
+undereye
+undo
+unfold_less
+unfold_less_double
+unfold_more
+unfold_more_double
+ungroup
+universal_currency
+universal_currency_alt
+universal_local
+unknown_2
+unknown_5
+unknown_7
+unknown_document
+unknown_med
+unlicense
+unpaved_road
+unpin
+unpublished
+unsubscribe
+upcoming
+update
+update_disabled
+upgrade
+upi_pay
+upload
+upload_2
+upload_file
+uppercase
+urology
+usb
+usb_off
+user_attributes
+vaccines
+vacuum
+vacuum_2
+vacuum_2_on
+valve
+vape_free
+vaping_rooms
+variable_add
+variable_insert
+variable_remove
+variables
+ventilator
+verified
+verified_off
+verified_user
+vertical_align_bottom
+vertical_align_center
+vertical_align_top
+vertical_distribute
+vertical_shades
+vertical_shades_closed
+vertical_split
+vibration
+video_call
+video_camera_back
+video_camera_back_add
+video_camera_front
+video_camera_front_off
+video_chat
+video_file
+video_frame_copy
+video_frame_save
+video_label
+video_library
+video_search
+video_settings
+video_stable
+video_template
+videocam
+videocam_alert
+videocam_off
+videogame_asset
+videogame_asset_off
+view_agenda
+view_apps
+view_array
+view_carousel
+view_column
+view_column_2
+view_comfy
+view_comfy_alt
+view_compact
+view_compact_alt
+view_cozy
+view_day
+view_headline
+view_in_ar
+view_in_ar_new
+view_in_ar_off
+view_kanban
+view_list
+view_module
+view_object_track
+view_quilt
+view_real_size
+view_sidebar
+view_stream
+view_timeline
+view_week
+vignette
+vignette_2
+villa
+visibility
+visibility_lock
+visibility_off
+vital_signs
+vitals
+vo2_max
+voice_chat
+voice_chat_off
+voice_over_off
+voice_selection
+voice_selection_off
+voicemail
+voicemail_2
+volcano
+volume_down
+volume_down_alt
+volume_mute
+volume_off
+volume_up
+volunteer_activism
+voting_chip
+vpn_key
+vpn_key_alert
+vpn_key_off
+vpn_lock
+vpn_lock_2
+vr180_create2d
+vr180_create2d_off
+vrpano
+walk_bike
+wall_art
+wall_lamp
+wallet
+wallpaper
+wallpaper_slideshow
+wand_shine
+wand_stars
+ward
+warehouse
+warning
+warning_amber
+warning_off
+wash
+washoku
+watch
+watch_alert
+watch_arrow
+watch_arrow_down
+watch_button
+watch_button_press
+watch_check
+watch_later
+watch_lock
+watch_off
+watch_screentime
+watch_vibration
+watch_wake
+water
+water_bottle
+water_bottle_large
+water_damage
+water_do
+water_drop
+water_drops
+water_ec
+water_full
+water_heater
+water_lock
+water_loss
+water_lux
+water_medium
+water_orp
+water_ph
+water_pump
+water_voc
+waterfall_chart
+waves
+waving_hand
+wb_auto
+wb_cloudy
+wb_incandescent
+wb_iridescent
+wb_shade
+wb_sunny
+wb_twilight
+wb_twilight_2
+wc
+weather_hail
+weather_mix
+weather_snowy
+web
+web_asset
+web_asset_off
+web_stories
+web_traffic
+webhook
+weekend
+weight
+west
+whatshot
+wheat
+wheelchair_pickup
+where_to_vote
+widget_medium
+widget_menu
+widget_small
+widget_width
+widgets
+width
+width_full
+width_normal
+width_wide
+wifi
+wifi_1_bar
+wifi_2_bar
+wifi_add
+wifi_calling
+wifi_calling_1
+wifi_calling_2
+wifi_calling_3
+wifi_calling_bar_1
+wifi_calling_bar_2
+wifi_calling_bar_3
+wifi_channel
+wifi_device
+wifi_find
+wifi_home
+wifi_lock
+wifi_notification
+wifi_off
+wifi_password
+wifi_protected_setup
+wifi_proxy
+wifi_tethering
+wifi_tethering_error
+wifi_tethering_off
+wind_power
+window
+window_closed
+window_open
+window_sensor
+windshield_defrost_auto
+windshield_defrost_front
+windshield_defrost_rear
+windshield_heat_front
+wine_bar
+woman
+woman_2
+work
+work_alert
+work_history
+work_off
+work_outline
+work_update
+workflow
+workspace_premium
+workspaces
+workspaces_outline
+wounds_injuries
+wrap_text
+wrist
+wrong_location
+wysiwyg
+x_circle
+y_circle
+yakitori
+yard
+yoshoku
+your_trips
+youtube_activity
+youtube_searched_for
+zone_person_alert
+zone_person_idle
+zone_person_urgent
+zoom_in
+zoom_in_map
+zoom_out
+zoom_out_map"""
+
+_FONTAWESOME = """\
+fa-brands fa-42-group
+fa-brands fa-500px
+fa-brands fa-accessible-icon
+fa-brands fa-accusoft
+fa-brands fa-adn
+fa-brands fa-adversal
+fa-brands fa-affiliatetheme
+fa-brands fa-airbnb
+fa-brands fa-algolia
+fa-brands fa-alipay
+fa-brands fa-amazon
+fa-brands fa-amazon-pay
+fa-brands fa-amilia
+fa-brands fa-android
+fa-brands fa-angellist
+fa-brands fa-angrycreative
+fa-brands fa-angular
+fa-brands fa-app-store
+fa-brands fa-app-store-ios
+fa-brands fa-apper
+fa-brands fa-apple
+fa-brands fa-apple-pay
+fa-brands fa-artstation
+fa-brands fa-asymmetrik
+fa-brands fa-atlassian
+fa-brands fa-audible
+fa-brands fa-autoprefixer
+fa-brands fa-avianex
+fa-brands fa-aviato
+fa-brands fa-aws
+fa-brands fa-bandcamp
+fa-brands fa-battle-net
+fa-brands fa-behance
+fa-brands fa-bilibili
+fa-brands fa-bimobject
+fa-brands fa-bitbucket
+fa-brands fa-bitcoin
+fa-brands fa-bity
+fa-brands fa-black-tie
+fa-brands fa-blackberry
+fa-brands fa-blogger
+fa-brands fa-blogger-b
+fa-brands fa-bluesky
+fa-brands fa-bluetooth
+fa-brands fa-bluetooth-b
+fa-brands fa-bootstrap
+fa-brands fa-bots
+fa-brands fa-brave
+fa-brands fa-brave-reverse
+fa-brands fa-btc
+fa-brands fa-buffer
+fa-brands fa-buromobelexperte
+fa-brands fa-buy-n-large
+fa-brands fa-buysellads
+fa-brands fa-canadian-maple-leaf
+fa-brands fa-cc-amazon-pay
+fa-brands fa-cc-amex
+fa-brands fa-cc-apple-pay
+fa-brands fa-cc-diners-club
+fa-brands fa-cc-discover
+fa-brands fa-cc-jcb
+fa-brands fa-cc-mastercard
+fa-brands fa-cc-paypal
+fa-brands fa-cc-stripe
+fa-brands fa-cc-visa
+fa-brands fa-centercode
+fa-brands fa-centos
+fa-brands fa-chrome
+fa-brands fa-chromecast
+fa-brands fa-cloudflare
+fa-brands fa-cloudscale
+fa-brands fa-cloudsmith
+fa-brands fa-cloudversify
+fa-brands fa-cmplid
+fa-brands fa-codepen
+fa-brands fa-codiepie
+fa-brands fa-confluence
+fa-brands fa-connectdevelop
+fa-brands fa-contao
+fa-brands fa-cotton-bureau
+fa-brands fa-cpanel
+fa-brands fa-creative-commons
+fa-brands fa-creative-commons-by
+fa-brands fa-creative-commons-nc
+fa-brands fa-creative-commons-nc-eu
+fa-brands fa-creative-commons-nc-jp
+fa-brands fa-creative-commons-nd
+fa-brands fa-creative-commons-pd
+fa-brands fa-creative-commons-pd-alt
+fa-brands fa-creative-commons-remix
+fa-brands fa-creative-commons-sa
+fa-brands fa-creative-commons-sampling
+fa-brands fa-creative-commons-sampling-plus
+fa-brands fa-creative-commons-share
+fa-brands fa-creative-commons-zero
+fa-brands fa-critical-role
+fa-brands fa-css
+fa-brands fa-css3
+fa-brands fa-css3-alt
+fa-brands fa-cuttlefish
+fa-brands fa-d-and-d
+fa-brands fa-d-and-d-beyond
+fa-brands fa-dailymotion
+fa-brands fa-dart-lang
+fa-brands fa-dashcube
+fa-brands fa-debian
+fa-brands fa-deezer
+fa-brands fa-delicious
+fa-brands fa-deploydog
+fa-brands fa-deskpro
+fa-brands fa-dev
+fa-brands fa-deviantart
+fa-brands fa-dhl
+fa-brands fa-diaspora
+fa-brands fa-digg
+fa-brands fa-digital-ocean
+fa-brands fa-discord
+fa-brands fa-discourse
+fa-brands fa-dochub
+fa-brands fa-docker
+fa-brands fa-draft2digital
+fa-brands fa-dribbble
+fa-brands fa-dropbox
+fa-brands fa-drupal
+fa-brands fa-dyalog
+fa-brands fa-earlybirds
+fa-brands fa-ebay
+fa-brands fa-edge
+fa-brands fa-edge-legacy
+fa-brands fa-elementor
+fa-brands fa-ello
+fa-brands fa-ember
+fa-brands fa-empire
+fa-brands fa-envira
+fa-brands fa-erlang
+fa-brands fa-ethereum
+fa-brands fa-etsy
+fa-brands fa-evernote
+fa-brands fa-expeditedssl
+fa-brands fa-facebook
+fa-brands fa-facebook-f
+fa-brands fa-facebook-messenger
+fa-brands fa-fantasy-flight-games
+fa-brands fa-fedex
+fa-brands fa-fedora
+fa-brands fa-figma
+fa-brands fa-files-pinwheel
+fa-brands fa-firefox
+fa-brands fa-firefox-browser
+fa-brands fa-first-order
+fa-brands fa-first-order-alt
+fa-brands fa-firstdraft
+fa-brands fa-flickr
+fa-brands fa-flipboard
+fa-brands fa-flutter
+fa-brands fa-fly
+fa-brands fa-font-awesome
+fa-brands fa-fonticons
+fa-brands fa-fonticons-fi
+fa-brands fa-fort-awesome
+fa-brands fa-fort-awesome-alt
+fa-brands fa-forumbee
+fa-brands fa-foursquare
+fa-brands fa-free-code-camp
+fa-brands fa-freebsd
+fa-brands fa-fulcrum
+fa-brands fa-galactic-republic
+fa-brands fa-galactic-senate
+fa-brands fa-get-pocket
+fa-brands fa-gg
+fa-brands fa-gg-circle
+fa-brands fa-git
+fa-brands fa-git-alt
+fa-brands fa-github
+fa-brands fa-github-alt
+fa-brands fa-gitkraken
+fa-brands fa-gitlab
+fa-brands fa-gitter
+fa-brands fa-glide
+fa-brands fa-glide-g
+fa-brands fa-gofore
+fa-brands fa-golang
+fa-brands fa-goodreads
+fa-brands fa-goodreads-g
+fa-brands fa-google
+fa-brands fa-google-drive
+fa-brands fa-google-pay
+fa-brands fa-google-play
+fa-brands fa-google-plus
+fa-brands fa-google-plus-g
+fa-brands fa-google-scholar
+fa-brands fa-google-wallet
+fa-brands fa-gratipay
+fa-brands fa-grav
+fa-brands fa-gripfire
+fa-brands fa-grunt
+fa-brands fa-guilded
+fa-brands fa-gulp
+fa-brands fa-hacker-news
+fa-brands fa-hackerrank
+fa-brands fa-hashnode
+fa-brands fa-hips
+fa-brands fa-hire-a-helper
+fa-brands fa-hive
+fa-brands fa-hooli
+fa-brands fa-hornbill
+fa-brands fa-hotjar
+fa-brands fa-houzz
+fa-brands fa-html5
+fa-brands fa-hubspot
+fa-brands fa-ideal
+fa-brands fa-imdb
+fa-brands fa-instagram
+fa-brands fa-instalod
+fa-brands fa-intercom
+fa-brands fa-internet-explorer
+fa-brands fa-invision
+fa-brands fa-ioxhost
+fa-brands fa-itch-io
+fa-brands fa-itunes
+fa-brands fa-itunes-note
+fa-brands fa-java
+fa-brands fa-jedi-order
+fa-brands fa-jenkins
+fa-brands fa-jira
+fa-brands fa-joget
+fa-brands fa-joomla
+fa-brands fa-js
+fa-brands fa-jsfiddle
+fa-brands fa-jxl
+fa-brands fa-kaggle
+fa-brands fa-keybase
+fa-brands fa-keycdn
+fa-brands fa-kickstarter
+fa-brands fa-kickstarter-k
+fa-brands fa-korvue
+fa-brands fa-laravel
+fa-brands fa-lastfm
+fa-brands fa-leanpub
+fa-brands fa-less
+fa-brands fa-letterboxd
+fa-brands fa-line
+fa-brands fa-linkedin
+fa-brands fa-linkedin-in
+fa-brands fa-linode
+fa-brands fa-linux
+fa-brands fa-lyft
+fa-brands fa-magento
+fa-brands fa-mailchimp
+fa-brands fa-mandalorian
+fa-brands fa-markdown
+fa-brands fa-mastodon
+fa-brands fa-maxcdn
+fa-brands fa-mdb
+fa-brands fa-medapps
+fa-brands fa-medium
+fa-brands fa-medrt
+fa-brands fa-meetup
+fa-brands fa-megaport
+fa-brands fa-mendeley
+fa-brands fa-meta
+fa-brands fa-microblog
+fa-brands fa-microsoft
+fa-brands fa-mintbit
+fa-brands fa-mix
+fa-brands fa-mixcloud
+fa-brands fa-mixer
+fa-brands fa-mizuni
+fa-brands fa-modx
+fa-brands fa-monero
+fa-brands fa-napster
+fa-brands fa-neos
+fa-brands fa-nfc-directional
+fa-brands fa-nfc-symbol
+fa-brands fa-nimblr
+fa-brands fa-node
+fa-brands fa-node-js
+fa-brands fa-npm
+fa-brands fa-ns8
+fa-brands fa-nutritionix
+fa-brands fa-octopus-deploy
+fa-brands fa-odnoklassniki
+fa-brands fa-odysee
+fa-brands fa-old-republic
+fa-brands fa-opencart
+fa-brands fa-openid
+fa-brands fa-opensuse
+fa-brands fa-opera
+fa-brands fa-optin-monster
+fa-brands fa-orcid
+fa-brands fa-osi
+fa-brands fa-padlet
+fa-brands fa-page4
+fa-brands fa-pagelines
+fa-brands fa-palfed
+fa-brands fa-patreon
+fa-brands fa-paypal
+fa-brands fa-perbyte
+fa-brands fa-periscope
+fa-brands fa-phabricator
+fa-brands fa-phoenix-framework
+fa-brands fa-phoenix-squadron
+fa-brands fa-php
+fa-brands fa-pied-piper
+fa-brands fa-pied-piper-alt
+fa-brands fa-pied-piper-hat
+fa-brands fa-pied-piper-pp
+fa-brands fa-pinterest
+fa-brands fa-pinterest-p
+fa-brands fa-pix
+fa-brands fa-pixiv
+fa-brands fa-playstation
+fa-brands fa-product-hunt
+fa-brands fa-pushed
+fa-brands fa-python
+fa-brands fa-qq
+fa-brands fa-quinscape
+fa-brands fa-quora
+fa-brands fa-r-project
+fa-brands fa-raspberry-pi
+fa-brands fa-ravelry
+fa-brands fa-react
+fa-brands fa-reacteurope
+fa-brands fa-readme
+fa-brands fa-rebel
+fa-brands fa-red-river
+fa-brands fa-reddit
+fa-brands fa-reddit-alien
+fa-brands fa-redhat
+fa-brands fa-renren
+fa-brands fa-replyd
+fa-brands fa-researchgate
+fa-brands fa-resolving
+fa-brands fa-rev
+fa-brands fa-rocketchat
+fa-brands fa-rockrms
+fa-brands fa-rust
+fa-brands fa-safari
+fa-brands fa-salesforce
+fa-brands fa-sass
+fa-brands fa-schlix
+fa-brands fa-screenpal
+fa-brands fa-scribd
+fa-brands fa-searchengin
+fa-brands fa-sellcast
+fa-brands fa-sellsy
+fa-brands fa-servicestack
+fa-brands fa-shirtsinbulk
+fa-brands fa-shoelace
+fa-brands fa-shopify
+fa-brands fa-shopware
+fa-brands fa-signal-messenger
+fa-brands fa-simplybuilt
+fa-brands fa-sistrix
+fa-brands fa-sith
+fa-brands fa-sitrox
+fa-brands fa-sketch
+fa-brands fa-skyatlas
+fa-brands fa-skype
+fa-brands fa-slack
+fa-brands fa-slideshare
+fa-brands fa-snapchat
+fa-brands fa-soundcloud
+fa-brands fa-sourcetree
+fa-brands fa-space-awesome
+fa-brands fa-speakap
+fa-brands fa-speaker-deck
+fa-brands fa-spotify
+fa-brands fa-square-behance
+fa-brands fa-square-bluesky
+fa-brands fa-square-dribbble
+fa-brands fa-square-facebook
+fa-brands fa-square-font-awesome
+fa-brands fa-square-font-awesome-stroke
+fa-brands fa-square-git
+fa-brands fa-square-github
+fa-brands fa-square-gitlab
+fa-brands fa-square-google-plus
+fa-brands fa-square-hacker-news
+fa-brands fa-square-instagram
+fa-brands fa-square-js
+fa-brands fa-square-lastfm
+fa-brands fa-square-letterboxd
+fa-brands fa-square-odnoklassniki
+fa-brands fa-square-pied-piper
+fa-brands fa-square-pinterest
+fa-brands fa-square-reddit
+fa-brands fa-square-snapchat
+fa-brands fa-square-steam
+fa-brands fa-square-threads
+fa-brands fa-square-tumblr
+fa-brands fa-square-twitter
+fa-brands fa-square-upwork
+fa-brands fa-square-viadeo
+fa-brands fa-square-vimeo
+fa-brands fa-square-web-awesome
+fa-brands fa-square-web-awesome-stroke
+fa-brands fa-square-whatsapp
+fa-brands fa-square-x-twitter
+fa-brands fa-square-xing
+fa-brands fa-square-youtube
+fa-brands fa-squarespace
+fa-brands fa-stack-exchange
+fa-brands fa-stack-overflow
+fa-brands fa-stackpath
+fa-brands fa-staylinked
+fa-brands fa-steam
+fa-brands fa-steam-symbol
+fa-brands fa-sticker-mule
+fa-brands fa-strava
+fa-brands fa-stripe
+fa-brands fa-stripe-s
+fa-brands fa-stubber
+fa-brands fa-studiovinari
+fa-brands fa-stumbleupon
+fa-brands fa-stumbleupon-circle
+fa-brands fa-superpowers
+fa-brands fa-supple
+fa-brands fa-suse
+fa-brands fa-swift
+fa-brands fa-symfony
+fa-brands fa-teamspeak
+fa-brands fa-telegram
+fa-brands fa-tencent-weibo
+fa-brands fa-the-red-yeti
+fa-brands fa-themeco
+fa-brands fa-themeisle
+fa-brands fa-think-peaks
+fa-brands fa-threads
+fa-brands fa-tiktok
+fa-brands fa-trade-federation
+fa-brands fa-trello
+fa-brands fa-tumblr
+fa-brands fa-twitch
+fa-brands fa-twitter
+fa-brands fa-typo3
+fa-brands fa-uber
+fa-brands fa-ubuntu
+fa-brands fa-uikit
+fa-brands fa-umbraco
+fa-brands fa-uncharted
+fa-brands fa-uniregistry
+fa-brands fa-unity
+fa-brands fa-unsplash
+fa-brands fa-untappd
+fa-brands fa-ups
+fa-brands fa-upwork
+fa-brands fa-usb
+fa-brands fa-usps
+fa-brands fa-ussunnah
+fa-brands fa-vaadin
+fa-brands fa-viacoin
+fa-brands fa-viadeo
+fa-brands fa-viber
+fa-brands fa-vimeo
+fa-brands fa-vimeo-v
+fa-brands fa-vine
+fa-brands fa-vk
+fa-brands fa-vnv
+fa-brands fa-vuejs
+fa-brands fa-watchman-monitoring
+fa-brands fa-waze
+fa-brands fa-web-awesome
+fa-brands fa-webflow
+fa-brands fa-weebly
+fa-brands fa-weibo
+fa-brands fa-weixin
+fa-brands fa-whatsapp
+fa-brands fa-whmcs
+fa-brands fa-wikipedia-w
+fa-brands fa-windows
+fa-brands fa-wirsindhandwerk
+fa-brands fa-wix
+fa-brands fa-wizards-of-the-coast
+fa-brands fa-wodu
+fa-brands fa-wolf-pack-battalion
+fa-brands fa-wordpress
+fa-brands fa-wordpress-simple
+fa-brands fa-wpbeginner
+fa-brands fa-wpexplorer
+fa-brands fa-wpforms
+fa-brands fa-wpressr
+fa-brands fa-x-twitter
+fa-brands fa-xbox
+fa-brands fa-xing
+fa-brands fa-y-combinator
+fa-brands fa-yahoo
+fa-brands fa-yammer
+fa-brands fa-yandex
+fa-brands fa-yandex-international
+fa-brands fa-yarn
+fa-brands fa-yelp
+fa-brands fa-yoast
+fa-brands fa-youtube
+fa-brands fa-zhihu
+fa-regular fa-address-book
+fa-regular fa-address-card
+fa-regular fa-bell
+fa-regular fa-bell-slash
+fa-regular fa-bookmark
+fa-regular fa-building
+fa-regular fa-calendar
+fa-regular fa-calendar-check
+fa-regular fa-calendar-days
+fa-regular fa-calendar-minus
+fa-regular fa-calendar-plus
+fa-regular fa-calendar-xmark
+fa-regular fa-chart-bar
+fa-regular fa-chess-bishop
+fa-regular fa-chess-king
+fa-regular fa-chess-knight
+fa-regular fa-chess-pawn
+fa-regular fa-chess-queen
+fa-regular fa-chess-rook
+fa-regular fa-circle
+fa-regular fa-circle-check
+fa-regular fa-circle-dot
+fa-regular fa-circle-down
+fa-regular fa-circle-left
+fa-regular fa-circle-pause
+fa-regular fa-circle-play
+fa-regular fa-circle-question
+fa-regular fa-circle-right
+fa-regular fa-circle-stop
+fa-regular fa-circle-up
+fa-regular fa-circle-user
+fa-regular fa-circle-xmark
+fa-regular fa-clipboard
+fa-regular fa-clock
+fa-regular fa-clone
+fa-regular fa-closed-captioning
+fa-regular fa-comment
+fa-regular fa-comment-dots
+fa-regular fa-comments
+fa-regular fa-compass
+fa-regular fa-copy
+fa-regular fa-copyright
+fa-regular fa-credit-card
+fa-regular fa-envelope
+fa-regular fa-envelope-open
+fa-regular fa-eye
+fa-regular fa-eye-slash
+fa-regular fa-face-angry
+fa-regular fa-face-dizzy
+fa-regular fa-face-flushed
+fa-regular fa-face-frown
+fa-regular fa-face-frown-open
+fa-regular fa-face-grimace
+fa-regular fa-face-grin
+fa-regular fa-face-grin-beam
+fa-regular fa-face-grin-beam-sweat
+fa-regular fa-face-grin-hearts
+fa-regular fa-face-grin-squint
+fa-regular fa-face-grin-squint-tears
+fa-regular fa-face-grin-stars
+fa-regular fa-face-grin-tears
+fa-regular fa-face-grin-tongue
+fa-regular fa-face-grin-tongue-squint
+fa-regular fa-face-grin-tongue-wink
+fa-regular fa-face-grin-wide
+fa-regular fa-face-grin-wink
+fa-regular fa-face-kiss
+fa-regular fa-face-kiss-beam
+fa-regular fa-face-kiss-wink-heart
+fa-regular fa-face-laugh
+fa-regular fa-face-laugh-beam
+fa-regular fa-face-laugh-squint
+fa-regular fa-face-laugh-wink
+fa-regular fa-face-meh
+fa-regular fa-face-meh-blank
+fa-regular fa-face-rolling-eyes
+fa-regular fa-face-sad-cry
+fa-regular fa-face-sad-tear
+fa-regular fa-face-smile
+fa-regular fa-face-smile-beam
+fa-regular fa-face-smile-wink
+fa-regular fa-face-surprise
+fa-regular fa-face-tired
+fa-regular fa-file
+fa-regular fa-file-audio
+fa-regular fa-file-code
+fa-regular fa-file-excel
+fa-regular fa-file-image
+fa-regular fa-file-lines
+fa-regular fa-file-pdf
+fa-regular fa-file-powerpoint
+fa-regular fa-file-video
+fa-regular fa-file-word
+fa-regular fa-file-zipper
+fa-regular fa-flag
+fa-regular fa-floppy-disk
+fa-regular fa-folder
+fa-regular fa-folder-closed
+fa-regular fa-folder-open
+fa-regular fa-font-awesome
+fa-regular fa-futbol
+fa-regular fa-gem
+fa-regular fa-hand
+fa-regular fa-hand-back-fist
+fa-regular fa-hand-lizard
+fa-regular fa-hand-peace
+fa-regular fa-hand-point-down
+fa-regular fa-hand-point-left
+fa-regular fa-hand-point-right
+fa-regular fa-hand-point-up
+fa-regular fa-hand-pointer
+fa-regular fa-hand-scissors
+fa-regular fa-hand-spock
+fa-regular fa-handshake
+fa-regular fa-hard-drive
+fa-regular fa-heart
+fa-regular fa-hospital
+fa-regular fa-hourglass
+fa-regular fa-hourglass-half
+fa-regular fa-id-badge
+fa-regular fa-id-card
+fa-regular fa-image
+fa-regular fa-images
+fa-regular fa-keyboard
+fa-regular fa-lemon
+fa-regular fa-life-ring
+fa-regular fa-lightbulb
+fa-regular fa-map
+fa-regular fa-message
+fa-regular fa-money-bill-1
+fa-regular fa-moon
+fa-regular fa-newspaper
+fa-regular fa-note-sticky
+fa-regular fa-object-group
+fa-regular fa-object-ungroup
+fa-regular fa-paper-plane
+fa-regular fa-paste
+fa-regular fa-pen-to-square
+fa-regular fa-rectangle-list
+fa-regular fa-rectangle-xmark
+fa-regular fa-registered
+fa-regular fa-share-from-square
+fa-regular fa-snowflake
+fa-regular fa-square
+fa-regular fa-square-caret-down
+fa-regular fa-square-caret-left
+fa-regular fa-square-caret-right
+fa-regular fa-square-caret-up
+fa-regular fa-square-check
+fa-regular fa-square-full
+fa-regular fa-square-minus
+fa-regular fa-square-plus
+fa-regular fa-star
+fa-regular fa-star-half
+fa-regular fa-star-half-stroke
+fa-regular fa-sun
+fa-regular fa-thumbs-down
+fa-regular fa-thumbs-up
+fa-regular fa-trash-can
+fa-regular fa-user
+fa-regular fa-window-maximize
+fa-regular fa-window-minimize
+fa-regular fa-window-restore
+fa-solid fa-0
+fa-solid fa-1
+fa-solid fa-2
+fa-solid fa-3
+fa-solid fa-4
+fa-solid fa-5
+fa-solid fa-6
+fa-solid fa-7
+fa-solid fa-8
+fa-solid fa-9
+fa-solid fa-a
+fa-solid fa-address-book
+fa-solid fa-address-card
+fa-solid fa-align-center
+fa-solid fa-align-justify
+fa-solid fa-align-left
+fa-solid fa-align-right
+fa-solid fa-anchor
+fa-solid fa-anchor-circle-check
+fa-solid fa-anchor-circle-exclamation
+fa-solid fa-anchor-circle-xmark
+fa-solid fa-anchor-lock
+fa-solid fa-angle-down
+fa-solid fa-angle-left
+fa-solid fa-angle-right
+fa-solid fa-angle-up
+fa-solid fa-angles-down
+fa-solid fa-angles-left
+fa-solid fa-angles-right
+fa-solid fa-angles-up
+fa-solid fa-ankh
+fa-solid fa-apple-whole
+fa-solid fa-archway
+fa-solid fa-arrow-down
+fa-solid fa-arrow-down-1-9
+fa-solid fa-arrow-down-9-1
+fa-solid fa-arrow-down-a-z
+fa-solid fa-arrow-down-long
+fa-solid fa-arrow-down-short-wide
+fa-solid fa-arrow-down-up-across-line
+fa-solid fa-arrow-down-up-lock
+fa-solid fa-arrow-down-wide-short
+fa-solid fa-arrow-down-z-a
+fa-solid fa-arrow-left
+fa-solid fa-arrow-left-long
+fa-solid fa-arrow-pointer
+fa-solid fa-arrow-right
+fa-solid fa-arrow-right-arrow-left
+fa-solid fa-arrow-right-from-bracket
+fa-solid fa-arrow-right-long
+fa-solid fa-arrow-right-to-bracket
+fa-solid fa-arrow-right-to-city
+fa-solid fa-arrow-rotate-left
+fa-solid fa-arrow-rotate-right
+fa-solid fa-arrow-trend-down
+fa-solid fa-arrow-trend-up
+fa-solid fa-arrow-turn-down
+fa-solid fa-arrow-turn-up
+fa-solid fa-arrow-up
+fa-solid fa-arrow-up-1-9
+fa-solid fa-arrow-up-9-1
+fa-solid fa-arrow-up-a-z
+fa-solid fa-arrow-up-from-bracket
+fa-solid fa-arrow-up-from-ground-water
+fa-solid fa-arrow-up-from-water-pump
+fa-solid fa-arrow-up-long
+fa-solid fa-arrow-up-right-dots
+fa-solid fa-arrow-up-right-from-square
+fa-solid fa-arrow-up-short-wide
+fa-solid fa-arrow-up-wide-short
+fa-solid fa-arrow-up-z-a
+fa-solid fa-arrows-down-to-line
+fa-solid fa-arrows-down-to-people
+fa-solid fa-arrows-left-right
+fa-solid fa-arrows-left-right-to-line
+fa-solid fa-arrows-rotate
+fa-solid fa-arrows-spin
+fa-solid fa-arrows-split-up-and-left
+fa-solid fa-arrows-to-circle
+fa-solid fa-arrows-to-dot
+fa-solid fa-arrows-to-eye
+fa-solid fa-arrows-turn-right
+fa-solid fa-arrows-turn-to-dots
+fa-solid fa-arrows-up-down
+fa-solid fa-arrows-up-down-left-right
+fa-solid fa-arrows-up-to-line
+fa-solid fa-asterisk
+fa-solid fa-at
+fa-solid fa-atom
+fa-solid fa-audio-description
+fa-solid fa-austral-sign
+fa-solid fa-award
+fa-solid fa-b
+fa-solid fa-baby
+fa-solid fa-baby-carriage
+fa-solid fa-backward
+fa-solid fa-backward-fast
+fa-solid fa-backward-step
+fa-solid fa-bacon
+fa-solid fa-bacteria
+fa-solid fa-bacterium
+fa-solid fa-bag-shopping
+fa-solid fa-bahai
+fa-solid fa-baht-sign
+fa-solid fa-ban
+fa-solid fa-ban-smoking
+fa-solid fa-bandage
+fa-solid fa-bangladeshi-taka-sign
+fa-solid fa-barcode
+fa-solid fa-bars
+fa-solid fa-bars-progress
+fa-solid fa-bars-staggered
+fa-solid fa-baseball
+fa-solid fa-baseball-bat-ball
+fa-solid fa-basket-shopping
+fa-solid fa-basketball
+fa-solid fa-bath
+fa-solid fa-battery-empty
+fa-solid fa-battery-full
+fa-solid fa-battery-half
+fa-solid fa-battery-quarter
+fa-solid fa-battery-three-quarters
+fa-solid fa-bed
+fa-solid fa-bed-pulse
+fa-solid fa-beer-mug-empty
+fa-solid fa-bell
+fa-solid fa-bell-concierge
+fa-solid fa-bell-slash
+fa-solid fa-bezier-curve
+fa-solid fa-bicycle
+fa-solid fa-binoculars
+fa-solid fa-biohazard
+fa-solid fa-bitcoin-sign
+fa-solid fa-blender
+fa-solid fa-blender-phone
+fa-solid fa-blog
+fa-solid fa-bold
+fa-solid fa-bolt
+fa-solid fa-bolt-lightning
+fa-solid fa-bomb
+fa-solid fa-bone
+fa-solid fa-bong
+fa-solid fa-book
+fa-solid fa-book-atlas
+fa-solid fa-book-bible
+fa-solid fa-book-bookmark
+fa-solid fa-book-journal-whills
+fa-solid fa-book-medical
+fa-solid fa-book-open
+fa-solid fa-book-open-reader
+fa-solid fa-book-quran
+fa-solid fa-book-skull
+fa-solid fa-book-tanakh
+fa-solid fa-bookmark
+fa-solid fa-border-all
+fa-solid fa-border-none
+fa-solid fa-border-top-left
+fa-solid fa-bore-hole
+fa-solid fa-bottle-droplet
+fa-solid fa-bottle-water
+fa-solid fa-bowl-food
+fa-solid fa-bowl-rice
+fa-solid fa-bowling-ball
+fa-solid fa-box
+fa-solid fa-box-archive
+fa-solid fa-box-open
+fa-solid fa-box-tissue
+fa-solid fa-boxes-packing
+fa-solid fa-boxes-stacked
+fa-solid fa-braille
+fa-solid fa-brain
+fa-solid fa-brazilian-real-sign
+fa-solid fa-bread-slice
+fa-solid fa-bridge
+fa-solid fa-bridge-circle-check
+fa-solid fa-bridge-circle-exclamation
+fa-solid fa-bridge-circle-xmark
+fa-solid fa-bridge-lock
+fa-solid fa-bridge-water
+fa-solid fa-briefcase
+fa-solid fa-briefcase-medical
+fa-solid fa-broom
+fa-solid fa-broom-ball
+fa-solid fa-brush
+fa-solid fa-bucket
+fa-solid fa-bug
+fa-solid fa-bug-slash
+fa-solid fa-bugs
+fa-solid fa-building
+fa-solid fa-building-circle-arrow-right
+fa-solid fa-building-circle-check
+fa-solid fa-building-circle-exclamation
+fa-solid fa-building-circle-xmark
+fa-solid fa-building-columns
+fa-solid fa-building-flag
+fa-solid fa-building-lock
+fa-solid fa-building-ngo
+fa-solid fa-building-shield
+fa-solid fa-building-un
+fa-solid fa-building-user
+fa-solid fa-building-wheat
+fa-solid fa-bullhorn
+fa-solid fa-bullseye
+fa-solid fa-burger
+fa-solid fa-burst
+fa-solid fa-bus
+fa-solid fa-bus-simple
+fa-solid fa-business-time
+fa-solid fa-c
+fa-solid fa-cable-car
+fa-solid fa-cake-candles
+fa-solid fa-calculator
+fa-solid fa-calendar
+fa-solid fa-calendar-check
+fa-solid fa-calendar-day
+fa-solid fa-calendar-days
+fa-solid fa-calendar-minus
+fa-solid fa-calendar-plus
+fa-solid fa-calendar-week
+fa-solid fa-calendar-xmark
+fa-solid fa-camera
+fa-solid fa-camera-retro
+fa-solid fa-camera-rotate
+fa-solid fa-campground
+fa-solid fa-candy-cane
+fa-solid fa-cannabis
+fa-solid fa-capsules
+fa-solid fa-car
+fa-solid fa-car-battery
+fa-solid fa-car-burst
+fa-solid fa-car-on
+fa-solid fa-car-rear
+fa-solid fa-car-side
+fa-solid fa-car-tunnel
+fa-solid fa-caravan
+fa-solid fa-caret-down
+fa-solid fa-caret-left
+fa-solid fa-caret-right
+fa-solid fa-caret-up
+fa-solid fa-carrot
+fa-solid fa-cart-arrow-down
+fa-solid fa-cart-flatbed
+fa-solid fa-cart-flatbed-suitcase
+fa-solid fa-cart-plus
+fa-solid fa-cart-shopping
+fa-solid fa-cash-register
+fa-solid fa-cat
+fa-solid fa-cedi-sign
+fa-solid fa-cent-sign
+fa-solid fa-certificate
+fa-solid fa-chair
+fa-solid fa-chalkboard
+fa-solid fa-chalkboard-user
+fa-solid fa-champagne-glasses
+fa-solid fa-charging-station
+fa-solid fa-chart-area
+fa-solid fa-chart-bar
+fa-solid fa-chart-column
+fa-solid fa-chart-diagram
+fa-solid fa-chart-gantt
+fa-solid fa-chart-line
+fa-solid fa-chart-pie
+fa-solid fa-chart-simple
+fa-solid fa-check
+fa-solid fa-check-double
+fa-solid fa-check-to-slot
+fa-solid fa-cheese
+fa-solid fa-chess
+fa-solid fa-chess-bishop
+fa-solid fa-chess-board
+fa-solid fa-chess-king
+fa-solid fa-chess-knight
+fa-solid fa-chess-pawn
+fa-solid fa-chess-queen
+fa-solid fa-chess-rook
+fa-solid fa-chevron-down
+fa-solid fa-chevron-left
+fa-solid fa-chevron-right
+fa-solid fa-chevron-up
+fa-solid fa-child
+fa-solid fa-child-combatant
+fa-solid fa-child-dress
+fa-solid fa-child-reaching
+fa-solid fa-children
+fa-solid fa-church
+fa-solid fa-circle
+fa-solid fa-circle-arrow-down
+fa-solid fa-circle-arrow-left
+fa-solid fa-circle-arrow-right
+fa-solid fa-circle-arrow-up
+fa-solid fa-circle-check
+fa-solid fa-circle-chevron-down
+fa-solid fa-circle-chevron-left
+fa-solid fa-circle-chevron-right
+fa-solid fa-circle-chevron-up
+fa-solid fa-circle-dollar-to-slot
+fa-solid fa-circle-dot
+fa-solid fa-circle-down
+fa-solid fa-circle-exclamation
+fa-solid fa-circle-h
+fa-solid fa-circle-half-stroke
+fa-solid fa-circle-info
+fa-solid fa-circle-left
+fa-solid fa-circle-minus
+fa-solid fa-circle-nodes
+fa-solid fa-circle-notch
+fa-solid fa-circle-pause
+fa-solid fa-circle-play
+fa-solid fa-circle-plus
+fa-solid fa-circle-question
+fa-solid fa-circle-radiation
+fa-solid fa-circle-right
+fa-solid fa-circle-stop
+fa-solid fa-circle-up
+fa-solid fa-circle-user
+fa-solid fa-circle-xmark
+fa-solid fa-city
+fa-solid fa-clapperboard
+fa-solid fa-clipboard
+fa-solid fa-clipboard-check
+fa-solid fa-clipboard-list
+fa-solid fa-clipboard-question
+fa-solid fa-clipboard-user
+fa-solid fa-clock
+fa-solid fa-clock-rotate-left
+fa-solid fa-clone
+fa-solid fa-closed-captioning
+fa-solid fa-cloud
+fa-solid fa-cloud-arrow-down
+fa-solid fa-cloud-arrow-up
+fa-solid fa-cloud-bolt
+fa-solid fa-cloud-meatball
+fa-solid fa-cloud-moon
+fa-solid fa-cloud-moon-rain
+fa-solid fa-cloud-rain
+fa-solid fa-cloud-showers-heavy
+fa-solid fa-cloud-showers-water
+fa-solid fa-cloud-sun
+fa-solid fa-cloud-sun-rain
+fa-solid fa-clover
+fa-solid fa-code
+fa-solid fa-code-branch
+fa-solid fa-code-commit
+fa-solid fa-code-compare
+fa-solid fa-code-fork
+fa-solid fa-code-merge
+fa-solid fa-code-pull-request
+fa-solid fa-coins
+fa-solid fa-colon-sign
+fa-solid fa-comment
+fa-solid fa-comment-dollar
+fa-solid fa-comment-dots
+fa-solid fa-comment-medical
+fa-solid fa-comment-nodes
+fa-solid fa-comment-slash
+fa-solid fa-comment-sms
+fa-solid fa-comments
+fa-solid fa-comments-dollar
+fa-solid fa-compact-disc
+fa-solid fa-compass
+fa-solid fa-compass-drafting
+fa-solid fa-compress
+fa-solid fa-computer
+fa-solid fa-computer-mouse
+fa-solid fa-cookie
+fa-solid fa-cookie-bite
+fa-solid fa-copy
+fa-solid fa-copyright
+fa-solid fa-couch
+fa-solid fa-cow
+fa-solid fa-credit-card
+fa-solid fa-crop
+fa-solid fa-crop-simple
+fa-solid fa-cross
+fa-solid fa-crosshairs
+fa-solid fa-crow
+fa-solid fa-crown
+fa-solid fa-crutch
+fa-solid fa-cruzeiro-sign
+fa-solid fa-cube
+fa-solid fa-cubes
+fa-solid fa-cubes-stacked
+fa-solid fa-d
+fa-solid fa-database
+fa-solid fa-delete-left
+fa-solid fa-democrat
+fa-solid fa-desktop
+fa-solid fa-dharmachakra
+fa-solid fa-diagram-next
+fa-solid fa-diagram-predecessor
+fa-solid fa-diagram-project
+fa-solid fa-diagram-successor
+fa-solid fa-diamond
+fa-solid fa-diamond-turn-right
+fa-solid fa-dice
+fa-solid fa-dice-d20
+fa-solid fa-dice-d6
+fa-solid fa-dice-five
+fa-solid fa-dice-four
+fa-solid fa-dice-one
+fa-solid fa-dice-six
+fa-solid fa-dice-three
+fa-solid fa-dice-two
+fa-solid fa-disease
+fa-solid fa-display
+fa-solid fa-divide
+fa-solid fa-dna
+fa-solid fa-dog
+fa-solid fa-dollar-sign
+fa-solid fa-dolly
+fa-solid fa-dong-sign
+fa-solid fa-door-closed
+fa-solid fa-door-open
+fa-solid fa-dove
+fa-solid fa-down-left-and-up-right-to-center
+fa-solid fa-down-long
+fa-solid fa-download
+fa-solid fa-dragon
+fa-solid fa-draw-polygon
+fa-solid fa-droplet
+fa-solid fa-droplet-slash
+fa-solid fa-drum
+fa-solid fa-drum-steelpan
+fa-solid fa-drumstick-bite
+fa-solid fa-dumbbell
+fa-solid fa-dumpster
+fa-solid fa-dumpster-fire
+fa-solid fa-dungeon
+fa-solid fa-e
+fa-solid fa-ear-deaf
+fa-solid fa-ear-listen
+fa-solid fa-earth-africa
+fa-solid fa-earth-americas
+fa-solid fa-earth-asia
+fa-solid fa-earth-europe
+fa-solid fa-earth-oceania
+fa-solid fa-egg
+fa-solid fa-eject
+fa-solid fa-elevator
+fa-solid fa-ellipsis
+fa-solid fa-ellipsis-vertical
+fa-solid fa-envelope
+fa-solid fa-envelope-circle-check
+fa-solid fa-envelope-open
+fa-solid fa-envelope-open-text
+fa-solid fa-envelopes-bulk
+fa-solid fa-equals
+fa-solid fa-eraser
+fa-solid fa-ethernet
+fa-solid fa-euro-sign
+fa-solid fa-exclamation
+fa-solid fa-expand
+fa-solid fa-explosion
+fa-solid fa-eye
+fa-solid fa-eye-dropper
+fa-solid fa-eye-low-vision
+fa-solid fa-eye-slash
+fa-solid fa-f
+fa-solid fa-face-angry
+fa-solid fa-face-dizzy
+fa-solid fa-face-flushed
+fa-solid fa-face-frown
+fa-solid fa-face-frown-open
+fa-solid fa-face-grimace
+fa-solid fa-face-grin
+fa-solid fa-face-grin-beam
+fa-solid fa-face-grin-beam-sweat
+fa-solid fa-face-grin-hearts
+fa-solid fa-face-grin-squint
+fa-solid fa-face-grin-squint-tears
+fa-solid fa-face-grin-stars
+fa-solid fa-face-grin-tears
+fa-solid fa-face-grin-tongue
+fa-solid fa-face-grin-tongue-squint
+fa-solid fa-face-grin-tongue-wink
+fa-solid fa-face-grin-wide
+fa-solid fa-face-grin-wink
+fa-solid fa-face-kiss
+fa-solid fa-face-kiss-beam
+fa-solid fa-face-kiss-wink-heart
+fa-solid fa-face-laugh
+fa-solid fa-face-laugh-beam
+fa-solid fa-face-laugh-squint
+fa-solid fa-face-laugh-wink
+fa-solid fa-face-meh
+fa-solid fa-face-meh-blank
+fa-solid fa-face-rolling-eyes
+fa-solid fa-face-sad-cry
+fa-solid fa-face-sad-tear
+fa-solid fa-face-smile
+fa-solid fa-face-smile-beam
+fa-solid fa-face-smile-wink
+fa-solid fa-face-surprise
+fa-solid fa-face-tired
+fa-solid fa-fan
+fa-solid fa-faucet
+fa-solid fa-faucet-drip
+fa-solid fa-fax
+fa-solid fa-feather
+fa-solid fa-feather-pointed
+fa-solid fa-ferry
+fa-solid fa-file
+fa-solid fa-file-arrow-down
+fa-solid fa-file-arrow-up
+fa-solid fa-file-audio
+fa-solid fa-file-circle-check
+fa-solid fa-file-circle-exclamation
+fa-solid fa-file-circle-minus
+fa-solid fa-file-circle-plus
+fa-solid fa-file-circle-question
+fa-solid fa-file-circle-xmark
+fa-solid fa-file-code
+fa-solid fa-file-contract
+fa-solid fa-file-csv
+fa-solid fa-file-excel
+fa-solid fa-file-export
+fa-solid fa-file-fragment
+fa-solid fa-file-half-dashed
+fa-solid fa-file-image
+fa-solid fa-file-import
+fa-solid fa-file-invoice
+fa-solid fa-file-invoice-dollar
+fa-solid fa-file-lines
+fa-solid fa-file-medical
+fa-solid fa-file-pdf
+fa-solid fa-file-pen
+fa-solid fa-file-powerpoint
+fa-solid fa-file-prescription
+fa-solid fa-file-shield
+fa-solid fa-file-signature
+fa-solid fa-file-video
+fa-solid fa-file-waveform
+fa-solid fa-file-word
+fa-solid fa-file-zipper
+fa-solid fa-fill
+fa-solid fa-fill-drip
+fa-solid fa-film
+fa-solid fa-filter
+fa-solid fa-filter-circle-dollar
+fa-solid fa-filter-circle-xmark
+fa-solid fa-fingerprint
+fa-solid fa-fire
+fa-solid fa-fire-burner
+fa-solid fa-fire-extinguisher
+fa-solid fa-fire-flame-curved
+fa-solid fa-fire-flame-simple
+fa-solid fa-fish
+fa-solid fa-fish-fins
+fa-solid fa-flag
+fa-solid fa-flag-checkered
+fa-solid fa-flag-usa
+fa-solid fa-flask
+fa-solid fa-flask-vial
+fa-solid fa-floppy-disk
+fa-solid fa-florin-sign
+fa-solid fa-folder
+fa-solid fa-folder-closed
+fa-solid fa-folder-minus
+fa-solid fa-folder-open
+fa-solid fa-folder-plus
+fa-solid fa-folder-tree
+fa-solid fa-font
+fa-solid fa-font-awesome
+fa-solid fa-football
+fa-solid fa-forward
+fa-solid fa-forward-fast
+fa-solid fa-forward-step
+fa-solid fa-franc-sign
+fa-solid fa-frog
+fa-solid fa-futbol
+fa-solid fa-g
+fa-solid fa-gamepad
+fa-solid fa-gas-pump
+fa-solid fa-gauge
+fa-solid fa-gauge-high
+fa-solid fa-gauge-simple
+fa-solid fa-gauge-simple-high
+fa-solid fa-gavel
+fa-solid fa-gear
+fa-solid fa-gears
+fa-solid fa-gem
+fa-solid fa-genderless
+fa-solid fa-ghost
+fa-solid fa-gift
+fa-solid fa-gifts
+fa-solid fa-glass-water
+fa-solid fa-glass-water-droplet
+fa-solid fa-glasses
+fa-solid fa-globe
+fa-solid fa-golf-ball-tee
+fa-solid fa-gopuram
+fa-solid fa-graduation-cap
+fa-solid fa-greater-than
+fa-solid fa-greater-than-equal
+fa-solid fa-grip
+fa-solid fa-grip-lines
+fa-solid fa-grip-lines-vertical
+fa-solid fa-grip-vertical
+fa-solid fa-group-arrows-rotate
+fa-solid fa-guarani-sign
+fa-solid fa-guitar
+fa-solid fa-gun
+fa-solid fa-h
+fa-solid fa-hammer
+fa-solid fa-hamsa
+fa-solid fa-hand
+fa-solid fa-hand-back-fist
+fa-solid fa-hand-dots
+fa-solid fa-hand-fist
+fa-solid fa-hand-holding
+fa-solid fa-hand-holding-dollar
+fa-solid fa-hand-holding-droplet
+fa-solid fa-hand-holding-hand
+fa-solid fa-hand-holding-heart
+fa-solid fa-hand-holding-medical
+fa-solid fa-hand-lizard
+fa-solid fa-hand-middle-finger
+fa-solid fa-hand-peace
+fa-solid fa-hand-point-down
+fa-solid fa-hand-point-left
+fa-solid fa-hand-point-right
+fa-solid fa-hand-point-up
+fa-solid fa-hand-pointer
+fa-solid fa-hand-scissors
+fa-solid fa-hand-sparkles
+fa-solid fa-hand-spock
+fa-solid fa-handcuffs
+fa-solid fa-hands
+fa-solid fa-hands-asl-interpreting
+fa-solid fa-hands-bound
+fa-solid fa-hands-bubbles
+fa-solid fa-hands-clapping
+fa-solid fa-hands-holding
+fa-solid fa-hands-holding-child
+fa-solid fa-hands-holding-circle
+fa-solid fa-hands-praying
+fa-solid fa-handshake
+fa-solid fa-handshake-angle
+fa-solid fa-handshake-simple
+fa-solid fa-handshake-simple-slash
+fa-solid fa-handshake-slash
+fa-solid fa-hanukiah
+fa-solid fa-hard-drive
+fa-solid fa-hashtag
+fa-solid fa-hat-cowboy
+fa-solid fa-hat-cowboy-side
+fa-solid fa-hat-wizard
+fa-solid fa-head-side-cough
+fa-solid fa-head-side-cough-slash
+fa-solid fa-head-side-mask
+fa-solid fa-head-side-virus
+fa-solid fa-heading
+fa-solid fa-headphones
+fa-solid fa-headphones-simple
+fa-solid fa-headset
+fa-solid fa-heart
+fa-solid fa-heart-circle-bolt
+fa-solid fa-heart-circle-check
+fa-solid fa-heart-circle-exclamation
+fa-solid fa-heart-circle-minus
+fa-solid fa-heart-circle-plus
+fa-solid fa-heart-circle-xmark
+fa-solid fa-heart-crack
+fa-solid fa-heart-pulse
+fa-solid fa-helicopter
+fa-solid fa-helicopter-symbol
+fa-solid fa-helmet-safety
+fa-solid fa-helmet-un
+fa-solid fa-hexagon-nodes
+fa-solid fa-hexagon-nodes-bolt
+fa-solid fa-highlighter
+fa-solid fa-hill-avalanche
+fa-solid fa-hill-rockslide
+fa-solid fa-hippo
+fa-solid fa-hockey-puck
+fa-solid fa-holly-berry
+fa-solid fa-horse
+fa-solid fa-horse-head
+fa-solid fa-hospital
+fa-solid fa-hospital-user
+fa-solid fa-hot-tub-person
+fa-solid fa-hotdog
+fa-solid fa-hotel
+fa-solid fa-hourglass
+fa-solid fa-hourglass-end
+fa-solid fa-hourglass-half
+fa-solid fa-hourglass-start
+fa-solid fa-house
+fa-solid fa-house-chimney
+fa-solid fa-house-chimney-crack
+fa-solid fa-house-chimney-medical
+fa-solid fa-house-chimney-user
+fa-solid fa-house-chimney-window
+fa-solid fa-house-circle-check
+fa-solid fa-house-circle-exclamation
+fa-solid fa-house-circle-xmark
+fa-solid fa-house-crack
+fa-solid fa-house-fire
+fa-solid fa-house-flag
+fa-solid fa-house-flood-water
+fa-solid fa-house-flood-water-circle-arrow-right
+fa-solid fa-house-laptop
+fa-solid fa-house-lock
+fa-solid fa-house-medical
+fa-solid fa-house-medical-circle-check
+fa-solid fa-house-medical-circle-exclamation
+fa-solid fa-house-medical-circle-xmark
+fa-solid fa-house-medical-flag
+fa-solid fa-house-signal
+fa-solid fa-house-tsunami
+fa-solid fa-house-user
+fa-solid fa-hryvnia-sign
+fa-solid fa-hurricane
+fa-solid fa-i
+fa-solid fa-i-cursor
+fa-solid fa-ice-cream
+fa-solid fa-icicles
+fa-solid fa-icons
+fa-solid fa-id-badge
+fa-solid fa-id-card
+fa-solid fa-id-card-clip
+fa-solid fa-igloo
+fa-solid fa-image
+fa-solid fa-image-portrait
+fa-solid fa-images
+fa-solid fa-inbox
+fa-solid fa-indent
+fa-solid fa-indian-rupee-sign
+fa-solid fa-industry
+fa-solid fa-infinity
+fa-solid fa-info
+fa-solid fa-italic
+fa-solid fa-j
+fa-solid fa-jar
+fa-solid fa-jar-wheat
+fa-solid fa-jedi
+fa-solid fa-jet-fighter
+fa-solid fa-jet-fighter-up
+fa-solid fa-joint
+fa-solid fa-jug-detergent
+fa-solid fa-k
+fa-solid fa-kaaba
+fa-solid fa-key
+fa-solid fa-keyboard
+fa-solid fa-khanda
+fa-solid fa-kip-sign
+fa-solid fa-kit-medical
+fa-solid fa-kitchen-set
+fa-solid fa-kiwi-bird
+fa-solid fa-l
+fa-solid fa-land-mine-on
+fa-solid fa-landmark
+fa-solid fa-landmark-dome
+fa-solid fa-landmark-flag
+fa-solid fa-language
+fa-solid fa-laptop
+fa-solid fa-laptop-code
+fa-solid fa-laptop-file
+fa-solid fa-laptop-medical
+fa-solid fa-lari-sign
+fa-solid fa-layer-group
+fa-solid fa-leaf
+fa-solid fa-left-long
+fa-solid fa-left-right
+fa-solid fa-lemon
+fa-solid fa-less-than
+fa-solid fa-less-than-equal
+fa-solid fa-life-ring
+fa-solid fa-lightbulb
+fa-solid fa-lines-leaning
+fa-solid fa-link
+fa-solid fa-link-slash
+fa-solid fa-lira-sign
+fa-solid fa-list
+fa-solid fa-list-check
+fa-solid fa-list-ol
+fa-solid fa-list-ul
+fa-solid fa-litecoin-sign
+fa-solid fa-location-arrow
+fa-solid fa-location-crosshairs
+fa-solid fa-location-dot
+fa-solid fa-location-pin
+fa-solid fa-location-pin-lock
+fa-solid fa-lock
+fa-solid fa-lock-open
+fa-solid fa-locust
+fa-solid fa-lungs
+fa-solid fa-lungs-virus
+fa-solid fa-m
+fa-solid fa-magnet
+fa-solid fa-magnifying-glass
+fa-solid fa-magnifying-glass-arrow-right
+fa-solid fa-magnifying-glass-chart
+fa-solid fa-magnifying-glass-dollar
+fa-solid fa-magnifying-glass-location
+fa-solid fa-magnifying-glass-minus
+fa-solid fa-magnifying-glass-plus
+fa-solid fa-manat-sign
+fa-solid fa-map
+fa-solid fa-map-location
+fa-solid fa-map-location-dot
+fa-solid fa-map-pin
+fa-solid fa-marker
+fa-solid fa-mars
+fa-solid fa-mars-and-venus
+fa-solid fa-mars-and-venus-burst
+fa-solid fa-mars-double
+fa-solid fa-mars-stroke
+fa-solid fa-mars-stroke-right
+fa-solid fa-mars-stroke-up
+fa-solid fa-martini-glass
+fa-solid fa-martini-glass-citrus
+fa-solid fa-martini-glass-empty
+fa-solid fa-mask
+fa-solid fa-mask-face
+fa-solid fa-mask-ventilator
+fa-solid fa-masks-theater
+fa-solid fa-mattress-pillow
+fa-solid fa-maximize
+fa-solid fa-medal
+fa-solid fa-memory
+fa-solid fa-menorah
+fa-solid fa-mercury
+fa-solid fa-message
+fa-solid fa-meteor
+fa-solid fa-microchip
+fa-solid fa-microphone
+fa-solid fa-microphone-lines
+fa-solid fa-microphone-lines-slash
+fa-solid fa-microphone-slash
+fa-solid fa-microscope
+fa-solid fa-mill-sign
+fa-solid fa-minimize
+fa-solid fa-minus
+fa-solid fa-mitten
+fa-solid fa-mobile
+fa-solid fa-mobile-button
+fa-solid fa-mobile-retro
+fa-solid fa-mobile-screen
+fa-solid fa-mobile-screen-button
+fa-solid fa-money-bill
+fa-solid fa-money-bill-1
+fa-solid fa-money-bill-1-wave
+fa-solid fa-money-bill-transfer
+fa-solid fa-money-bill-trend-up
+fa-solid fa-money-bill-wave
+fa-solid fa-money-bill-wheat
+fa-solid fa-money-bills
+fa-solid fa-money-check
+fa-solid fa-money-check-dollar
+fa-solid fa-monument
+fa-solid fa-moon
+fa-solid fa-mortar-pestle
+fa-solid fa-mosque
+fa-solid fa-mosquito
+fa-solid fa-mosquito-net
+fa-solid fa-motorcycle
+fa-solid fa-mound
+fa-solid fa-mountain
+fa-solid fa-mountain-city
+fa-solid fa-mountain-sun
+fa-solid fa-mug-hot
+fa-solid fa-mug-saucer
+fa-solid fa-music
+fa-solid fa-n
+fa-solid fa-naira-sign
+fa-solid fa-network-wired
+fa-solid fa-neuter
+fa-solid fa-newspaper
+fa-solid fa-not-equal
+fa-solid fa-notdef
+fa-solid fa-note-sticky
+fa-solid fa-notes-medical
+fa-solid fa-o
+fa-solid fa-object-group
+fa-solid fa-object-ungroup
+fa-solid fa-oil-can
+fa-solid fa-oil-well
+fa-solid fa-om
+fa-solid fa-otter
+fa-solid fa-outdent
+fa-solid fa-p
+fa-solid fa-pager
+fa-solid fa-paint-roller
+fa-solid fa-paintbrush
+fa-solid fa-palette
+fa-solid fa-pallet
+fa-solid fa-panorama
+fa-solid fa-paper-plane
+fa-solid fa-paperclip
+fa-solid fa-parachute-box
+fa-solid fa-paragraph
+fa-solid fa-passport
+fa-solid fa-paste
+fa-solid fa-pause
+fa-solid fa-paw
+fa-solid fa-peace
+fa-solid fa-pen
+fa-solid fa-pen-clip
+fa-solid fa-pen-fancy
+fa-solid fa-pen-nib
+fa-solid fa-pen-ruler
+fa-solid fa-pen-to-square
+fa-solid fa-pencil
+fa-solid fa-people-arrows
+fa-solid fa-people-carry-box
+fa-solid fa-people-group
+fa-solid fa-people-line
+fa-solid fa-people-pulling
+fa-solid fa-people-robbery
+fa-solid fa-people-roof
+fa-solid fa-pepper-hot
+fa-solid fa-percent
+fa-solid fa-person
+fa-solid fa-person-arrow-down-to-line
+fa-solid fa-person-arrow-up-from-line
+fa-solid fa-person-biking
+fa-solid fa-person-booth
+fa-solid fa-person-breastfeeding
+fa-solid fa-person-burst
+fa-solid fa-person-cane
+fa-solid fa-person-chalkboard
+fa-solid fa-person-circle-check
+fa-solid fa-person-circle-exclamation
+fa-solid fa-person-circle-minus
+fa-solid fa-person-circle-plus
+fa-solid fa-person-circle-question
+fa-solid fa-person-circle-xmark
+fa-solid fa-person-digging
+fa-solid fa-person-dots-from-line
+fa-solid fa-person-dress
+fa-solid fa-person-dress-burst
+fa-solid fa-person-drowning
+fa-solid fa-person-falling
+fa-solid fa-person-falling-burst
+fa-solid fa-person-half-dress
+fa-solid fa-person-harassing
+fa-solid fa-person-hiking
+fa-solid fa-person-military-pointing
+fa-solid fa-person-military-rifle
+fa-solid fa-person-military-to-person
+fa-solid fa-person-praying
+fa-solid fa-person-pregnant
+fa-solid fa-person-rays
+fa-solid fa-person-rifle
+fa-solid fa-person-running
+fa-solid fa-person-shelter
+fa-solid fa-person-skating
+fa-solid fa-person-skiing
+fa-solid fa-person-skiing-nordic
+fa-solid fa-person-snowboarding
+fa-solid fa-person-swimming
+fa-solid fa-person-through-window
+fa-solid fa-person-walking
+fa-solid fa-person-walking-arrow-loop-left
+fa-solid fa-person-walking-arrow-right
+fa-solid fa-person-walking-dashed-line-arrow-right
+fa-solid fa-person-walking-luggage
+fa-solid fa-person-walking-with-cane
+fa-solid fa-peseta-sign
+fa-solid fa-peso-sign
+fa-solid fa-phone
+fa-solid fa-phone-flip
+fa-solid fa-phone-slash
+fa-solid fa-phone-volume
+fa-solid fa-photo-film
+fa-solid fa-piggy-bank
+fa-solid fa-pills
+fa-solid fa-pizza-slice
+fa-solid fa-place-of-worship
+fa-solid fa-plane
+fa-solid fa-plane-arrival
+fa-solid fa-plane-circle-check
+fa-solid fa-plane-circle-exclamation
+fa-solid fa-plane-circle-xmark
+fa-solid fa-plane-departure
+fa-solid fa-plane-lock
+fa-solid fa-plane-slash
+fa-solid fa-plane-up
+fa-solid fa-plant-wilt
+fa-solid fa-plate-wheat
+fa-solid fa-play
+fa-solid fa-plug
+fa-solid fa-plug-circle-bolt
+fa-solid fa-plug-circle-check
+fa-solid fa-plug-circle-exclamation
+fa-solid fa-plug-circle-minus
+fa-solid fa-plug-circle-plus
+fa-solid fa-plug-circle-xmark
+fa-solid fa-plus
+fa-solid fa-plus-minus
+fa-solid fa-podcast
+fa-solid fa-poo
+fa-solid fa-poo-storm
+fa-solid fa-poop
+fa-solid fa-power-off
+fa-solid fa-prescription
+fa-solid fa-prescription-bottle
+fa-solid fa-prescription-bottle-medical
+fa-solid fa-print
+fa-solid fa-pump-medical
+fa-solid fa-pump-soap
+fa-solid fa-puzzle-piece
+fa-solid fa-q
+fa-solid fa-qrcode
+fa-solid fa-question
+fa-solid fa-quote-left
+fa-solid fa-quote-right
+fa-solid fa-r
+fa-solid fa-radiation
+fa-solid fa-radio
+fa-solid fa-rainbow
+fa-solid fa-ranking-star
+fa-solid fa-receipt
+fa-solid fa-record-vinyl
+fa-solid fa-rectangle-ad
+fa-solid fa-rectangle-list
+fa-solid fa-rectangle-xmark
+fa-solid fa-recycle
+fa-solid fa-registered
+fa-solid fa-repeat
+fa-solid fa-reply
+fa-solid fa-reply-all
+fa-solid fa-republican
+fa-solid fa-restroom
+fa-solid fa-retweet
+fa-solid fa-ribbon
+fa-solid fa-right-from-bracket
+fa-solid fa-right-left
+fa-solid fa-right-long
+fa-solid fa-right-to-bracket
+fa-solid fa-ring
+fa-solid fa-road
+fa-solid fa-road-barrier
+fa-solid fa-road-bridge
+fa-solid fa-road-circle-check
+fa-solid fa-road-circle-exclamation
+fa-solid fa-road-circle-xmark
+fa-solid fa-road-lock
+fa-solid fa-road-spikes
+fa-solid fa-robot
+fa-solid fa-rocket
+fa-solid fa-rotate
+fa-solid fa-rotate-left
+fa-solid fa-rotate-right
+fa-solid fa-route
+fa-solid fa-rss
+fa-solid fa-ruble-sign
+fa-solid fa-rug
+fa-solid fa-ruler
+fa-solid fa-ruler-combined
+fa-solid fa-ruler-horizontal
+fa-solid fa-ruler-vertical
+fa-solid fa-rupee-sign
+fa-solid fa-rupiah-sign
+fa-solid fa-s
+fa-solid fa-sack-dollar
+fa-solid fa-sack-xmark
+fa-solid fa-sailboat
+fa-solid fa-satellite
+fa-solid fa-satellite-dish
+fa-solid fa-scale-balanced
+fa-solid fa-scale-unbalanced
+fa-solid fa-scale-unbalanced-flip
+fa-solid fa-school
+fa-solid fa-school-circle-check
+fa-solid fa-school-circle-exclamation
+fa-solid fa-school-circle-xmark
+fa-solid fa-school-flag
+fa-solid fa-school-lock
+fa-solid fa-scissors
+fa-solid fa-screwdriver
+fa-solid fa-screwdriver-wrench
+fa-solid fa-scroll
+fa-solid fa-scroll-torah
+fa-solid fa-sd-card
+fa-solid fa-section
+fa-solid fa-seedling
+fa-solid fa-server
+fa-solid fa-shapes
+fa-solid fa-share
+fa-solid fa-share-from-square
+fa-solid fa-share-nodes
+fa-solid fa-sheet-plastic
+fa-solid fa-shekel-sign
+fa-solid fa-shield
+fa-solid fa-shield-cat
+fa-solid fa-shield-dog
+fa-solid fa-shield-halved
+fa-solid fa-shield-heart
+fa-solid fa-shield-virus
+fa-solid fa-ship
+fa-solid fa-shirt
+fa-solid fa-shoe-prints
+fa-solid fa-shop
+fa-solid fa-shop-lock
+fa-solid fa-shop-slash
+fa-solid fa-shower
+fa-solid fa-shrimp
+fa-solid fa-shuffle
+fa-solid fa-shuttle-space
+fa-solid fa-sign-hanging
+fa-solid fa-signal
+fa-solid fa-signature
+fa-solid fa-signs-post
+fa-solid fa-sim-card
+fa-solid fa-sink
+fa-solid fa-sitemap
+fa-solid fa-skull
+fa-solid fa-skull-crossbones
+fa-solid fa-slash
+fa-solid fa-sleigh
+fa-solid fa-sliders
+fa-solid fa-smog
+fa-solid fa-smoking
+fa-solid fa-snowflake
+fa-solid fa-snowman
+fa-solid fa-snowplow
+fa-solid fa-soap
+fa-solid fa-socks
+fa-solid fa-solar-panel
+fa-solid fa-sort
+fa-solid fa-sort-down
+fa-solid fa-sort-up
+fa-solid fa-spa
+fa-solid fa-spaghetti-monster-flying
+fa-solid fa-spell-check
+fa-solid fa-spider
+fa-solid fa-spinner
+fa-solid fa-splotch
+fa-solid fa-spoon
+fa-solid fa-spray-can
+fa-solid fa-spray-can-sparkles
+fa-solid fa-square
+fa-solid fa-square-arrow-up-right
+fa-solid fa-square-binary
+fa-solid fa-square-caret-down
+fa-solid fa-square-caret-left
+fa-solid fa-square-caret-right
+fa-solid fa-square-caret-up
+fa-solid fa-square-check
+fa-solid fa-square-envelope
+fa-solid fa-square-full
+fa-solid fa-square-h
+fa-solid fa-square-minus
+fa-solid fa-square-nfi
+fa-solid fa-square-parking
+fa-solid fa-square-pen
+fa-solid fa-square-person-confined
+fa-solid fa-square-phone
+fa-solid fa-square-phone-flip
+fa-solid fa-square-plus
+fa-solid fa-square-poll-horizontal
+fa-solid fa-square-poll-vertical
+fa-solid fa-square-root-variable
+fa-solid fa-square-rss
+fa-solid fa-square-share-nodes
+fa-solid fa-square-up-right
+fa-solid fa-square-virus
+fa-solid fa-square-xmark
+fa-solid fa-staff-snake
+fa-solid fa-stairs
+fa-solid fa-stamp
+fa-solid fa-stapler
+fa-solid fa-star
+fa-solid fa-star-and-crescent
+fa-solid fa-star-half
+fa-solid fa-star-half-stroke
+fa-solid fa-star-of-david
+fa-solid fa-star-of-life
+fa-solid fa-sterling-sign
+fa-solid fa-stethoscope
+fa-solid fa-stop
+fa-solid fa-stopwatch
+fa-solid fa-stopwatch-20
+fa-solid fa-store
+fa-solid fa-store-slash
+fa-solid fa-street-view
+fa-solid fa-strikethrough
+fa-solid fa-stroopwafel
+fa-solid fa-subscript
+fa-solid fa-suitcase
+fa-solid fa-suitcase-medical
+fa-solid fa-suitcase-rolling
+fa-solid fa-sun
+fa-solid fa-sun-plant-wilt
+fa-solid fa-superscript
+fa-solid fa-swatchbook
+fa-solid fa-synagogue
+fa-solid fa-syringe
+fa-solid fa-t
+fa-solid fa-table
+fa-solid fa-table-cells
+fa-solid fa-table-cells-column-lock
+fa-solid fa-table-cells-large
+fa-solid fa-table-cells-row-lock
+fa-solid fa-table-cells-row-unlock
+fa-solid fa-table-columns
+fa-solid fa-table-list
+fa-solid fa-table-tennis-paddle-ball
+fa-solid fa-tablet
+fa-solid fa-tablet-button
+fa-solid fa-tablet-screen-button
+fa-solid fa-tablets
+fa-solid fa-tachograph-digital
+fa-solid fa-tag
+fa-solid fa-tags
+fa-solid fa-tape
+fa-solid fa-tarp
+fa-solid fa-tarp-droplet
+fa-solid fa-taxi
+fa-solid fa-teeth
+fa-solid fa-teeth-open
+fa-solid fa-temperature-arrow-down
+fa-solid fa-temperature-arrow-up
+fa-solid fa-temperature-empty
+fa-solid fa-temperature-full
+fa-solid fa-temperature-half
+fa-solid fa-temperature-high
+fa-solid fa-temperature-low
+fa-solid fa-temperature-quarter
+fa-solid fa-temperature-three-quarters
+fa-solid fa-tenge-sign
+fa-solid fa-tent
+fa-solid fa-tent-arrow-down-to-line
+fa-solid fa-tent-arrow-left-right
+fa-solid fa-tent-arrow-turn-left
+fa-solid fa-tent-arrows-down
+fa-solid fa-tents
+fa-solid fa-terminal
+fa-solid fa-text-height
+fa-solid fa-text-slash
+fa-solid fa-text-width
+fa-solid fa-thermometer
+fa-solid fa-thumbs-down
+fa-solid fa-thumbs-up
+fa-solid fa-thumbtack
+fa-solid fa-thumbtack-slash
+fa-solid fa-ticket
+fa-solid fa-ticket-simple
+fa-solid fa-timeline
+fa-solid fa-toggle-off
+fa-solid fa-toggle-on
+fa-solid fa-toilet
+fa-solid fa-toilet-paper
+fa-solid fa-toilet-paper-slash
+fa-solid fa-toilet-portable
+fa-solid fa-toilets-portable
+fa-solid fa-toolbox
+fa-solid fa-tooth
+fa-solid fa-torii-gate
+fa-solid fa-tornado
+fa-solid fa-tower-broadcast
+fa-solid fa-tower-cell
+fa-solid fa-tower-observation
+fa-solid fa-tractor
+fa-solid fa-trademark
+fa-solid fa-traffic-light
+fa-solid fa-trailer
+fa-solid fa-train
+fa-solid fa-train-subway
+fa-solid fa-train-tram
+fa-solid fa-transgender
+fa-solid fa-trash
+fa-solid fa-trash-arrow-up
+fa-solid fa-trash-can
+fa-solid fa-trash-can-arrow-up
+fa-solid fa-tree
+fa-solid fa-tree-city
+fa-solid fa-triangle-exclamation
+fa-solid fa-trophy
+fa-solid fa-trowel
+fa-solid fa-trowel-bricks
+fa-solid fa-truck
+fa-solid fa-truck-arrow-right
+fa-solid fa-truck-droplet
+fa-solid fa-truck-fast
+fa-solid fa-truck-field
+fa-solid fa-truck-field-un
+fa-solid fa-truck-front
+fa-solid fa-truck-medical
+fa-solid fa-truck-monster
+fa-solid fa-truck-moving
+fa-solid fa-truck-pickup
+fa-solid fa-truck-plane
+fa-solid fa-truck-ramp-box
+fa-solid fa-tty
+fa-solid fa-turkish-lira-sign
+fa-solid fa-turn-down
+fa-solid fa-turn-up
+fa-solid fa-tv
+fa-solid fa-u
+fa-solid fa-umbrella
+fa-solid fa-umbrella-beach
+fa-solid fa-underline
+fa-solid fa-universal-access
+fa-solid fa-unlock
+fa-solid fa-unlock-keyhole
+fa-solid fa-up-down
+fa-solid fa-up-down-left-right
+fa-solid fa-up-long
+fa-solid fa-up-right-and-down-left-from-center
+fa-solid fa-up-right-from-square
+fa-solid fa-upload
+fa-solid fa-user
+fa-solid fa-user-astronaut
+fa-solid fa-user-check
+fa-solid fa-user-clock
+fa-solid fa-user-doctor
+fa-solid fa-user-gear
+fa-solid fa-user-graduate
+fa-solid fa-user-group
+fa-solid fa-user-injured
+fa-solid fa-user-large
+fa-solid fa-user-large-slash
+fa-solid fa-user-lock
+fa-solid fa-user-minus
+fa-solid fa-user-ninja
+fa-solid fa-user-nurse
+fa-solid fa-user-pen
+fa-solid fa-user-plus
+fa-solid fa-user-secret
+fa-solid fa-user-shield
+fa-solid fa-user-slash
+fa-solid fa-user-tag
+fa-solid fa-user-tie
+fa-solid fa-user-xmark
+fa-solid fa-users
+fa-solid fa-users-between-lines
+fa-solid fa-users-gear
+fa-solid fa-users-line
+fa-solid fa-users-rays
+fa-solid fa-users-rectangle
+fa-solid fa-users-slash
+fa-solid fa-users-viewfinder
+fa-solid fa-utensils
+fa-solid fa-v
+fa-solid fa-van-shuttle
+fa-solid fa-vault
+fa-solid fa-vector-square
+fa-solid fa-venus
+fa-solid fa-venus-double
+fa-solid fa-venus-mars
+fa-solid fa-vest
+fa-solid fa-vest-patches
+fa-solid fa-vial
+fa-solid fa-vial-circle-check
+fa-solid fa-vial-virus
+fa-solid fa-vials
+fa-solid fa-video
+fa-solid fa-video-slash
+fa-solid fa-vihara
+fa-solid fa-virus
+fa-solid fa-virus-covid
+fa-solid fa-virus-covid-slash
+fa-solid fa-virus-slash
+fa-solid fa-viruses
+fa-solid fa-voicemail
+fa-solid fa-volcano
+fa-solid fa-volleyball
+fa-solid fa-volume-high
+fa-solid fa-volume-low
+fa-solid fa-volume-off
+fa-solid fa-volume-xmark
+fa-solid fa-vr-cardboard
+fa-solid fa-w
+fa-solid fa-walkie-talkie
+fa-solid fa-wallet
+fa-solid fa-wand-magic
+fa-solid fa-wand-magic-sparkles
+fa-solid fa-wand-sparkles
+fa-solid fa-warehouse
+fa-solid fa-water
+fa-solid fa-water-ladder
+fa-solid fa-wave-square
+fa-solid fa-web-awesome
+fa-solid fa-weight-hanging
+fa-solid fa-weight-scale
+fa-solid fa-wheat-awn
+fa-solid fa-wheat-awn-circle-exclamation
+fa-solid fa-wheelchair
+fa-solid fa-wheelchair-move
+fa-solid fa-whiskey-glass
+fa-solid fa-wifi
+fa-solid fa-wind
+fa-solid fa-window-maximize
+fa-solid fa-window-minimize
+fa-solid fa-window-restore
+fa-solid fa-wine-bottle
+fa-solid fa-wine-glass
+fa-solid fa-wine-glass-empty
+fa-solid fa-won-sign
+fa-solid fa-worm
+fa-solid fa-wrench
+fa-solid fa-x
+fa-solid fa-x-ray
+fa-solid fa-xmark
+fa-solid fa-xmarks-lines
+fa-solid fa-y
+fa-solid fa-yen-sign
+fa-solid fa-yin-yang
+fa-solid fa-z"""
+
+MATERIAL: list[str] = [f"ms:{n}" for n in _MATERIAL.split()]
+FONTAWESOME: list[str] = [f"fa:{c}" for c in _FONTAWESOME.splitlines() if c]
+ALL: list[str] = MATERIAL + FONTAWESOME

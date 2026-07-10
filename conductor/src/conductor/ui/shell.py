@@ -4,6 +4,7 @@ from nicegui import app, ui
 from starlette.requests import Request
 
 from conductor import __version__
+from conductor.ui import kit
 
 # label, path, Material icon
 NAV = (
@@ -14,20 +15,21 @@ NAV = (
     ("Jobs", "/jobs", "list_alt"),
 )
 
-# ── theme (dark grey surfaces, orange accent) ───────────────────────────────────
-ORANGE = "#F97316"
-HEADER_BG = "#161619"  # darker grey than the page/surfaces
+HEADER_BG = kit.PAGE_BG
 
 
 def _theme() -> None:
     ui.dark_mode(True)
     ui.colors(
-        primary=ORANGE,
-        secondary=ORANGE,
-        accent=ORANGE,
-        dark="#2A2A2E",  # cards, drawer, panels
-        dark_page="#1E1E22",  # page background
+        primary=kit.ORANGE,
+        secondary=kit.ORANGE,
+        accent=kit.ORANGE,
+        positive=kit.GREEN,
+        negative=kit.RED,
+        dark=kit.SURFACE,  # cards, drawer, panels
+        dark_page=kit.PAGE_BG,  # page background
     )
+    kit.load_head()
 
 
 # ── shell (header + collapsible drawer) ─────────────────────────────────────────

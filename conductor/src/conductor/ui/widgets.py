@@ -86,6 +86,17 @@ def _input(field: ConfigFieldView) -> ValueElement[Any]:
     return box
 
 
+def github_repo_field(options: list[str], value: str = "") -> ValueElement[Any]:
+    """Repo picker shared by the wizard and the projects page: a live-fetched, typeable select when
+    the token could list repos, else a free-typed owner/name input (the documented fallback)."""
+    if options:
+        opts = list(dict.fromkeys([*options, *([value] if value else [])]))
+        return ui.select(
+            options=opts, value=value or None, label="Repository (owner/name)", with_input=True
+        ).classes("w-full")
+    return ui.input(label="Repository (owner/name)", value=value).classes("w-full")
+
+
 def _payload_url_field(url: str) -> None:
     """Read-only payload URL input with a copy-to-clipboard button in its append slot."""
 

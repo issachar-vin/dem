@@ -3,8 +3,10 @@ from __future__ import annotations
 import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 from nicegui import ui
+from nicegui.elements.mixins.value_element import ValueElement
 from starlette.requests import Request
 
 from conductor import catalog, plane, verify
@@ -12,6 +14,7 @@ from conductor.mappings import ProjectMappingView, RepoMappingView
 from conductor.models import WorkflowState
 from conductor.plane import PlaneError
 from conductor.store import ConfigFieldView
+from conductor.ui import kit
 from conductor.ui.context import get_context
 from conductor.ui.pages import _render_state_form
 from conductor.ui.shell import _layout, _origin, _page
@@ -22,6 +25,7 @@ from conductor.ui.widgets import (
     _payload_url_field,
     _Section,
     _test_row,
+    github_repo_field,
 )
 
 STEP_ORDER = ("claude", "plane", "github", "notifications", "advanced")
@@ -411,26 +415,12 @@ async def _github_panel(tabs: ui.tabs, origin: str) -> None:
     _step_footer(tabs, steps["github"])
 
 
-ROLE_CHOICES = ("frontend", "backend", "other")
-
-
 @dataclass
 class _RepoRow:
     exp: ui.expansion
     role: ui.select
-    repo: ui.select | ui.input
+    repo: ValueElement[Any]
     branch: ui.input
-
-
-def _repo_field(options: list[str], value: str = "") -> ui.select | ui.input:
-    """Repo picker: a live-fetched select (typeable) when the token could list repos, else a
-    free-typed owner/name input as the documented fallback."""
-    if options:
-        opts = list(dict.fromkeys([*options, *([value] if value else [])]))
-        return ui.select(
-            options=opts, value=value or None, label="Repository (owner/name)", with_input=True
-        ).classes("w-full")
-    return ui.input(label="Repository (owner/name)", value=value).classes("w-full")
 
 
 def _project_section(
@@ -460,10 +450,14 @@ def _project_section(
                 repo_col,
                 ui.expansion(title, icon="folder", value=opened).classes("w-full") as exp,
             ):
-                role_in = ui.select(options=list(ROLE_CHOICES), value=role, label="Role").classes(
-                    "w-full"
-                )
-                repo_in = _repo_field(list(repo_defaults), repo)
+                role_in = ui.select(
+                    options=list(kit.ROLE_SUGGESTIONS),
+                    value=role or None,
+                    label="Role (e.g. frontend, backend, docs)",
+                    with_input=True,
+                    new_value_mode="add-unique",
+                ).classes("w-full")
+                repo_in = github_repo_field(list(repo_defaults), repo)
                 branch_in = ui.input(label="Base branch", value=branch or default_branch).classes(
                     "w-full"
                 )
@@ -473,7 +467,7 @@ def _project_section(
                     def seed_branch(
                         _: object,
                         target: ui.input = branch_in,
-                        picker: ui.select | ui.input = repo_in,
+                        picker: ValueElement[Any] = repo_in,
                     ) -> None:
                         target.value = repo_defaults.get(str(picker.value or ""), default_branch)
 
@@ -500,17 +494,23 @@ def _project_section(
         desired: list[tuple[str, str, str]] = []
         for row in rows:
             repo = (row.repo.value or "").strip()
+            role = str(row.role.value or "").strip().lower()
             if not repo:
                 continue
+            if not role:
+                ui.notify(f"{name}: every repository needs an identifier.", color="negative")
+                return False
             if not _is_owner_name(repo):
                 ui.notify(f"'{repo}' must be in owner/name form.", color="negative")
                 return False
-            desired.append((str(row.role.value), repo, str(row.branch.value or "main")))
+            desired.append((role, repo, str(row.branch.value or "main")))
 
         roles = [d[0] for d in desired]
-        dupes = {r for r in roles if r != "other" and roles.count(r) > 1}
+        dupes = {r for r in roles if roles.count(r) > 1}
         if dupes:
-            ui.notify(f"{name}: duplicate role(s) {', '.join(sorted(dupes))}.", color="negative")
+            ui.notify(
+                f"{name}: duplicate identifier(s) {', '.join(sorted(dupes))}.", color="negative"
+            )
             return False
 
         mappings = get_context().mappings
@@ -628,8 +628,10 @@ async def wizard_page(request: Request) -> None:
     start = next((str(s.step) for s in status.steps if not s.complete), "claude")
 
     with _page():
-        ui.label("Setup wizard").classes("text-2xl font-bold")
-        ui.label("Work through each tab; fields unlock as you complete the one before.")
+        ui.label("Setup wizard").classes("text-2xl font-bold").style(f"color:{kit.TEXT}")
+        ui.label("Work through each tab; fields unlock as you complete the one before.").style(
+            f"color:{kit.MUTED}"
+        )
         with ui.tabs().classes("w-full") as tabs:
             for step in STEP_ORDER:
                 ui.tab(step, label=step.title(), icon=_step_icon(bool(step_complete.get(step))))

@@ -13,6 +13,7 @@ class RepoMappingView(BaseModel):
     key: str
     github_repo: str
     base_branch: str
+    icon: str | None = None
     source: str
 
 
@@ -28,6 +29,7 @@ class ProjectMappingView(BaseModel):
     plane_project_id: str
     enabled: bool
     has_webhook_secret: bool
+    icon: str | None
     source: str
     repos: list[RepoMappingView]
 
@@ -56,6 +58,7 @@ class MappingStore:
                     key=r.key,
                     github_repo=r.github_repo,
                     base_branch=r.base_branch,
+                    icon=r.icon,
                     source=r.source,
                 )
             )
@@ -64,6 +67,7 @@ class MappingStore:
                 plane_project_id=p.plane_project_id,
                 enabled=p.enabled,
                 has_webhook_secret=bool(p.webhook_secret),
+                icon=p.icon,
                 source=p.source,
                 repos=by_project.get(p.plane_project_id, []),
             )
@@ -76,10 +80,11 @@ class MappingStore:
         *,
         enabled: bool = False,
         webhook_secret: str | None = None,
+        icon: str | None = None,
         source: str = "ui",
     ) -> None:
-        """Upsert a project's project-level fields. `webhook_secret` is only written when a
-        non-None value is passed, so toggling `enabled` never wipes an existing secret."""
+        """Upsert a project's project-level fields. `webhook_secret` and `icon` are only written
+        when a non-None value is passed, so toggling `enabled` never wipes either."""
         async with self._sessionmaker() as session:
             row = await session.get(ProjectMapping, project_id)
             if row is None:
@@ -89,6 +94,8 @@ class MappingStore:
             row.source = source
             if webhook_secret is not None:
                 row.webhook_secret = self._box.encrypt(webhook_secret)
+            if icon is not None:
+                row.icon = icon
             await session.commit()
 
     async def get_webhook_secret(self, project_id: str) -> str | None:
@@ -154,6 +161,7 @@ class MappingStore:
                     key=r.key,
                     github_repo=r.github_repo,
                     base_branch=r.base_branch,
+                    icon=r.icon,
                     source=r.source,
                 )
                 for r in rows
@@ -166,8 +174,11 @@ class MappingStore:
         *,
         github_repo: str,
         base_branch: str = "main",
+        icon: str | None = None,
         source: str = "ui",
     ) -> None:
+        """Upsert a repo. `icon` is only written when provided, so updating a repo's branch (or a
+        wizard re-save) never wipes a previously picked icon; pass it to change the icon."""
         async with self._sessionmaker() as session:
             existing = (
                 await session.execute(
@@ -184,6 +195,7 @@ class MappingStore:
                         key=key,
                         github_repo=github_repo,
                         base_branch=base_branch,
+                        icon=icon,
                         source=source,
                     )
                 )
@@ -191,6 +203,8 @@ class MappingStore:
                 existing.github_repo = github_repo
                 existing.base_branch = base_branch
                 existing.source = source
+                if icon is not None:
+                    existing.icon = icon
             await session.commit()
 
     async def delete_repo(self, project_id: str, key: str) -> bool:
