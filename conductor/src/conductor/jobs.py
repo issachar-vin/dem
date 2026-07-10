@@ -5,10 +5,10 @@ state) a state-machine concern, never an intake concern."""
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import CursorResult, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -89,6 +89,36 @@ async def enqueue_job(
             await session.rollback()
             return None
     return job
+
+
+async def claim_job(sessionmaker: async_sessionmaker[AsyncSession], job_id: int) -> bool:
+    """Atomically move a job queued → running. Returns False if another worker already claimed it
+    (the guard makes concurrent workers safe even though v1 runs a single serial worker)."""
+    async with sessionmaker() as session:
+        result = cast(
+            CursorResult[Any],
+            await session.execute(
+                update(Job)
+                .where(Job.id == job_id, Job.status == JobStatus.QUEUED)
+                .values(status=JobStatus.RUNNING, attempts=Job.attempts + 1)
+            ),
+        )
+        await session.commit()
+        return result.rowcount == 1
+
+
+async def complete_job(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    job_id: int,
+    *,
+    status: JobStatus,
+    error: str | None = None,
+) -> None:
+    async with sessionmaker() as session:
+        await session.execute(
+            update(Job).where(Job.id == job_id).values(status=status, error=error)
+        )
+        await session.commit()
 
 
 async def list_jobs(

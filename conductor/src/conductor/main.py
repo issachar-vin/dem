@@ -7,7 +7,10 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI
 
-from conductor import __version__, poller, telemetry, ui
+from conductor import __version__, poller, scheduler, telemetry, ui
+from conductor.agents.dispatcher import Dispatcher
+from conductor.agents.dockerctl import default_factory
+from conductor.agents.volumes import VolumeManager
 from conductor.api import webhooks as webhooks_api
 from conductor.auth import AuthStore
 from conductor.config import BootstrapSettings, get_settings
@@ -15,6 +18,7 @@ from conductor.crypto import SecretBox
 from conductor.db import create_engine, create_sessionmaker
 from conductor.mappings import MappingStore
 from conductor.store import ConfigStore
+from conductor.tickets import TicketStore
 
 logger = logging.getLogger("conductor")
 
@@ -68,12 +72,37 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         store=store, mappings=mappings, sessionmaker=sessionmaker
     )
 
+    resolved = await store.resolved()
+    docker_factory = default_factory(resolved.get("docker_host"))
+    dispatcher = Dispatcher(
+        store=store,
+        docker_factory=docker_factory,
+        max_concurrent=_int(resolved.get("max_concurrent_agents"), 1),
+    )
+    sched = scheduler.Scheduler(
+        sessionmaker=sessionmaker,
+        store=store,
+        mappings=mappings,
+        tickets=TicketStore(sessionmaker),
+        dispatcher=dispatcher,
+        volumes=VolumeManager(store=store, docker_factory=docker_factory),
+    )
+    sched_task = await scheduler.start(sched)
+
     telemetry.build_info.labels(version=__version__).set(1)
     try:
         yield
     finally:
+        await scheduler.stop(sched_task)
         await poller.stop(poll_task)
         await engine.dispose()
+
+
+def _int(value: str | None, default: int) -> int:
+    try:
+        return int(value) if value else default
+    except ValueError:
+        return default
 
 
 def create_app(settings: BootstrapSettings | None = None) -> FastAPI:
