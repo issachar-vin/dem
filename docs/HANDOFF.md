@@ -13,7 +13,7 @@ board. **Next is Phase 5** (the real role prompts + review loop), which also clo
 Phase-3 acceptance item ("merged PR → cleanup job *runs*") — no ticket carries a `pr_number` until
 Phase 5 creates PRs.
 
-**Nav icon states (PR #49, open):** follow-up polish on PR #48's collapsed sidebar. Active page no
+**Nav icon states (PR #49, merged):** follow-up polish on PR #48's collapsed sidebar. Active page no
 longer shows a background pill when the drawer is collapsed — only the orange icon signals it (the
 pill only makes sense next to a label, which mini mode hides). Hovering another icon in collapsed
 mode also shows no background (Quasar renders hover as a separate `.q-focus-helper` overlay, not
