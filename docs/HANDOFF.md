@@ -13,7 +13,16 @@ board. **Next is Phase 5** (the real role prompts + review loop), which also clo
 Phase-3 acceptance item ("merged PR → cleanup job *runs*") — no ticket carries a `pr_number` until
 Phase 5 creates PRs.
 
-**Console redesign (PR #48, open):** the whole console rebuilt to `docs/UI_DESIGN.md` ("Modern
+**Nav icon states (PR #49, open):** follow-up polish on PR #48's collapsed sidebar. Active page no
+longer shows a background pill when the drawer is collapsed — only the orange icon signals it (the
+pill only makes sense next to a label, which mini mode hides). Hovering another icon in collapsed
+mode also shows no background (Quasar renders hover as a separate `.q-focus-helper` overlay, not
+the item's own `background-color` — neutralized directly in `kit.py`). Inactive icons darkened
+(`MUTED` → `FAINT`); hovering a non-active icon now lights it white via a `!important` CSS rule
+(icon color is set inline per item so it degrades correctly with no CSS, which is why hover needs
+`!important` to win); the active icon stays orange regardless of hover. VERSION 0.4.10.
+
+**Console redesign (PR #48, merged):** the whole console rebuilt to `docs/UI_DESIGN.md` ("Modern
 Dark Developer SaaS" — Linear/Vercel-style) and the **original UI removed**; the redesigned pages
 serve the root paths. `ui/kit.py` is now the full design kit (tokens, global stylesheet, **Lucide**
 webfont for interface chrome — FA + Material Symbols stay loaded so stored `fa:`/`ms:` icon-picker
