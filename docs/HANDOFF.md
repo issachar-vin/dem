@@ -13,7 +13,17 @@ board. **Next is Phase 5** (the real role prompts + review loop), which also clo
 Phase-3 acceptance item ("merged PR → cleanup job *runs*") — no ticket carries a `pr_number` until
 Phase 5 creates PRs.
 
-**Live-hardening + wizard PR (open):** found while running the pipeline on barad-dur —
+**Console UI makeover (PR #47, open):** Phase-4-closing visual pass. A shared design system
+(`ui/kit.py`: tokens, Font Awesome + Inter + Material Symbols, panel/section_header/stat_tile/pill/
+icon_tile/kebab/buttons); the projects page rebuilt to the mockup (project card, stat tiles, repo
+rows with a ⋮ kebab, dashed add-form); **searchable icon pickers** for both repo and project icons
+over a bundled 6,326-icon catalog (`ui/icons_catalog.py`), persisted via new `repo_mappings.icon` /
+`project_mappings.icon` columns (migrations `d4e5…` / `e5f6…`); and **wizard↔config parity** by
+sharing widgets (`github_repo_field`, `_test_row`, `_Section.model`, mode-driven field visibility).
+`"other"` role dropped everywhere (identifier is a free combobox). Icons don't round-trip through
+`targets.yml` yet (cosmetic). VERSION 0.4.8.
+
+**Live-hardening + wizard (merged, PR #46):** found while running the pipeline on barad-dur —
 - **Board mirroring**: the scheduler now moves the Plane card `ready_for_dev → in_progress →
   in_review` (`scheduler._set_state` → `plane.set_state`, best-effort; unmapped state / Plane error
   logs and continues; no self-trigger since only `ready_for_dev` fires a job).
