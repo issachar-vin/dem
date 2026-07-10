@@ -4,51 +4,56 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.4.1):** **Phases 1–3 DONE & merged. Phase 4 IN PROGRESS — Part 1 (agent image)
-DONE & merged (PR #39); Part 2 (dispatcher + volumes + contracts) DONE, PR #40 open; Part 3
-(scheduler) remains.** The conductor turns Plane/GitHub webhooks (or GitHub polls) into deduped
-`Job`s on the console's **Jobs** page; **nothing consumes those Jobs yet — that is Part 3.** The
-Phase-3 acceptance item still open ("merged PR → cleanup job *runs*") needs the Job consumer built
-in Part 3.
+**Status (VERSION 0.4.2):** **Phases 1–3 DONE & merged. Phase 4 nearly done — Part 1 (agent image,
+PR #39) & Part 2 (dispatcher + volumes + contracts, PR #40) DONE & merged; Part 3 (scheduler + Job
+consumer) DONE, PR #41 open.** The conductor now consumes intake `Job`s: the scheduler dispatches an
+engineer container for a ticket entering `ready_for_dev`. **Next is Phase 5** (the real role prompts
++ review loop), which also closes the still-open Phase-3 acceptance item ("merged PR → cleanup job
+*runs*") — no ticket carries a `pr_number` until Phase 5 creates PRs.
 
-**Part 1 delivered** the `agent/` image (`Dockerfile` + `entrypoint.sh` + `seed-claude.json`) and
-`make agent-smoke`, accepted live (containerized `claude -p`, same-`session_id` resume off the state
-volume, kill-on-timeout).
+`agent/` image (Part 1): `Dockerfile` + `entrypoint.sh` + `seed-claude.json` + `make agent-smoke`,
+accepted live (containerized `claude -p`, same-`session_id` resume, kill-on-timeout).
 
-**Part 2 delivered** the `conductor/agents/` package (PR #40): `dockerctl.py` (whole Docker surface
-behind Protocols + `run_container` with `ContainerFailed`/`ContainerTimeout`→kill), `dispatcher.py`
-(`docker run` construction, per-role `asyncio.Semaphore`, envelope parse), `volumes.py`
-(`VolumeManager.prepare/destroy` — clone + `ticket/<id>` branch + git identity + **the carry-in
-chown fix** + token stripped from the stored remote), `contracts.py` (Pydantic plan/result/verdict +
-`MalformedAgentOutput`), `roles.py`; plus `github.get_user()` for derive-from-token authorship. Not
-wired into the app lifespan yet — Part 3 constructs and drives these. No runtime-observable change on
-its own. Optional pre-Part-3 confidence check: a `make dispatch-smoke` (real Docker socket +
-`prepare` → `Dispatcher.run` → `destroy`) — not built; add if wanted.
+`conductor/agents/` package (Part 2): `dockerctl.py` (Docker surface behind Protocols +
+`run_container` with `ContainerFailed`/`ContainerTimeout`→kill), `dispatcher.py` (`docker run`
+construction, per-role `asyncio.Semaphore`, envelope parse), `volumes.py` (`VolumeManager.prepare/
+destroy` — clone + `ticket/<id>` branch + git identity + carry-in chown fix + token stripped from
+the stored remote), `contracts.py` (Pydantic plan/result/verdict + `MalformedAgentOutput`),
+`roles.py`; plus `github.get_user()` for derive-from-token authorship.
+
+Scheduler (Part 3, PR #41): `scheduler.py` worker loop (start/stop mirroring `poller.py`, wired into
+the lifespan) selects the next queued **engineer** job — **in-flight-first then oldest-created**,
+`_is_blocked` is a **Phase-5 seam** (returns False; the planner doesn't create Plane blocking
+relations until Phase 5, and the CE relations endpoint must be validated live first) — claims it
+atomically (`jobs.claim_job`/`complete_job`), then drives get-or-create ticket → `prepare` →
+`Dispatcher.run(engineer, **placeholder prompt**)` → record `session_id` → ticket `in_review` → job
+`done`; failure → job `failed` + ticket `error`. `tickets.py` = small `TicketStore`. Non-engineer
+triggers (planner, GitHub) are left **queued** for Phase 5. **Deploy note:** the conductor container
+needs the Docker socket mounted and the `agent_image` present on that host, or every dispatch fails;
+each dispatch leaves `psa-*-<id>` volumes behind (cleanup is Phase 5) and spends tokens.
 
 ---
 
-## ▶ RESUME: Phase 4 Part 3 — scheduler & Job consumer
+## ▶ RESUME: Phase 5 — the four role prompts & review loop
 
-Authoritative spec: `docs/PLAN.md` → **Phase 4**, plus the scheduler folded in from **"Work intake,
-ordering & concurrency"**. This is where the intake Jobs finally get consumed. **Part 2 (below) is
-done — its dispatcher/volumes/contracts are the building blocks Part 3 wires up.**
+Authoritative spec: `docs/PLAN.md` → **Phase 5** (+ the loop mechanics in **"Work intake, ordering &
+concurrency"**). Part 3's scheduler is the consumer this builds on — it already dispatches the
+engineer with a *placeholder* prompt; Phase 5 makes it real. Roughly:
 
-3. **Scheduler / state machine** (deferred out of Phase 3 step 6) — selects work from the Job queue:
-   **in-flight-first** (`in_progress`/`in_review`/`changes_requested`) then **oldest-created**
-   `ready_for_dev`; **Plane blocking-relationship** eligibility gate (skip a ticket blocked by a
-   not-yet-`done` issue); **`MAX_CONCURRENT_AGENTS=1`** per-role semaphore; **no auto-merge**.
-   Construct `Dispatcher` + `VolumeManager` in the app lifespan (docker factory from `docker_host`),
-   add a queue-worker loop mirroring `poller.py`'s start/stop pattern, and drive
-   `VolumeManager.prepare` → `Dispatcher.run` → contract parse → `VolumeManager.destroy`. Actual role
-   prompts and the review loop are Phase 5; Part 3 can dispatch the engineer with a placeholder
-   prompt to prove the consumer end-to-end.
-
-**Part 2 (DONE, PR #40) — dispatcher + volume lifecycle + contracts.** `docker run` construction
-(per-ticket volumes `psa-repo-<id>` / `psa-claude-<id>`, role env incl. OTel attrs, mem/CPU limits,
-named container, hard timeout → kill), volume lifecycle (create + `git clone --depth 50` +
-`ticket/<id>` branch; destroy on cleanup), and agent output contracts as Pydantic (plan JSON;
-engineer result + session_id; reviewer/QA verdict) with the malformed-output re-prompt-once policy
-signalled via `MalformedAgentOutput`.
+- **Prompt files** `agent/prompts/{planner,engineer,reviewer,qa}.md` with explicit output contracts
+  (the Pydantic models in `agents/contracts.py` already define the shapes).
+- **Engineer**: replace the placeholder prompt with the real one (ticket body + criteria, findings
+  JSON on resume); conductor does push + PR creation afterward (credentialed step stays out of the
+  agent) → ticket `in_review`.
+- **Reviewer + QA**: run after PR creation, post findings as **ticket comments**, verdict JSON parsed
+  via `contracts.parse_verdict` (this is where the **re-prompt-once** `MalformedAgentOutput` policy
+  gets exercised); any fail → `changes_requested`, `loop_round++`, diff-hash **stall check**, resume
+  the engineer (`claude -p --resume <engineer_session_id>` — already stored on the ticket) → re-run.
+  Both pass → `ready_for_approval` + notify; **no auto-merge**.
+- **Planner**: consume the `trigger=="planner"` jobs Part 3 leaves queued — decompose the epic, create
+  Plane issues, set blocking relationships (then **wire `_is_blocked`** in `scheduler.py`), drop into
+  `ready_for_dev`.
+- **Cleanup**: merged-PR job → `VolumeManager.destroy` (closes the open Phase-3 acceptance item).
 
 **Decided for Phase 4 — git commit authorship (do NOT add manual name/email fields).** Derive
 `user.name`/`user.email` from `GET /user` on the existing `github_token` (returns `login`, `name`,
