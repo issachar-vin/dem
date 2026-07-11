@@ -416,18 +416,14 @@ def _add_repo_form(pid: str, repo_defaults: dict[str, str]) -> ui.element:
             with (
                 ui.column().classes("grow"),
                 widgets.labeled(
-                    "Repository Identifier",
-                    helper="Unique name used by the system. Examples: frontend, backend, docs",
+                    "Repository key",
+                    helper="Any short name you choose (e.g. ui, backend, docs, mobile). Agents use "
+                    "this key to decide which repo a ticket needs — so name it meaningfully.",
                 ),
             ):
-                # A combobox: `frontend`/`backend` are suggestions but any value can be typed.
                 key_in = (
-                    ui.select(
-                        options=list(kit.ROLE_SUGGESTIONS),
-                        with_input=True,
-                        new_value_mode="add-unique",
-                    )
-                    .props("outlined dense options-dark")
+                    ui.input(placeholder="e.g. ui, backend, docs")
+                    .props("outlined dense")
                     .classes("w-full v2-field")
                 )
             with ui.column().classes("grow"):
