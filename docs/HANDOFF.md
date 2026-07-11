@@ -4,7 +4,7 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.9):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+**Status (VERSION 0.5.10):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
 full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
 wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove: **PR #55 (merged)** —
 empty-diff/needs-input parking, clearer GitHub 422s, console stop-job; **PR #56 (merged)** —
@@ -14,19 +14,28 @@ viewer, EDT/EST display; **PR #58 (merged)** — live agent monitoring, agent wr
 resume-parked-ticket-with-memory, and (still being added to the same PR) the event timeline + job
 failure reasons + multi-repo router (below). Phases 1–4 provenance (PRs #39–#50) in the fold below.
 
-**PR #60 (open, VERSION 0.5.9) — in progress, multiple parts on one PR:**
-- **Resume parked ticket with memory (done):** a parked ticket in a resumable status
-  (`awaiting_human`/`no_changes`) with a saved `engineer_session_id` and surviving `psa-repo-*` +
-  `psa-claude-*` volumes, moved back to `ready_for_dev`, now **resumes** its Claude session
-  (`--resume`) over the existing volumes instead of wiping + re-cloning + rescanning. The human's
-  answer is pulled from the Plane comment thread (`PlaneClient.list_comments`) into a new
-  `engineer_resume` prompt. Falls back to a fresh build if the volumes were pruned
-  (`VolumeManager.has_session` gates it). `_build(ctx, resume=…)` carries both paths.
-- **Still to add on this PR:** (a) **event timeline** — conductor pipeline steps (prep repos,
-  determined repos, opened PR, review passed) recorded and interleaved with agent runs in the run
-  window; (b) **job failure reasons** — surface `Job.error` on hover of the failed badge in the jobs
-  table + in the job live view; (c) **multi-repo smart router** — text-only router agent (ticket +
-  repo catalog → repo keys; no GitHub access) + repo descriptions + multi-PR-per-ticket machinery.
+**Resume parked ticket with memory (PR #60, merged, VERSION 0.5.9):** a parked ticket in a resumable
+status (`awaiting_human`/`no_changes`) with a saved `engineer_session_id` and surviving `psa-repo-*`
++ `psa-claude-*` volumes, moved back to `ready_for_dev`, now **resumes** its Claude session
+(`--resume`) over the existing volumes instead of wiping + re-cloning + rescanning. The human's answer
+is pulled from the Plane comment thread (`PlaneClient.list_comments`) into a new `engineer_resume`
+prompt. Falls back to a fresh build if the volumes were pruned (`VolumeManager.has_session` gates it).
+`_build(ctx, resume=…)` carries both paths.
+
+**PR #61 (open, VERSION 0.5.10) — event timeline + failure reasons done; router being added to the
+same PR:**
+- **Event timeline (done):** new `job_events` table + store; the scheduler records each pipeline step
+  (prep repo, resuming, opened PR, review passed/changes/stalled, parked, decomposed epic, merged,
+  failed) with a level. The console run modal is now a **timeline** — events interleaved with agent
+  runs by timestamp (colored markers between the run cards). Events cascade-delete with the job.
+- **Job failure reasons (done):** `Job.error` shows on hover of the failed/stopped badge in the jobs
+  table, and the failure is also a red timeline event in the job view.
+- **Still to add on this PR — multi-repo smart router:** a text-only router agent (ticket + repo
+  catalog → repo keys; **no GitHub access** — conductor still does the credentialed clone) that
+  decides which repo(s) a ticket needs; an optional repo **description** field (RepoMapping + console)
+  for routing quality; and the **multi-PR-per-ticket** machinery a cross-repo ticket needs
+  (`Ticket.pr_number` → many; review loop / cleanup / webhook routing per PR). The router's
+  "Determined repos needed: …" step emits into the new timeline.
 **Next up:** the **multi-repo smart router** (decided) — a text-only router agent (ticket + repo
 catalog → JSON list of repo keys; no GitHub access, conductor still does the credentialed clone),
 an optional repo **description** field for routing, and the **multi-PR-per-ticket** machinery a
