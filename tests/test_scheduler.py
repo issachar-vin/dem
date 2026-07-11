@@ -71,13 +71,18 @@ class FakeDispatcher:
 
 class FakeVolumes:
     def __init__(
-        self, *, diff_hashes: list[str] | None = None, commit_count: int = 1
+        self,
+        *,
+        diff_hashes: list[str] | None = None,
+        commit_count: int = 1,
+        session_exists: bool = False,
     ) -> None:
         self.prepared: list[dict[str, str]] = []
         self.pushed: list[dict[str, str]] = []
         self.planner_prepared: list[dict[str, Any]] = []
         self.destroyed: list[str] = []
         self._commit_count = commit_count
+        self._session_exists = session_exists
         # Default hashes are unique per call so the stall detector never fires; a test that wants a
         # stall passes repeated values.
         self._diff_hashes = list(diff_hashes) if diff_hashes is not None else None
@@ -100,6 +105,9 @@ class FakeVolumes:
     async def prepare_planner(self, *, epic_id: str, repos: Any) -> None:
         self.planner_prepared.append({"epic_id": epic_id, "repos": list(repos)})
 
+    async def has_session(self, *, ticket_id: str) -> bool:
+        return self._session_exists
+
     async def destroy(self, *, ticket_id: str) -> None:
         self.destroyed.append(ticket_id)
 
@@ -114,11 +122,22 @@ class FakeVolumes:
 
 
 class FakePlane:
-    def __init__(self, *, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        error: Exception | None = None,
+        thread: list[dict[str, Any]] | None = None,
+    ) -> None:
         self._error = error
+        self._thread = thread or []
         self.moves: list[tuple[str, str, str]] = []
         self.comments: list[tuple[str, str, str]] = []
         self.created_issues: list[dict[str, Any]] = []
+
+    async def list_comments(
+        self, project_id: str, issue_id: str
+    ) -> list[dict[str, Any]]:
+        return self._thread
 
     async def get_issue(self, project_id: str, issue_id: str) -> dict[str, str]:
         return {"name": f"Ticket {issue_id}", "description_stripped": "do the thing"}
@@ -348,6 +367,57 @@ async def test_needs_input_parks_ticket(
     # A parked ticket is surfaced on the Plane board's blocked column.
     assert ("proj-1", "ISSUE-1", "state-blocked") in plane.moves
     assert await _job_status(sessionmaker, "ISSUE-1") == "done"
+
+
+async def test_parked_ticket_resumes_with_memory(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    # A previously parked ticket with a saved session, moved back to ready_for_dev.
+    tickets = TicketStore(sessionmaker)
+    await tickets.get_or_create("ISSUE-1", "proj-1")
+    await tickets.set_status("ISSUE-1", "awaiting_human")
+    await tickets.set_engineer_session("ISSUE-1", "prev-sess")
+
+    dispatcher, volumes = FakeDispatcher(), FakeVolumes(session_exists=True)
+    plane = FakePlane(thread=[{"comment_stripped": "Use OAuth, not API keys."}])
+    scheduler, _ = await _scheduler(
+        store, mappings, sessionmaker, dispatcher, volumes, plane=plane
+    )
+    await _enqueue(sessionmaker, "ISSUE-1")
+
+    await scheduler.tick()
+
+    # Resumed with memory: no fresh clone, and the engineer continued its saved session with the
+    # human's answer folded into the prompt.
+    assert volumes.prepared == []
+    engineer = next(r for r in dispatcher.runs if r.role.value == "engineer")
+    assert engineer.resume_session_id == "prev-sess"
+    assert "Use OAuth" in engineer.prompt
+
+
+async def test_parked_ticket_rebuilds_when_volumes_gone(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    tickets = TicketStore(sessionmaker)
+    await tickets.get_or_create("ISSUE-1", "proj-1")
+    await tickets.set_status("ISSUE-1", "awaiting_human")
+    await tickets.set_engineer_session("ISSUE-1", "prev-sess")
+
+    dispatcher = FakeDispatcher()
+    volumes = FakeVolumes(session_exists=False)  # volumes pruned since the park
+    scheduler, _ = await _scheduler(store, mappings, sessionmaker, dispatcher, volumes)
+    await _enqueue(sessionmaker, "ISSUE-1")
+
+    await scheduler.tick()
+
+    # No session to resume → fresh build: re-cloned, dispatched without a resume session.
+    assert volumes.prepared != []
+    engineer = next(r for r in dispatcher.runs if r.role.value == "engineer")
+    assert engineer.resume_session_id is None
 
 
 async def test_review_fail_then_pass_resumes_engineer(
