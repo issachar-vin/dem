@@ -172,6 +172,65 @@ async def test_list_and_delete_jobs(
     assert len(await list_jobs(sessionmaker)) == 1
 
 
+async def test_delete_job_cascades_ticket_records(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from conductor import agent_runs
+    from conductor.jobs import delete_job
+    from conductor.models import AgentRunLog, Ticket
+
+    async with sessionmaker() as session:
+        job = Job(source="plane", event_type="e", payload={"issue_id": "T-1"})
+        session.add_all(
+            [
+                job,
+                Ticket(ticket_id="T-1", project_id="P"),
+                Ticket(ticket_id="T-2", project_id="P"),
+            ]
+        )
+        await session.commit()
+        job_id = job.id
+    await agent_runs.record_run(
+        sessionmaker,
+        ticket_id="T-1",
+        role="engineer",
+        loop_round=0,
+        output="a",
+        ok=True,
+    )
+    await agent_runs.record_run(
+        sessionmaker,
+        ticket_id="T-2",
+        role="engineer",
+        loop_round=0,
+        output="b",
+        ok=True,
+    )
+
+    assert await delete_job(sessionmaker, job_id) is True
+
+    async with sessionmaker() as session:
+        assert await session.get(Ticket, "T-1") is None
+        assert (
+            await session.get(Ticket, "T-2") is not None
+        )  # unrelated ticket untouched
+        remaining = (await session.execute(select(AgentRunLog))).scalars().all()
+        assert [r.ticket_id for r in remaining] == ["T-2"]
+
+
+async def test_delete_job_without_issue_id_leaves_records(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from conductor.jobs import delete_job
+
+    async with sessionmaker() as session:
+        job = Job(source="github", event_type="e", payload={})
+        session.add(job)
+        await session.commit()
+        job_id = job.id
+    assert await delete_job(sessionmaker, job_id) is True
+
+
 async def test_stop_job_marks_active_job_stopped(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:

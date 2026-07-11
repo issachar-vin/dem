@@ -1,7 +1,9 @@
 """Persisted agent-run output. The agent containers stream their events to stdout and are removed on
 exit, so the conductor captures each `claude -p` run here for the console to replay afterwards."""
 
+import json
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
@@ -58,3 +60,150 @@ async def runs_for_ticket(
             .all()
         )
         return [AgentRunView.model_validate(row) for row in rows]
+
+
+class RunSummary(BaseModel):
+    """A human-readable digest of one captured run: the final `result` event as an outcome indicator
+    plus a plain-language transcript derived from the stream-json events."""
+
+    outcome: str  # the result event's subtype (e.g. "success", "error_max_turns"); "" if none seen
+    is_error: bool
+    result_text: str  # the agent's final result message
+    meta: str  # "12 turns · 45.3s · $0.3400", any subset present
+    sentences: list[str]
+
+
+def parse_events(output: str) -> list[dict[str, Any]]:
+    """Parse the captured stdout (stream-json / JSONL) into events, wrapping any non-JSON line as
+    `{"raw": …}` so a partial or failed run still renders."""
+    events: list[dict[str, Any]] = []
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            events.append({"raw": line})
+            continue
+        events.append(parsed if isinstance(parsed, dict) else {"value": parsed})
+    return events
+
+
+def summarize_output(output: str) -> RunSummary:
+    outcome = ""
+    is_error = False
+    result_text = ""
+    meta = ""
+    sentences: list[str] = []
+    for event in parse_events(output):
+        if event.get("type") == "result":
+            outcome, is_error, result_text, meta = _result_indicator(event)
+            continue
+        sentences.extend(_event_sentences(event))
+    return RunSummary(
+        outcome=outcome,
+        is_error=is_error,
+        result_text=result_text,
+        meta=meta,
+        sentences=sentences,
+    )
+
+
+def _result_indicator(event: dict[str, Any]) -> tuple[str, bool, str, str]:
+    outcome = str(event.get("subtype") or ("error" if event.get("is_error") else "success"))
+    parts: list[str] = []
+    turns = event.get("num_turns")
+    if isinstance(turns, int):
+        parts.append(f"{turns} turn{'s' if turns != 1 else ''}")
+    duration = event.get("duration_ms")
+    if isinstance(duration, int | float):
+        parts.append(f"{duration / 1000:.1f}s")
+    cost = event.get("total_cost_usd")
+    if isinstance(cost, int | float):
+        parts.append(f"${cost:.4f}")
+    return (
+        outcome,
+        bool(event.get("is_error")),
+        str(event.get("result") or "").strip(),
+        " · ".join(parts),
+    )
+
+
+# Tool name → the input field that best names what it did; falls back to the first non-empty string.
+_TOOL_ARG = {
+    "Bash": "command",
+    "Read": "file_path",
+    "Edit": "file_path",
+    "Write": "file_path",
+    "Glob": "pattern",
+    "Grep": "pattern",
+    "Task": "description",
+    "WebFetch": "url",
+    "WebSearch": "query",
+}
+
+
+def _event_sentences(event: dict[str, Any]) -> list[str]:
+    etype = event.get("type")
+    if etype == "system" and event.get("subtype") == "init":
+        model = event.get("model")
+        return [f"Session started on {model}." if model else "Session started."]
+    if etype == "assistant":
+        return _content_sentences(_message_content(event))
+    if etype == "user":
+        return _tool_result_sentences(_message_content(event))
+    if "raw" in event:
+        return [str(event["raw"])]
+    return []
+
+
+def _message_content(event: dict[str, Any]) -> list[dict[str, Any]]:
+    message = event.get("message")
+    if not isinstance(message, dict):
+        return []
+    content = message.get("content")
+    if isinstance(content, str):
+        return [{"type": "text", "text": content}]
+    if isinstance(content, list):
+        return [block for block in content if isinstance(block, dict)]
+    return []
+
+
+def _content_sentences(content: list[dict[str, Any]]) -> list[str]:
+    out: list[str] = []
+    for block in content:
+        btype = block.get("type")
+        if btype == "text":
+            text = str(block.get("text") or "").strip()
+            if text:
+                out.append(text)
+        elif btype == "tool_use":
+            out.append(_tool_use_sentence(block))
+    return out
+
+
+def _tool_use_sentence(block: dict[str, Any]) -> str:
+    name = str(block.get("name") or "a tool")
+    tool_input = block.get("input")
+    detail = ""
+    if isinstance(tool_input, dict):
+        key = _TOOL_ARG.get(name)
+        value = tool_input.get(key) if key else None
+        if not isinstance(value, str) or not value.strip():
+            value = next((v for v in tool_input.values() if isinstance(v, str) and v.strip()), None)
+        if isinstance(value, str) and value.strip():
+            detail = _truncate(value.strip().splitlines()[0], 120)
+    return f"Used {name}: {detail}" if detail else f"Used {name}."
+
+
+def _tool_result_sentences(content: list[dict[str, Any]]) -> list[str]:
+    # Successful tool results are noise in a transcript; only surface the ones that erred.
+    return [
+        "A tool call returned an error."
+        for block in content
+        if block.get("type") == "tool_result" and block.get("is_error")
+    ]
+
+
+def _truncate(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"

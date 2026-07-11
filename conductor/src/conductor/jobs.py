@@ -8,11 +8,11 @@ from datetime import datetime
 from typing import Any, cast
 
 from pydantic import BaseModel
-from sqlalchemy import CursorResult, select, update
+from sqlalchemy import CursorResult, delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from conductor.models import Job, JobStatus
+from conductor.models import AgentRunLog, Job, JobStatus, Ticket
 
 logger = logging.getLogger("conductor")
 
@@ -188,10 +188,17 @@ async def list_jobs(
 
 
 async def delete_job(sessionmaker: async_sessionmaker[AsyncSession], job_id: int) -> bool:
+    """Delete a job and every record tied to its ticket: the agent-run log history and the ticket's
+    pipeline-mirror row (there is no DB-level FK — jobs reach their ticket through the payload's
+    `issue_id` — so the cascade is done here explicitly)."""
     async with sessionmaker() as session:
         row = await session.get(Job, job_id)
         if row is None:
             return False
+        ticket_id = str(row.payload.get("issue_id") or "")
+        if ticket_id:
+            await session.execute(delete(AgentRunLog).where(AgentRunLog.ticket_id == ticket_id))
+            await session.execute(delete(Ticket).where(Ticket.ticket_id == ticket_id))
         await session.delete(row)
         await session.commit()
         return True

@@ -4,11 +4,12 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.5):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+**Status (VERSION 0.5.6):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
 full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
 wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove: **PR #55 (merged)** —
-empty-diff/needs-input parking, clearer GitHub 422s, console stop-job; **PR #56 (open, 0.5.5)** —
-agent-run output capture + console log viewer. Phases 1–4 provenance (PRs #39–#50) in the fold below.
+empty-diff/needs-input parking, clearer GitHub 422s, console stop-job; **PR #56 (merged)** —
+agent-run output capture + console log viewer; **PR #57 (open, 0.5.6)** — job-delete cascade,
+readable log viewer, EDT/EST display (below). Phases 1–4 provenance (PRs #39–#50) in the fold below.
 **Next is Phase 6 (observability)** — still waiting on the user for the otel-collector host:port and
 the ntfy/Slack notify target.
 
@@ -160,14 +161,26 @@ issues (PR #55, open — VERSION 0.5.4):
   `psa-*-<ticket>` containers (job → `stopped`, ticket → `stopped`), delete also kills containers.
   `complete_job` is now compare-and-set on `running` so a manual stop isn't clobbered.
 
-**Agent-run observability — console side (PR #56, open, VERSION 0.5.5):** done. The agent now runs
+**Agent-run observability — console side (PR #56, merged, VERSION 0.5.5):** done. The agent now runs
 with `claude -p --output-format stream-json --verbose` (incremental events, visible live in `docker
 logs`); `contracts.parse_envelope` reads the final `type:"result"` event out of the JSONL. Each
 `claude -p` run's raw output is captured via an injected `Dispatcher` `RunRecorder` and persisted to
 a new **`agent_runs`** table (migration `b7c8d9e0f1a2`; tail-capped at 200K chars), keyed by ticket +
-role + loop-round. The **Jobs page** got a log button → modal of that ticket's runs as expandable
-event trees. **Phase 6 reuses this stream** to build the Grafana/Loki "what is the engineer doing
-right now" drilldown — the console view is the local counterpart.
+role + loop-round. The **Jobs page** got a log button → modal of that ticket's runs. **Phase 6 reuses
+this stream** to build the Grafana/Loki "what is the engineer doing right now" drilldown — the console
+view is the local counterpart.
+
+**Console polish (PR #57, open, VERSION 0.5.6):** three console fixes. (1) **Cascade job delete** —
+`jobs.delete_job` resolves the ticket via the payload `issue_id` and deletes that ticket's `agent_runs`
+history **and** its `Ticket` row before the job (no DB FK, so the cascade is explicit in code; GitHub
+jobs without `issue_id` are a no-op). (2) **Readable log viewer** — the run modal no longer dumps
+event trees: `agent_runs.summarize_output()` (pure, unit-tested) turns the stream-json into sentences
+(session start · assistant text · `Used <Tool>: <arg>`) shown per run with an outcome pill, and the
+final `result` event renders as a **clickable indicator** (result text + turns/duration/cost) that
+opens the raw JSON in a nested modal via `agent_runs.parse_events()`. (3) **EDT/EST display** — new
+`conductor/localtime.py` converts every UI datetime to `America/New_York` (`%Z` → EDT/EST by date);
+DB stays UTC; `tzdata` added for the slim image. **Not yet live-verified in a browser** — nested-dialog
+interaction is import- and unit-verified only.
 
 **Other deferred follow-up:** auto-resume a parked `awaiting_human` ticket when a human replies —
 consume Plane **issue-comment** webhooks and `claude -p --resume` the engineer with the answer.
