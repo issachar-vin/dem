@@ -4,14 +4,13 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.3):** **Phases 1–4 DONE & merged. Phase 5 code-complete** — Part 1 (engineer
-agent real, **PR #51 merged**), Part 2 (reviewer/QA loop, **PR #52 merged**), Part 3 (planner, **PR
-#53 merged**), Part 4 (merged-PR cleanup, **PR #54, open**). The full pipeline is wired: planner →
-engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup. Phases 1–3 and Phase 4
-(agent image PR #39, dispatcher/volumes/contracts PR #40, scheduler/Job consumer PR #41, image
-publishing PR #42, live-deploy fixes PRs #43–#45, plus the UI work PRs #46–#50) are all merged. The
-conductor consumes intake `Job`s end-to-end **live on barad-dur**. **Next is Phase 6 (observability)**
-— still waiting on the user for the otel-collector host:port and the ntfy/Slack notify target.
+**Status (VERSION 0.5.5):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
+wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove: **PR #55 (merged)** —
+empty-diff/needs-input parking, clearer GitHub 422s, console stop-job; **PR #56 (open, 0.5.5)** —
+agent-run output capture + console log viewer. Phases 1–4 provenance (PRs #39–#50) in the fold below.
+**Next is Phase 6 (observability)** — still waiting on the user for the otel-collector host:port and
+the ntfy/Slack notify target.
 
 **Phase 5 Part 4 — merged-PR cleanup (PR #54, open):** the scheduler now selects `source="github"`
 jobs (previously filtered out by `_select_job`'s `source=="plane"` clause). `_run_cleanup`: a
@@ -161,14 +160,14 @@ issues (PR #55, open — VERSION 0.5.4):
   `psa-*-<ticket>` containers (job → `stopped`, ticket → `stopped`), delete also kills containers.
   `complete_job` is now compare-and-set on `running` so a manual stop isn't clobbered.
 
-**Next agent-run observability PR (recommended before more live runs — the pipeline is a black box
-mid-run):** switch the agent invocation to `claude -p --output-format stream-json --verbose`
-(streaming requires `--verbose`), which emits incremental JSON events (tool calls, messages) instead
-of one buffered blob at the end — so `docker logs` shows progress live. Requires updating
-`dispatcher._build_command` **and** `contracts.parse_envelope` (parse the final `type:"result"` line
-of the JSONL, not one object). Then **persist** that streamed output as logs (the container is
-force-removed on exit, so logs must be captured to survive) and add a **log-modal button** on the
-Jobs page. This one feature covers the "verbose / log button / live output" asks together.
+**Agent-run observability — console side (PR #56, open, VERSION 0.5.5):** done. The agent now runs
+with `claude -p --output-format stream-json --verbose` (incremental events, visible live in `docker
+logs`); `contracts.parse_envelope` reads the final `type:"result"` event out of the JSONL. Each
+`claude -p` run's raw output is captured via an injected `Dispatcher` `RunRecorder` and persisted to
+a new **`agent_runs`** table (migration `b7c8d9e0f1a2`; tail-capped at 200K chars), keyed by ticket +
+role + loop-round. The **Jobs page** got a log button → modal of that ticket's runs as expandable
+event trees. **Phase 6 reuses this stream** to build the Grafana/Loki "what is the engineer doing
+right now" drilldown — the console view is the local counterpart.
 
 **Other deferred follow-up:** auto-resume a parked `awaiting_human` ticket when a human replies —
 consume Plane **issue-comment** webhooks and `claude -p --resume` the engineer with the answer.
