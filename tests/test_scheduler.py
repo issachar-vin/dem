@@ -72,6 +72,7 @@ class FakeVolumes:
         self.prepared: list[dict[str, str]] = []
         self.pushed: list[dict[str, str]] = []
         self.planner_prepared: list[dict[str, Any]] = []
+        self.destroyed: list[str] = []
         # Default hashes are unique per call so the stall detector never fires; a test that wants a
         # stall passes repeated values.
         self._diff_hashes = list(diff_hashes) if diff_hashes is not None else None
@@ -93,6 +94,9 @@ class FakeVolumes:
 
     async def prepare_planner(self, *, epic_id: str, repos: Any) -> None:
         self.planner_prepared.append({"epic_id": epic_id, "repos": list(repos)})
+
+    async def destroy(self, *, ticket_id: str) -> None:
+        self.destroyed.append(ticket_id)
 
     async def diff_hash(self, *, ticket_id: str, base_branch: str) -> str:
         self._diff_calls += 1
@@ -200,6 +204,36 @@ async def _enqueue(
         payload={"project_id": project, "issue_id": issue_id, "trigger": trigger},
         dedupe_key=f"{project}:{issue_id}",
     )
+
+
+async def _enqueue_github(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    *,
+    repo: str = "octo/backend",
+    pr_number: int = 7,
+    merged: bool = True,
+    delivery_id: str | None = None,
+) -> None:
+    await enqueue_job(
+        sessionmaker,
+        source="github",
+        event_type="pull_request.closed",
+        payload={
+            "project_id": "proj-1",
+            "repo": repo,
+            "pr_number": pr_number,
+            "merged": merged,
+        },
+        delivery_id=delivery_id or f"gh-{repo}-{pr_number}-{merged}",
+    )
+
+
+async def _github_job_status(sessionmaker: async_sessionmaker[AsyncSession]) -> str:
+    async with sessionmaker() as session:
+        job = (
+            await session.execute(select(Job).where(Job.source == "github"))
+        ).scalar_one()
+        return job.status
 
 
 async def _job_status(
@@ -434,6 +468,87 @@ async def test_blocked_ticket_is_skipped_until_blocker_done(
     )
     await tickets.set_status("BLOCKER", "done")
     assert await scheduler.tick() is True  # blocker done → DEP dispatches
+    assert dispatcher.runs[0].ticket_id == "DEP"
+
+
+async def test_merged_pr_cleans_up_ticket(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    dispatcher, volumes = FakeDispatcher(), FakeVolumes()
+    scheduler, tickets = await _scheduler(
+        store, mappings, sessionmaker, dispatcher, volumes
+    )
+    await tickets.get_or_create("ISSUE-1", "proj-1")
+    await tickets.set_pr("ISSUE-1", 7, "https://github.com/octo/backend/pull/7")
+    await tickets.set_status("ISSUE-1", "in_review")
+    await _enqueue_github(sessionmaker, repo="octo/backend", pr_number=7, merged=True)
+
+    assert await scheduler.tick() is True
+    assert volumes.destroyed == ["ISSUE-1"]
+    assert await _github_job_status(sessionmaker) == "done"
+    ticket = await tickets.get("ISSUE-1")
+    assert ticket is not None and ticket.agent_status == "done"
+
+
+async def test_unmerged_pr_job_is_drained(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    dispatcher, volumes = FakeDispatcher(), FakeVolumes()
+    scheduler, tickets = await _scheduler(
+        store, mappings, sessionmaker, dispatcher, volumes
+    )
+    await tickets.get_or_create("ISSUE-1", "proj-1")
+    await tickets.set_pr("ISSUE-1", 7, "https://github.com/octo/backend/pull/7")
+    await _enqueue_github(sessionmaker, pr_number=7, merged=False)
+
+    assert await scheduler.tick() is True
+    assert volumes.destroyed == []  # not merged → no cleanup
+    assert await _github_job_status(sessionmaker) == "done"  # drained, not left queued
+
+
+async def test_merged_pr_without_tracked_ticket_is_drained(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    dispatcher, volumes = FakeDispatcher(), FakeVolumes()
+    scheduler, _ = await _scheduler(store, mappings, sessionmaker, dispatcher, volumes)
+    await _enqueue_github(sessionmaker, pr_number=99, merged=True)
+
+    assert await scheduler.tick() is True
+    assert volumes.destroyed == []
+    assert await _github_job_status(sessionmaker) == "done"
+
+
+async def test_merged_pr_releases_blocked_ticket(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    dispatcher, volumes = FakeDispatcher(), FakeVolumes()
+    scheduler, tickets = await _scheduler(
+        store, mappings, sessionmaker, dispatcher, volumes
+    )
+    await tickets.create_planned(
+        "DEP", "proj-1", target_repo="backend", blocked_by=["BLOCKER"]
+    )
+    await tickets.create_planned(
+        "BLOCKER", "proj-1", target_repo="backend", blocked_by=[]
+    )
+    await tickets.set_pr("BLOCKER", 7, "https://github.com/octo/backend/pull/7")
+    await _enqueue(sessionmaker, "DEP")
+
+    assert await scheduler.tick() is False  # DEP blocked by BLOCKER (not done)
+
+    await _enqueue_github(sessionmaker, pr_number=7, merged=True)
+    assert await scheduler.tick() is True  # merged PR → BLOCKER done
+    assert volumes.destroyed == ["BLOCKER"]
+
+    assert await scheduler.tick() is True  # DEP now unblocked → dispatched
     assert dispatcher.runs[0].ticket_id == "DEP"
 
 

@@ -44,6 +44,14 @@ class TicketStore:
         async with self._sessionmaker() as session:
             return await session.get(Ticket, ticket_id)
 
+    async def get_by_pr_url(self, pr_url: str) -> Ticket | None:
+        """The ticket a PR belongs to, matched on the full PR url so cross-repo PR-number collisions
+        within a project can't clean up the wrong ticket."""
+        async with self._sessionmaker() as session:
+            return (
+                await session.execute(select(Ticket).where(Ticket.pr_url == pr_url))
+            ).scalar_one_or_none()
+
     async def statuses_for(self, ticket_ids: list[str]) -> dict[str, str]:
         if not ticket_ids:
             return {}

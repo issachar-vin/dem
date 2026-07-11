@@ -4,14 +4,26 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.2):** **Phases 1–4 DONE & merged. Phase 5 IN PROGRESS** — Part 1 (engineer
-agent real, **PR #51 merged**), Part 2 (reviewer/QA loop, **PR #52 merged**), and Part 3 (planner,
-**PR #53, open**) done; Part 4 (merged-PR cleanup) remains. Phases 1–3 and Phase 4 (agent image PR
-#39, dispatcher/volumes/contracts PR #40, scheduler/Job consumer PR #41, image publishing PR #42,
-live-deploy fixes PRs #43–#45, plus the UI work PRs #46–#50) are all merged. The conductor consumes
-intake `Job`s end-to-end **live on barad-dur**.
+**Status (VERSION 0.5.3):** **Phases 1–4 DONE & merged. Phase 5 code-complete** — Part 1 (engineer
+agent real, **PR #51 merged**), Part 2 (reviewer/QA loop, **PR #52 merged**), Part 3 (planner, **PR
+#53 merged**), Part 4 (merged-PR cleanup, **PR #54, open**). The full pipeline is wired: planner →
+engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup. Phases 1–3 and Phase 4
+(agent image PR #39, dispatcher/volumes/contracts PR #40, scheduler/Job consumer PR #41, image
+publishing PR #42, live-deploy fixes PRs #43–#45, plus the UI work PRs #46–#50) are all merged. The
+conductor consumes intake `Job`s end-to-end **live on barad-dur**. **Next is Phase 6 (observability)**
+— still waiting on the user for the otel-collector host:port and the ntfy/Slack notify target.
 
-**Phase 5 Part 3 — planner (PR #53, open):** consumes the `trigger=="planner"` jobs (previously left
+**Phase 5 Part 4 — merged-PR cleanup (PR #54, open):** the scheduler now selects `source="github"`
+jobs (previously filtered out by `_select_job`'s `source=="plane"` clause). `_run_cleanup`: a
+**merged** PR (`merged==True` + `pr_number`) → find the ticket by reconstructed `pr_url`
+(`https://github.com/<repo>/pull/<n>`, exact so cross-repo PR-number collisions can't clean the wrong
+ticket) → mark it **`done`** (the transition that **releases dependents** from Part 3's blocking gate)
+→ `VolumeManager.destroy` → job done. Every other GitHub PR delivery (opened, review, comment,
+unmerged close) has no consumer today and is **drained** (marked done) so the queue can't grow
+unbounded. Closes the long-open Phase-3 acceptance item "merged PR → cleanup job *runs*". VERSION
+0.5.3.
+
+**Phase 5 Part 3 — planner (PR #53 merged):** consumes the `trigger=="planner"` jobs (previously left
 queued). New `planner.md` (epic + the project's repos cloned read-only under `/work/<key>` →
 `Plan` contract). `VolumeManager.prepare_planner()` clones each project repo into `/work/<key>`
 (credentialed root helper, token-stripped, no ticket branch). New `Ticket.target_repo` +
@@ -133,27 +145,26 @@ queryable directly via Loki's `query_range` API (no Grafana token needed).
 
 ---
 
-## ▶ RESUME: Phase 5 Part 4 — merged-PR cleanup (closes Phase 5)
+## ▶ RESUME: Phase 5 live acceptance, then Phase 6 (observability)
 
-Authoritative spec: `docs/PLAN.md` → **Phase 5**. **Parts 1–3 done (PRs #51/#52 merged, #53 open).**
-Remaining — the last Phase-5 slice:
+**Phase 5 is code-complete (PR #54 closes it).** Before Phase 6, run the **live acceptance on
+barad-dur** — the whole pipeline has only ever been unit-tested with fakes end-to-end:
 
-- **Merged-PR handler**: GitHub PR-event jobs are currently left queued (`_select_job` only takes
-  planner/engineer triggers). Handle the `pull_request` **closed+merged** event: find the ticket by
-  `pr_number` (already stored), mark it **`done`** (the local status `_is_blocked` waits on — this is
-  what finally releases dependent tickets from Part 3's blocking gate), and run
-  `VolumeManager.destroy(ticket_id)` to reclaim its `psa-*-<id>` volumes. Closes the open Phase-3
-  acceptance item "merged PR → cleanup job *runs*".
-- Confirm the GitHub webhook/poll intake actually enqueues a job for merged PRs (check
-  `api/webhooks.py` around line 328 and `poller.py`); wire the trigger name the scheduler dispatches
-  on.
+- Seed the fixture (`tests/fixtures/demo-repo`, a tiny FastAPI todo app) or a real chessbro epic;
+  drive an epic → planner → tickets → engineer → PR → reviewer/QA → ready_for_approval, merge, and
+  confirm the **cleanup job runs** (volumes reclaimed, ticket `done`, dependents released).
+- Validate the two Part-3/4 assumptions that only live traffic exercises: (1) an **API-created issue
+  in ready_for_dev fires the engineer webhook**; (2) **merged-PR webhook/poll** delivers `merged` +
+  `pr_number` as the cleanup handler expects.
+- **Deferred follow-up:** surface the blocking graph on the **Plane board** (a relations API call) —
+  needs the CE relations endpoint validated live first. Build order is already enforced locally via
+  `Ticket.blocked_by`, so this is human-visibility polish, not correctness.
 
-After Part 4, Phase 5 is complete → **Phase 6 (observability)**; user still owes the barad-dur
-otel-collector host:port and the ntfy/Slack notify target (see Pending from the user).
-
-**Blocking-graph note (from Part 3):** build order is enforced by the **local** `Ticket.blocked_by`
-graph, not Plane relations (no validated CE endpoint). Surfacing the relation on the Plane board for
-human visibility is a deferred follow-up once the CE relations endpoint is validated live.
+**Phase 6 (observability)** — authoritative spec `docs/PLAN.md` → Phase 6. Needs from the user
+(still pending): the barad-dur **otel-collector host:port** and the **ntfy/Slack notify target**. The
+agent dispatcher already emits OTel resource attributes (`agent.role`/`ticket.id`/`loop.round`) and
+`notify.py` already dispatches to ntfy/slack/webhook — Phase 6 wires the conductor's own traces/
+metrics/logs to the collector and fills in the notify target.
 
 **Decided for Phase 4 — git commit authorship (do NOT add manual name/email fields).** Derive
 `user.name`/`user.email` from `GET /user` on the existing `github_token` (returns `login`, `name`,
@@ -244,8 +255,8 @@ orphaned containers from a failed deploy: `docker rm -f dem-conductor` then rede
 
 ## Pending from the user
 - **Phase 6:** barad-dur otel-collector host:port; ntfy/Slack notify target.
-- Phase 3 acceptance is done live except "merged PR → cleanup job *runs*", which needs the Phase 4
-  consumer.
+- **Phase 5 live acceptance** on barad-dur (see the RESUME box) — the pipeline is only fake-tested
+  end-to-end. The "merged PR → cleanup job *runs*" item is now built (Part 4, PR #54); confirm it live.
 
 <details><summary>Done &amp; merged — one-line provenance</summary>
 

@@ -7,9 +7,9 @@ job: build the ticket in a container, push its branch, open a PR, then loop revi
 their findings back to the engineer via `--resume` until both pass (→ ready_for_approval) or the
 engineer's diff stops changing (→ stalled). The planner trigger decomposes an epic: it clones the
 project's repos read-only, dispatches the planner, then creates a Plane issue per planned ticket in
-ready_for_dev (each carrying its target repo + blocking graph locally). The Plane board is mirrored
-across the transitions. GitHub PR-event triggers (merged-PR cleanup) are Part 4; those jobs stay
-queued for now."""
+ready_for_dev (each carrying its target repo + blocking graph locally). GitHub PR jobs are handled
+too: a merged PR marks its ticket `done` (releasing dependents from the blocking gate) and reclaims
+its volumes; other PR deliveries are drained. The Plane board is mirrored across the transitions."""
 
 import asyncio
 import contextlib
@@ -91,7 +91,9 @@ class Scheduler:
             return False
         if not await claim_job(self._sessionmaker, job.id):
             return False  # another worker won the race
-        if job.payload.get("trigger") == _PLANNER_TRIGGER:
+        if job.source == "github":
+            await self._run_cleanup(job)
+        elif job.payload.get("trigger") == _PLANNER_TRIGGER:
             await self._run_planner(job)
         else:
             await self._run_engineer(job)
@@ -103,7 +105,7 @@ class Scheduler:
                 (
                     await session.execute(
                         select(Job)
-                        .where(Job.source == "plane", Job.status == JobStatus.QUEUED)
+                        .where(Job.status == JobStatus.QUEUED)
                         .order_by(Job.created_at.asc(), Job.id.asc())
                     )
                 )
@@ -113,8 +115,11 @@ class Scheduler:
         in_flight = await self._tickets.in_flight_ids()
         candidates: list[Job] = []
         for job in jobs:
+            if job.source == "github":
+                candidates.append(job)  # merged-PR cleanup / drain — always eligible
+                continue
             if job.payload.get("trigger") not in (_ENGINEER_TRIGGER, _PLANNER_TRIGGER):
-                continue  # GitHub PR triggers are Part 4
+                continue
             if await self._is_blocked(job):
                 continue
             candidates.append(job)
@@ -132,6 +137,29 @@ class Scheduler:
             return False
         statuses = await self._tickets.statuses_for(ticket.blocked_by)
         return any(statuses.get(blocker) != "done" for blocker in ticket.blocked_by)
+
+    async def _run_cleanup(self, job: Job) -> None:
+        """Handle a GitHub PR job. A merged PR marks its ticket `done` (which releases dependents
+        from the blocking gate) and reclaims its volumes; every other PR delivery (opened, review,
+        comment) has no consumer today and is drained so the queue doesn't grow unbounded."""
+        try:
+            pr_number = job.payload.get("pr_number")
+            if not job.payload.get("merged") or not isinstance(pr_number, int):
+                await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
+                return
+            pr_url = f"https://github.com/{job.payload.get('repo', '')}/pull/{pr_number}"
+            ticket = await self._tickets.get_by_pr_url(pr_url)
+            if ticket is None:
+                await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
+                logger.info("Merged PR %s has no tracked ticket; nothing to clean up", pr_url)
+                return
+            await self._tickets.set_status(ticket.ticket_id, "done")
+            await self._volumes.destroy(ticket_id=ticket.ticket_id)
+            await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
+            logger.info("Ticket %s merged (%s) → done, volumes reclaimed", ticket.ticket_id, pr_url)
+        except Exception as exc:
+            await complete_job(self._sessionmaker, job.id, status=JobStatus.FAILED, error=str(exc))
+            logger.exception("Cleanup failed for job %s", job.id)
 
     async def _run_engineer(self, job: Job) -> None:
         project_id = str(job.payload.get("project_id", ""))
