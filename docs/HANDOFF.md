@@ -4,12 +4,26 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.1):** **Phases 1–4 DONE & merged. Phase 5 IN PROGRESS** — Part 1 (engineer
-agent real, **PR #51 merged**) and Part 2 (reviewer/QA review loop, **PR #52, open**) done; Part 3
-(planner) and Part 4 (merged-PR cleanup) remain. Phases 1–3 and Phase 4 (agent image PR #39,
-dispatcher/volumes/contracts PR #40, scheduler/Job consumer PR #41, image publishing PR #42, live-
-deploy fixes PRs #43–#45, plus the UI work PRs #46–#50) are all merged. The conductor consumes intake
-`Job`s end-to-end **live on barad-dur**.
+**Status (VERSION 0.5.2):** **Phases 1–4 DONE & merged. Phase 5 IN PROGRESS** — Part 1 (engineer
+agent real, **PR #51 merged**), Part 2 (reviewer/QA loop, **PR #52 merged**), and Part 3 (planner,
+**PR #53, open**) done; Part 4 (merged-PR cleanup) remains. Phases 1–3 and Phase 4 (agent image PR
+#39, dispatcher/volumes/contracts PR #40, scheduler/Job consumer PR #41, image publishing PR #42,
+live-deploy fixes PRs #43–#45, plus the UI work PRs #46–#50) are all merged. The conductor consumes
+intake `Job`s end-to-end **live on barad-dur**.
+
+**Phase 5 Part 3 — planner (PR #53, open):** consumes the `trigger=="planner"` jobs (previously left
+queued). New `planner.md` (epic + the project's repos cloned read-only under `/work/<key>` →
+`Plan` contract). `VolumeManager.prepare_planner()` clones each project repo into `/work/<key>`
+(credentialed root helper, token-stripped, no ticket branch). New `Ticket.target_repo` +
+`Ticket.blocked_by` columns (migration `a6b7c8d9e0f1`). `_run_planner`: clone → dispatch planner →
+create a Plane issue per ticket in `ready_for_dev` (fires the engineer webhook) → pre-create the
+local `Ticket` with `target_repo` + resolved `blocked_by` (plan keys → real issue ids). Engineer
+dispatch routes off `target_repo` (falls back to the first mapped repo). `_is_blocked` **wired** off
+the local graph: queued until every blocker is `done`. **Two scoping calls:** (1) **no Plane-side
+relations call** — no validated CE relations endpoint, so build order is enforced by the local
+`blocked_by` graph; board surfacing deferred; (2) `_is_blocked` releases when blockers are `done` —
+the merge→`done` transition is **Part 4**, so dependent tickets correctly wait until then. VERSION
+0.5.2.
 
 **Phase 5 Part 2 — reviewer/QA review loop (PR #52, open):** the whole build→review→resume loop runs
 **synchronously within one engineer job** (matches the existing scheduler shape + the
@@ -119,27 +133,27 @@ queryable directly via Loki's `query_range` API (no Grafana token needed).
 
 ---
 
-## ▶ RESUME: Phase 5 Part 3 — the planner
+## ▶ RESUME: Phase 5 Part 4 — merged-PR cleanup (closes Phase 5)
 
-Authoritative spec: `docs/PLAN.md` → **Phase 5**. **Parts 1 (engineer real + PR, #51 merged) and 2
-(reviewer/QA loop, #52) are done.** Remaining:
+Authoritative spec: `docs/PLAN.md` → **Phase 5**. **Parts 1–3 done (PRs #51/#52 merged, #53 open).**
+Remaining — the last Phase-5 slice:
 
-- **Planner (Part 3)**: consume the `trigger=="planner"` jobs the scheduler already leaves queued
-  (`_select_engineer_job` skips non-engineer triggers today). Add `planner.md` under
-  `conductor/src/conductor/prompts/`; input is the epic title/body **plus the project's repo set**,
-  each repo cloned **read-only** for scoping (Read/Glob/Grep). Output is the `Plan` contract already
-  in `agents/contracts.py` (tickets with `target_repo` + a `blocked_by` graph). The conductor then
-  creates the Plane issues (`plane.create_issue`), records each ticket's target repo, sets the Plane
-  **blocking relationships** from the graph, and drops them in `ready_for_dev`. Then **wire
-  `_is_blocked`** in `scheduler.py` (currently a hardcoded `False` seam) to skip tickets blocked by a
-  not-yet-`done` issue — validate the CE relations endpoint live first.
-- **Cleanup (Part 4)**: merged-PR GitHub event → a cleanup job → `VolumeManager.destroy` (closes the
-  open Phase-3 acceptance item "merged PR → cleanup job *runs*"). GitHub PR-event jobs are currently
-  left queued.
+- **Merged-PR handler**: GitHub PR-event jobs are currently left queued (`_select_job` only takes
+  planner/engineer triggers). Handle the `pull_request` **closed+merged** event: find the ticket by
+  `pr_number` (already stored), mark it **`done`** (the local status `_is_blocked` waits on — this is
+  what finally releases dependent tickets from Part 3's blocking gate), and run
+  `VolumeManager.destroy(ticket_id)` to reclaim its `psa-*-<id>` volumes. Closes the open Phase-3
+  acceptance item "merged PR → cleanup job *runs*".
+- Confirm the GitHub webhook/poll intake actually enqueues a job for merged PRs (check
+  `api/webhooks.py` around line 328 and `poller.py`); wire the trigger name the scheduler dispatches
+  on.
 
-Note on multi-repo: `_resolve_repo` in the scheduler still takes the project's **first** mapped repo
-(fine for human-created single-repo tickets). Once the planner assigns a `target_repo` per ticket,
-route the engineer dispatch off that instead of the first repo.
+After Part 4, Phase 5 is complete → **Phase 6 (observability)**; user still owes the barad-dur
+otel-collector host:port and the ntfy/Slack notify target (see Pending from the user).
+
+**Blocking-graph note (from Part 3):** build order is enforced by the **local** `Ticket.blocked_by`
+graph, not Plane relations (no validated CE endpoint). Surfacing the relation on the Plane board for
+human visibility is a deferred follow-up once the CE relations endpoint is validated live.
 
 **Decided for Phase 4 — git commit authorship (do NOT add manual name/email fields).** Derive
 `user.name`/`user.email` from `GET /user` on the existing `github_token` (returns `login`, `name`,
