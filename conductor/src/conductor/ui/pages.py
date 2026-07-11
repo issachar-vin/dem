@@ -18,6 +18,7 @@ from nicegui import ui
 from conductor import agent_runs, plane, verify
 from conductor import jobs as jobs_mod
 from conductor.agents import dockerctl
+from conductor.localtime import format_display
 from conductor.mappings import MappingStore, RepoMappingView
 from conductor.models import WorkflowState
 from conductor.plane import PlaneError
@@ -698,7 +699,7 @@ async def jobs_page() -> None:
                 "ticket_id": str(job.payload.get("issue_id") or ""),
                 "dedupe_key": job.dedupe_key or "—",
                 "deliveries": len(job.raw_payloads),
-                "created_at": job.created_at.strftime("%Y-%m-%d %H:%M"),
+                "created_at": format_display(job.created_at),
             }
             for job in jobs
         ]
@@ -782,36 +783,64 @@ async def _show_logs(ticket_id: str) -> None:
         if not runs:
             ui.label("No agent runs recorded yet.").classes("text-sm").style(f"color:{kit.MUTED}")
         for run in runs:
-            state = "ok" if run.ok else "failed"
-            when = run.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            title = f"{run.role} · round {run.loop_round} · {state} · {when}"
-            with ui.expansion(title).classes("w-full").props(f"header-style=color:{kit.TEXT}"):
-                ui.json_editor(
-                    {
-                        "content": {"json": _parse_events(run.output)},
-                        "readOnly": True,
-                        "mode": "tree",
-                    }
-                ).classes("w-full")
+            _run_entry(run)
         with ui.row().classes("w-full justify-end"):
             kit.secondary_button("Close", on_click=dialog.close)
     dialog.open()
 
 
-def _parse_events(output: str) -> list[dict[str, Any]]:
-    """The captured stdout is stream-json (JSONL); parse each line into an event, wrapping any
-    non-JSON line as raw so a partial/failed run still renders."""
-    events: list[dict[str, Any]] = []
-    for line in output.splitlines():
-        if not line.strip():
-            continue
-        try:
-            parsed = json.loads(line)
-        except json.JSONDecodeError:
-            events.append({"raw": line})
-            continue
-        events.append(parsed if isinstance(parsed, dict) else {"value": parsed})
-    return events
+def _run_entry(run: agent_runs.AgentRunView) -> None:
+    """One captured run as a readable card: outcome pill, plain-language transcript, and a clickable
+    result indicator that opens the raw stream-json in a second modal."""
+    summary = agent_runs.summarize_output(run.output)
+    ok = run.ok and not summary.is_error
+    color = kit.GREEN if ok else kit.RED
+    with ui.element("div").classes("v2-row w-full p-4 gap-3 flex flex-col"):
+        with ui.row().classes("w-full items-center justify-between no-wrap"):
+            with ui.row().classes("items-center gap-3 no-wrap"):
+                kit.pill(summary.outcome or ("ok" if ok else "failed"), color=color)
+                ui.label(f"{run.role} · round {run.loop_round}").classes("font-medium").style(
+                    f"color:{kit.TEXT}"
+                )
+            ui.label(format_display(run.created_at, "%Y-%m-%d %H:%M:%S")).classes("text-xs").style(
+                f"color:{kit.MUTED}"
+            )
+
+        if summary.sentences:
+            with ui.column().classes("gap-1 w-full").style("max-height:320px;overflow-y:auto"):
+                for sentence in summary.sentences:
+                    ui.label(sentence).classes("text-sm leading-snug").style(f"color:{kit.TEXT}")
+        else:
+            ui.label("No transcript captured.").classes("text-sm").style(f"color:{kit.MUTED}")
+
+        indicator = ui.element("div").classes(
+            "v2-row w-full p-3 cursor-pointer v2-lift flex items-center"
+            " justify-between no-wrap gap-3"
+        )
+        with indicator:
+            with ui.column().classes("gap-0 min-w-0"):
+                ui.label(summary.result_text or "View raw JSON").classes(
+                    "text-sm font-medium ellipsis"
+                ).style(f"color:{color}")
+                if summary.meta:
+                    ui.label(summary.meta).classes("text-xs").style(f"color:{kit.MUTED}")
+            kit.licon("braces", color=kit.MUTED, size=16)
+        indicator.on("click", lambda: _show_raw(run))
+
+
+def _show_raw(run: agent_runs.AgentRunView) -> None:
+    title = f"{run.role} · round {run.loop_round} — raw JSON"
+    with kit.dialog_card(title, min_width=820) as dialog:
+        ui.json_editor(
+            {
+                "content": {"json": agent_runs.parse_events(run.output)},
+                "readOnly": True,
+                "mode": "tree",
+            }
+        ).classes("w-full")
+        with ui.row().classes("w-full justify-end"):
+            kit.secondary_button("Close", on_click=dialog.close)
+    dialog.open()
 
 
 async def _stop_job(job_id: int) -> None:
