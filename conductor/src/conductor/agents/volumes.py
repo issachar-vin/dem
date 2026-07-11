@@ -7,7 +7,8 @@ without the chown the non-root agent can't write it — the Part 1 carry-in fix)
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 from conductor.agents.dockerctl import DockerClient, DockerFactory, run_container
 from conductor.catalog import DEFAULT_AGENT_IMAGE
@@ -15,6 +16,15 @@ from conductor.github import GitHubClient, GitHubUser, client_from_resolved
 from conductor.store import ConfigStore
 
 logger = logging.getLogger("conductor")
+
+
+@dataclass(frozen=True)
+class RepoClone:
+    """One repo to clone into a planner workspace, at `/work/<key>`."""
+
+    key: str
+    github_repo: str
+    base_branch: str
 
 
 class VolumeManager:
@@ -53,6 +63,28 @@ class VolumeManager:
             entrypoint=["bash", "-c"],
             command=[_clone_script(github_repo, base_branch, ticket_id, identity)],
             name=f"psa-clone-{ticket_id}",
+            environment={"CLONE_TOKEN": cfg.get("github_token", "")},
+            volumes={repo_vol: "/work"},
+            user="root",
+        )
+
+    async def prepare_planner(self, *, epic_id: str, repos: Sequence[RepoClone]) -> None:
+        """Populate the planner's `psa-repo-<epic_id>` volume with a read-only clone of each of the
+        project's repos at `/work/<key>` so the planner can scope tickets against the real codebase.
+        Credentialed (machine token), so it runs here not in the agent — like the engineer clone."""
+        cfg = await self._store.resolved()
+        client = self._docker_factory()
+        repo_vol = f"psa-repo-{epic_id}"
+        claude_vol = f"psa-claude-{epic_id}"
+        await self._remove_volumes(client, repo_vol, claude_vol)
+        await asyncio.to_thread(client.volumes.create, repo_vol)
+        await asyncio.to_thread(client.volumes.create, claude_vol)
+        await run_container(
+            client,
+            image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
+            entrypoint=["bash", "-c"],
+            command=[_planner_clone_script(repos)],
+            name=f"psa-clone-{epic_id}",
             environment={"CLONE_TOKEN": cfg.get("github_token", "")},
             volumes={repo_vol: "/work"},
             user="root",
@@ -116,6 +148,19 @@ def _push_script(github_repo: str, ticket_id: str) -> str:
             f'"ticket/{ticket_id}"',
         ]
     )
+
+
+def _planner_clone_script(repos: Sequence[RepoClone]) -> str:
+    lines = ["set -euo pipefail", "git config --global --add safe.directory '*'"]
+    for repo in repos:
+        dest = f"/work/{repo.key}"
+        lines += [
+            f'git clone --depth 1 --branch "{repo.base_branch}" '
+            f'"https://x-access-token:${{CLONE_TOKEN}}@github.com/{repo.github_repo}.git" "{dest}"',
+            f'git -C "{dest}" remote set-url origin "https://github.com/{repo.github_repo}.git"',
+        ]
+    lines.append("chown -R agent:agent /work")
+    return "\n".join(lines)
 
 
 def _diff_hash_script(base_branch: str) -> str:

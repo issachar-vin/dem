@@ -21,6 +21,42 @@ class TicketStore:
                 session.add(Ticket(ticket_id=ticket_id, project_id=project_id))
                 await session.commit()
 
+    async def create_planned(
+        self, ticket_id: str, project_id: str, *, target_repo: str | None, blocked_by: list[str]
+    ) -> None:
+        """Pre-create a planner ticket carrying its target repo and blocking graph, so the engineer
+        job the ready_for_dev webhook later fires finds them already set (get_or_create is a no-op
+        once the row exists)."""
+        async with self._sessionmaker() as session:
+            if await session.get(Ticket, ticket_id) is None:
+                session.add(
+                    Ticket(
+                        ticket_id=ticket_id,
+                        project_id=project_id,
+                        agent_status="ready_for_dev",
+                        target_repo=target_repo,
+                        blocked_by=blocked_by,
+                    )
+                )
+                await session.commit()
+
+    async def get(self, ticket_id: str) -> Ticket | None:
+        async with self._sessionmaker() as session:
+            return await session.get(Ticket, ticket_id)
+
+    async def statuses_for(self, ticket_ids: list[str]) -> dict[str, str]:
+        if not ticket_ids:
+            return {}
+        async with self._sessionmaker() as session:
+            rows = (
+                await session.execute(
+                    select(Ticket.ticket_id, Ticket.agent_status).where(
+                        Ticket.ticket_id.in_(ticket_ids)
+                    )
+                )
+            ).all()
+            return {ticket_id: status for ticket_id, status in rows}
+
     async def set_status(self, ticket_id: str, status: str) -> None:
         async with self._sessionmaker() as session:
             await session.execute(

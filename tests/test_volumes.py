@@ -83,6 +83,33 @@ async def test_push_pushes_ticket_branch_with_token(store: ConfigStore) -> None:
     assert '"ticket/T-4"' in script
 
 
+async def test_prepare_planner_clones_each_repo_read_only(store: ConfigStore) -> None:
+    from conductor.agents.volumes import RepoClone
+
+    await store.set_secret("github_token", "ghtok")
+    docker = FakeDocker()
+    user = GitHubUser(login="bot", id=1)
+    await _manager(store, docker, user).prepare_planner(
+        epic_id="EPIC-1",
+        repos=[
+            RepoClone("backend", "octo/backend", "main"),
+            RepoClone("ui", "octo/ui", "dev"),
+        ],
+    )
+    assert set(docker.volumes.created) == {"psa-repo-EPIC-1", "psa-claude-EPIC-1"}
+
+    image, command, kwargs = docker.containers.calls[0]
+    assert kwargs["name"] == "psa-clone-EPIC-1"
+    assert kwargs["environment"]["CLONE_TOKEN"] == "ghtok"
+    script = command[0]
+    # Each repo cloned into /work/<key>; no ticket branch (read-only scoping clone).
+    assert 'octo/backend.git" "/work/backend"' in script
+    assert 'octo/ui.git" "/work/ui"' in script
+    assert '--branch "main"' in script and '--branch "dev"' in script
+    assert "checkout -b" not in script
+    assert "chown -R agent:agent /work" in script
+
+
 async def test_diff_hash_runs_git_diff_and_returns_stdout(store: ConfigStore) -> None:
     docker = FakeDocker(FakeContainer(stdout=b"abc123\n"))
     user = GitHubUser(login="bot", id=1)
