@@ -4,15 +4,32 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.7):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+**Status (VERSION 0.5.8):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
 full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
 wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove: **PR #55 (merged)** —
 empty-diff/needs-input parking, clearer GitHub 422s, console stop-job; **PR #56 (merged)** —
 agent-run output capture + console log viewer; **PR #57 (merged)** — job-delete cascade, readable log
-viewer, EDT/EST display; **PR #58 (open, 0.5.7)** — live agent monitoring, agent write-permission fix,
-`blocked` state (below). Phases 1–4 provenance (PRs #39–#50) in the fold below.
-**Next is Phase 6 (observability)** — still waiting on the user for the otel-collector host:port and
-the ntfy/Slack notify target.
+viewer, EDT/EST display; **PR #58 (merged)** — live agent monitoring, agent write-permission fix,
+`blocked` state; **PR #59 (open, 0.5.8)** — verdict JSON parsing fix + review UX (below). Phases 1–4
+provenance (PRs #39–#50) in the fold below.
+**Next up:** the **multi-repo smart router** (decided) — a text-only router agent (ticket + repo
+catalog → JSON list of repo keys; no GitHub access, conductor still does the credentialed clone),
+an optional repo **description** field for routing, and the **multi-PR-per-ticket** machinery a
+cross-repo ticket needs (`Ticket.pr_number` → many; review loop / cleanup / webhook routing per PR).
+Then Phase 6 (observability) — still waiting on the otel-collector host:port and ntfy/Slack target.
+
+**Live-run fixes (PR #59, open, VERSION 0.5.8):** first real epic run surfaced a parser bug that
+looked like three bugs. The **reviewer passed** (`{"pass": true, "findings": []}`) but wrapped it in
+a ```json fence with prose; `parse_verdict`'s bare `json.loads` failed → `MalformedAgentOutput` → job
+**failed**, ticket stuck at **in_review**, no ready_for_approval, no PR comment. Fixes: (1)
+`contracts._extract_json` strips a code fence / grabs the outermost `{…}` before parsing **verdicts
+and plans** (verified against the two real reviewer outputs — both now pass); (2) the **PR link is
+posted as a Plane comment** at PR creation, before review; (3) an **unscorable verdict after a PR
+exists parks** the ticket `review_unscored` → `blocked` with the PR link and completes the job `done`
+(no longer fails + discards the PR); (4) console log modal: **no idle flicker** (re-renders only when
+runs change), **sticky-bottom** scroll (follows the tail, restores position if scrolled up), result
+string **word-wraps**. The engineer's write-permission fix (#58) is confirmed working live — the
+engineer wrote the README. **Not browser-verified:** the flicker/scroll/wrap behavior.
 
 **Console + pipeline hardening (PR #58, open, VERSION 0.5.7):** first real epic run exposed three
 things. (1) **Live agent monitoring** — `agent_runs` now carries `status` (running/done/failed) +
