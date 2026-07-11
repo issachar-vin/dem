@@ -129,11 +129,37 @@ async def complete_job(
     status: JobStatus,
     error: str | None = None,
 ) -> None:
+    # Compare-and-set on RUNNING: if the job was manually stopped from the console mid-run (which
+    # kills the container and makes the scheduler try to fail it here), the stop wins — this write
+    # matches no rows and is a no-op, so the `stopped` status is preserved.
     async with sessionmaker() as session:
         await session.execute(
-            update(Job).where(Job.id == job_id).values(status=status, error=error)
+            update(Job)
+            .where(Job.id == job_id, Job.status == JobStatus.RUNNING)
+            .values(status=status, error=error)
         )
         await session.commit()
+
+
+async def get_job(sessionmaker: async_sessionmaker[AsyncSession], job_id: int) -> Job | None:
+    async with sessionmaker() as session:
+        return await session.get(Job, job_id)
+
+
+async def stop_job(sessionmaker: async_sessionmaker[AsyncSession], job_id: int) -> Job | None:
+    """Mark an active (queued/running) job `stopped` and return it (its payload names the containers
+    to kill). Returns None if the job already reached a terminal state — nothing to stop."""
+    async with sessionmaker() as session:
+        result = cast(
+            CursorResult[Any],
+            await session.execute(
+                update(Job)
+                .where(Job.id == job_id, Job.status.in_((JobStatus.QUEUED, JobStatus.RUNNING)))
+                .values(status=JobStatus.STOPPED)
+            ),
+        )
+        await session.commit()
+        return await session.get(Job, job_id) if result.rowcount == 1 else None
 
 
 async def list_jobs(

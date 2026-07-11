@@ -52,3 +52,46 @@ async def test_timeout_kills_and_raises() -> None:
         )
     assert container.killed is True
     assert container.removed is True
+
+
+class _KContainer:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.killed = False
+
+    def kill(self) -> None:
+        self.killed = True
+
+
+class _KContainers:
+    def __init__(self, containers: list[_KContainer]) -> None:
+        self._containers = containers
+
+    def run(self, image: str, command: list[str], **kwargs: object) -> _KContainer:
+        raise NotImplementedError
+
+    def list(self, **kwargs: object) -> list[_KContainer]:
+        return self._containers  # kill_containers applies its own psa-*-<id> guard
+
+
+class _KDocker:
+    def __init__(self, containers: list[_KContainer]) -> None:
+        self.containers = _KContainers(containers)
+
+
+async def test_kill_containers_kills_only_matching_shape() -> None:
+    from conductor.agents.dockerctl import kill_containers
+
+    containers = [
+        _KContainer("psa-engineer-T1"),
+        _KContainer("psa-clone-T1"),
+        _KContainer("psa-reviewer-T2"),  # different ticket
+        _KContainer("other-T1"),  # not a psa- container
+        _KContainer("psa-engineer-T1x"),  # doesn't end with the id
+    ]
+    killed = await kill_containers(_KDocker(containers), "T1")  # type: ignore[arg-type]
+    assert set(killed) == {"psa-engineer-T1", "psa-clone-T1"}
+    assert [c.name for c in containers if c.killed] == [
+        "psa-engineer-T1",
+        "psa-clone-T1",
+    ]

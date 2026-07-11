@@ -81,3 +81,21 @@ async def test_create_pull_request_posts_and_parses() -> None:
     )
     assert pr.number == 42
     assert pr.html_url == "https://github.com/octo/backend/pull/42"
+
+
+async def test_error_detail_surfaces_errors_array() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            422,
+            json={
+                "message": "Validation Failed",
+                "errors": [{"message": "No commits between main and ticket/x"}],
+            },
+        )
+
+    with pytest.raises(GitHubError) as exc:
+        await _client(httpx.MockTransport(handler)).create_pull_request(
+            "o/r", head="ticket/x", base="main", title="t", body="b"
+        )
+    assert exc.value.status_code == 422
+    assert "No commits between main and ticket/x" in exc.value.detail

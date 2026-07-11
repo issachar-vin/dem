@@ -170,3 +170,57 @@ async def test_list_and_delete_jobs(
     assert await delete_job(sessionmaker, a.id) is True
     assert await delete_job(sessionmaker, a.id) is False
     assert len(await list_jobs(sessionmaker)) == 1
+
+
+async def test_stop_job_marks_active_job_stopped(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from conductor.jobs import claim_job, stop_job
+
+    async with sessionmaker() as session:
+        job = Job(source="plane", event_type="e", payload={"issue_id": "I1"})
+        session.add(job)
+        await session.commit()
+        job_id = job.id
+    await claim_job(sessionmaker, job_id)  # queued → running
+
+    stopped = await stop_job(sessionmaker, job_id)
+    assert stopped is not None and stopped.status == JobStatus.STOPPED
+    assert stopped.payload["issue_id"] == "I1"  # payload available for container kill
+
+
+async def test_stop_job_none_when_already_terminal(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from conductor.jobs import complete_job, claim_job, stop_job
+
+    async with sessionmaker() as session:
+        job = Job(source="plane", event_type="e", payload={})
+        session.add(job)
+        await session.commit()
+        job_id = job.id
+    await claim_job(sessionmaker, job_id)
+    await complete_job(sessionmaker, job_id, status=JobStatus.DONE)
+
+    assert (
+        await stop_job(sessionmaker, job_id) is None
+    )  # already done → nothing to stop
+
+
+async def test_complete_job_does_not_override_stopped(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from conductor.jobs import complete_job, claim_job, stop_job
+
+    async with sessionmaker() as session:
+        job = Job(source="plane", event_type="e", payload={})
+        session.add(job)
+        await session.commit()
+        job_id = job.id
+    await claim_job(sessionmaker, job_id)
+    await stop_job(sessionmaker, job_id)  # running → stopped (console stop)
+
+    # The scheduler's container was killed by the stop, so it now tries to fail the job — must no-op.
+    await complete_job(sessionmaker, job_id, status=JobStatus.FAILED, error="killed")
+    async with sessionmaker() as session:
+        assert (await session.get(Job, job_id)).status == JobStatus.STOPPED

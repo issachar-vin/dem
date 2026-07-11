@@ -55,8 +55,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     mappings = MappingStore(sessionmaker, box)
     app.state.mappings = mappings
 
+    docker_factory = default_factory((await store.resolved()).get("docker_host"))
     ui.configure(
-        store=store, mappings=mappings, auth=auth, settings=settings, sessionmaker=sessionmaker
+        store=store,
+        mappings=mappings,
+        auth=auth,
+        settings=settings,
+        sessionmaker=sessionmaker,
+        docker_factory=docker_factory,
     )
     if settings.targets_file:
         imported = await mappings.import_targets(
@@ -73,7 +79,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     resolved = await store.resolved()
-    docker_factory = default_factory(resolved.get("docker_host"))
     dispatcher = Dispatcher(
         store=store,
         docker_factory=docker_factory,

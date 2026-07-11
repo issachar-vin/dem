@@ -25,5 +25,16 @@ container — you only write code and commit.
 - Do **not** modify git configuration, credentials, or files outside `/work`.
 - Leave the working tree clean (everything committed) when you are done.
 
-When you are finished, reply with a one-paragraph summary of what you changed and confirm the
+## If you're stuck on a decision only a human can make
+
+If the ticket is ambiguous or you genuinely cannot proceed without a human decision (a design
+choice, a missing requirement, conflicting instructions), do **not** guess and do **not** commit a
+half-measure. Instead make **no commits** and reply with a single line, exactly:
+
+`NEEDS_INPUT: <your specific question>`
+
+The conductor will post your question to the ticket for a human and pause the work. Use this
+sparingly — only when a wrong assumption would waste real effort.
+
+When you finish normally, reply with a one-paragraph summary of what you changed and confirm the
 test suite passes.

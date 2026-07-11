@@ -182,13 +182,16 @@ class Scheduler:
                 issue=issue,
             )
             await self._tickets.get_or_create(issue_id, project_id)
-            ctx, session_id = await self._build(ctx)
-            await self._review_loop(ctx, session_id)
+            built = await self._build(ctx)
+            if built is not None:  # None → parked (needs input / no changes); no PR to review
+                ctx, session_id = built
+                await self._review_loop(ctx, session_id)
             await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
         except Exception as exc:
             await complete_job(self._sessionmaker, job.id, status=JobStatus.FAILED, error=str(exc))
             if issue_id:
-                await self._tickets.set_status(issue_id, "error")
+                # Don't clobber a ticket a concurrent console stop already parked as `stopped`.
+                await self._tickets.set_status_unless(issue_id, "error", ("stopped",))
             logger.exception("Ticket pipeline failed for %s", issue_id)
 
     async def _run_planner(self, job: Job) -> None:
@@ -257,9 +260,11 @@ class Scheduler:
                 issue_id, project_id, target_repo=target, blocked_by=blocked_ids
             )
 
-    async def _build(self, ctx: _Pipeline) -> tuple[_Pipeline, str]:
+    async def _build(self, ctx: _Pipeline) -> tuple[_Pipeline, str] | None:
         """Engineer stage: build the ticket, push its branch, open the PR. Returns the enriched
-        context (with the PR url) and the engineer's session id for the review-loop resume."""
+        context (with the PR url) and the engineer's session id for the review-loop resume — or
+        `None` if the ticket was **parked** for a human (the engineer asked a question, or made no
+        changes), in which case there is nothing to review."""
         await self._set_state(ctx, "in_progress", WorkflowState.IN_PROGRESS)
         await self._volumes.prepare(
             ticket_id=ctx.issue_id, github_repo=ctx.repo, base_branch=ctx.base_branch
@@ -273,6 +278,19 @@ class Scheduler:
             )
         )
         await self._tickets.set_engineer_session(ctx.issue_id, envelope.session_id)
+
+        question = _needs_input(envelope.result)
+        if question is not None:
+            await self._park(ctx, "awaiting_human", f"The engineer needs a decision:\n\n{question}")
+            return None
+        if (
+            await self._volumes.commit_count(ticket_id=ctx.issue_id, base_branch=ctx.base_branch)
+            == 0
+        ):
+            summary = envelope.result.strip() or "(no summary)"
+            await self._park(ctx, "no_changes", f"The engineer made no changes.\n\n{summary}")
+            return None
+
         await self._volumes.push(ticket_id=ctx.issue_id, github_repo=ctx.repo)
         pr = await ctx.github.create_pull_request(
             ctx.repo,
@@ -285,6 +303,17 @@ class Scheduler:
         await self._set_state(ctx, "in_review", WorkflowState.IN_REVIEW)
         logger.info("Engineer built ticket %s → PR %s", ctx.issue_id, pr.number)
         return replace(ctx, pr_url=pr.html_url), envelope.session_id
+
+    async def _park(self, ctx: _Pipeline, status: str, comment: str) -> None:
+        """Stop the pipeline for a ticket that needs a human: post the reason as a Plane comment and
+        set a terminal local status (not `done`, so blocked dependents stay blocked). Best-effort on
+        the comment — a Plane hiccup shouldn't turn a valid park into a failure."""
+        await self._tickets.set_status(ctx.issue_id, status)
+        try:
+            await ctx.plane.post_comment(ctx.project_id, ctx.issue_id, _html_paragraphs(comment))
+        except plane.PlaneError as exc:
+            logger.warning("Could not post park comment to %s: %s", ctx.issue_id, exc.detail)
+        logger.info("Ticket %s parked (%s)", ctx.issue_id, status)
 
     async def _review_loop(self, ctx: _Pipeline, session_id: str) -> None:
         """Run reviewer + QA; on any fail, feed findings back to the engineer and re-review until
@@ -458,6 +487,25 @@ def _planner_prompt(epic: dict[str, object], repos: list[RepoMappingView]) -> st
     return prompts.render(
         "planner", title=_issue_title(epic), body=_issue_body(epic), repos=repo_lines
     )
+
+
+_NEEDS_INPUT_MARKER = "NEEDS_INPUT:"
+
+
+def _needs_input(result: str) -> str | None:
+    """If the engineer signalled it can't proceed without a human decision (a `NEEDS_INPUT:` line,
+    per engineer.md), return the question; else None."""
+    for line in result.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(_NEEDS_INPUT_MARKER):
+            return stripped[len(_NEEDS_INPUT_MARKER) :].strip() or "(no question given)"
+    return None
+
+
+def _html_paragraphs(text: str) -> str:
+    from html import escape
+
+    return "".join(f"<p>{escape(block)}</p>" for block in text.split("\n\n") if block.strip())
 
 
 def _plan_issue_html(planned: contracts.PlannedTicket) -> str:

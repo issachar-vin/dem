@@ -110,6 +110,27 @@ async def test_prepare_planner_clones_each_repo_read_only(store: ConfigStore) ->
     assert "chown -R agent:agent /work" in script
 
 
+async def test_commit_count_parses_rev_list(store: ConfigStore) -> None:
+    docker = FakeDocker(FakeContainer(stdout=b"3\n"))
+    user = GitHubUser(login="bot", id=1)
+    count = await _manager(store, docker, user).commit_count(
+        ticket_id="T-6", base_branch="main"
+    )
+    assert count == 3
+    _, command, kwargs = docker.containers.calls[0]
+    assert kwargs["name"] == "psa-count-T-6"
+    assert 'git rev-list --count "main..HEAD"' in command[0]
+
+
+async def test_commit_count_zero_on_unparseable(store: ConfigStore) -> None:
+    docker = FakeDocker(FakeContainer(stdout=b""))
+    user = GitHubUser(login="bot", id=1)
+    count = await _manager(store, docker, user).commit_count(
+        ticket_id="T-7", base_branch="main"
+    )
+    assert count == 0
+
+
 async def test_diff_hash_runs_git_diff_and_returns_stdout(store: ConfigStore) -> None:
     docker = FakeDocker(FakeContainer(stdout=b"abc123\n"))
     user = GitHubUser(login="bot", id=1)

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from conductor.agents.dockerctl import DockerFactory
 from conductor.auth import AuthStore
 from conductor.config import BootstrapSettings
 from conductor.mappings import MappingStore
@@ -22,6 +23,7 @@ class AppContext:
     auth: AuthStore
     settings: BootstrapSettings
     sessionmaker: async_sessionmaker[AsyncSession]
+    docker_factory: DockerFactory
 
 
 _context: AppContext | None = None
@@ -34,10 +36,16 @@ def configure(
     auth: AuthStore,
     settings: BootstrapSettings,
     sessionmaker: async_sessionmaker[AsyncSession],
+    docker_factory: DockerFactory,
 ) -> None:
     global _context
     _context = AppContext(
-        store=store, mappings=mappings, auth=auth, settings=settings, sessionmaker=sessionmaker
+        store=store,
+        mappings=mappings,
+        auth=auth,
+        settings=settings,
+        sessionmaker=sessionmaker,
+        docker_factory=docker_factory,
     )
 
 

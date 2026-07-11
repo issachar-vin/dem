@@ -122,6 +122,17 @@ def _error_detail(response: httpx.Response) -> str:
         body = None
     if isinstance(body, dict):
         message = body.get("message")
+        # GitHub's real reason (e.g. "No commits between main and ticket/…" on a 422) lives in the
+        # errors[] array, not the top-level message — surface it so failures are self-explanatory.
+        errors = body.get("errors")
+        if isinstance(errors, list):
+            details = "; ".join(
+                str(e.get("message") or e.get("code"))
+                for e in errors
+                if isinstance(e, dict) and (e.get("message") or e.get("code"))
+            )
+            if details:
+                message = f"{message}: {details}" if message else details
     return f"HTTP {response.status_code}: {message or response.text[:200]}"
 
 

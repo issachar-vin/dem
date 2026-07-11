@@ -40,6 +40,7 @@ class FakeDispatcher:
         verdicts: list[Verdict] | None = None,
         parse_error: Exception | None = None,
         plan: Plan | None = None,
+        engineer_result: str = "ok",
     ) -> None:
         self._session_id = session_id
         self._error = error
@@ -47,6 +48,7 @@ class FakeDispatcher:
         self._verdicts = list(verdicts) if verdicts is not None else None
         self._parse_error = parse_error
         self._plan = plan if plan is not None else Plan(tickets=[])
+        self._engineer_result = engineer_result
         self.runs: list[AgentRun] = []
         self.parsed_runs: list[AgentRun] = []
 
@@ -54,7 +56,7 @@ class FakeDispatcher:
         self.runs.append(run)
         if self._error is not None:
             raise self._error
-        return ClaudeEnvelope(session_id=self._session_id, result="ok")
+        return ClaudeEnvelope(session_id=self._session_id, result=self._engineer_result)
 
     async def run_parsed(self, run: AgentRun, parse: Any) -> tuple[ClaudeEnvelope, Any]:
         self.parsed_runs.append(run)
@@ -68,11 +70,14 @@ class FakeDispatcher:
 
 
 class FakeVolumes:
-    def __init__(self, *, diff_hashes: list[str] | None = None) -> None:
+    def __init__(
+        self, *, diff_hashes: list[str] | None = None, commit_count: int = 1
+    ) -> None:
         self.prepared: list[dict[str, str]] = []
         self.pushed: list[dict[str, str]] = []
         self.planner_prepared: list[dict[str, Any]] = []
         self.destroyed: list[str] = []
+        self._commit_count = commit_count
         # Default hashes are unique per call so the stall detector never fires; a test that wants a
         # stall passes repeated values.
         self._diff_hashes = list(diff_hashes) if diff_hashes is not None else None
@@ -97,6 +102,9 @@ class FakeVolumes:
 
     async def destroy(self, *, ticket_id: str) -> None:
         self.destroyed.append(ticket_id)
+
+    async def commit_count(self, *, ticket_id: str, base_branch: str) -> int:
+        return self._commit_count
 
     async def diff_hash(self, *, ticket_id: str, base_branch: str) -> str:
         self._diff_calls += 1
@@ -287,6 +295,54 @@ async def test_tick_dispatches_engineer(
         assert ticket.agent_status == "ready_for_approval"
         assert ticket.pr_number == 7
         assert ticket.pr_url == "https://github.com/octo/backend/pull/7"
+
+
+async def test_no_changes_parks_ticket(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    # Engineer left zero commits → no PR to open; park the ticket instead of 422-ing.
+    dispatcher, volumes = FakeDispatcher(), FakeVolumes(commit_count=0)
+    github, plane = FakeGitHub(), FakePlane()
+    scheduler, tickets = await _scheduler(
+        store, mappings, sessionmaker, dispatcher, volumes, plane=plane, github=github
+    )
+    await _enqueue(sessionmaker, "ISSUE-1")
+
+    assert await scheduler.tick() is True
+    assert github.created == []  # no PR attempted
+    assert volumes.pushed == []
+    assert len(plane.comments) == 1  # reason posted to the ticket
+    assert (
+        await _job_status(sessionmaker, "ISSUE-1") == "done"
+    )  # a valid outcome, not a failure
+    ticket = await tickets.get("ISSUE-1")
+    assert ticket is not None and ticket.agent_status == "no_changes"
+
+
+async def test_needs_input_parks_ticket(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    dispatcher = FakeDispatcher(
+        engineer_result="NEEDS_INPUT: which auth provider should I use?"
+    )
+    volumes, github, plane = FakeVolumes(), FakeGitHub(), FakePlane()
+    scheduler, tickets = await _scheduler(
+        store, mappings, sessionmaker, dispatcher, volumes, plane=plane, github=github
+    )
+    await _enqueue(sessionmaker, "ISSUE-1")
+
+    assert await scheduler.tick() is True
+    assert github.created == []  # parked before PR creation
+    assert (
+        "which auth provider" in plane.comments[0][2]
+    )  # the question reached the ticket
+    ticket = await tickets.get("ISSUE-1")
+    assert ticket is not None and ticket.agent_status == "awaiting_human"
+    assert await _job_status(sessionmaker, "ISSUE-1") == "done"
 
 
 async def test_review_fail_then_pass_resumes_engineer(
