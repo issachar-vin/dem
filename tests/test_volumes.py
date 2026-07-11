@@ -164,6 +164,19 @@ async def test_destroy_missing_volume_is_swallowed(store: ConfigStore) -> None:
     await _manager(store, docker, user).destroy(ticket_id="ghost")  # no volumes exist
 
 
+async def test_has_session_true_only_when_both_volumes_present(
+    store: ConfigStore,
+) -> None:
+    await store.set_secret("github_token", "ghtok")
+    docker = FakeDocker()
+    manager = _manager(store, docker, GitHubUser(login="bot", id=1))
+    assert await manager.has_session(ticket_id="T-7") is False  # neither volume
+    docker.volumes.create("psa-repo-T-7")
+    assert await manager.has_session(ticket_id="T-7") is False  # only the repo volume
+    docker.volumes.create("psa-claude-T-7")
+    assert await manager.has_session(ticket_id="T-7") is True  # both present
+
+
 async def test_prepare_clears_stale_volumes_first(store: ConfigStore) -> None:
     await store.set_secret("github_token", "ghtok")
     docker = FakeDocker()

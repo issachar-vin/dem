@@ -72,6 +72,9 @@ class PlaneClient:
             )
         )
 
+    async def list_comments(self, project_id: str, issue_id: str) -> list[dict[str, Any]]:
+        return await self._paginated(f"{self._project_url(project_id)}/issues/{issue_id}/comments/")
+
     async def list_states(self, project_id: str) -> list[dict[str, Any]]:
         return await self._paginated(f"{self._project_url(project_id)}/states/")
 

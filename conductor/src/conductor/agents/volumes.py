@@ -143,6 +143,22 @@ class VolumeManager:
         )
         return stdout.strip()
 
+    async def has_session(self, *, ticket_id: str) -> bool:
+        """Whether both of a ticket's volumes survive — the repo working tree and the Claude session
+        state that `--resume` replays from. Gates whether a parked ticket can resume with its memory
+        instead of being rebuilt from a fresh clone."""
+        client = self._docker_factory()
+
+        def _both_exist() -> bool:
+            for name in (f"psa-repo-{ticket_id}", f"psa-claude-{ticket_id}"):
+                try:
+                    client.volumes.get(name)
+                except Exception:  # docker NotFound (or any lookup failure) → treat as absent
+                    return False
+            return True
+
+        return await asyncio.to_thread(_both_exist)
+
     async def destroy(self, *, ticket_id: str) -> None:
         client = self._docker_factory()
         await self._remove_volumes(client, f"psa-repo-{ticket_id}", f"psa-claude-{ticket_id}")

@@ -14,6 +14,7 @@ its volumes; other PR deliveries are drained. The Plane board is mirrored across
 import asyncio
 import contextlib
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Any
@@ -30,7 +31,7 @@ from conductor.agents.volumes import RepoClone, VolumeManager
 from conductor.github import GitHubClient
 from conductor.jobs import claim_job, complete_job, requeue_running
 from conductor.mappings import MappingStore, RepoMappingView
-from conductor.models import Job, JobStatus, WorkflowState
+from conductor.models import Job, JobStatus, Ticket, WorkflowState
 from conductor.plane import PlaneClient
 from conductor.store import ConfigStore
 from conductor.tickets import TicketStore
@@ -42,6 +43,19 @@ _ENGINEER_TRIGGER = "engineer"
 _PLANNER_TRIGGER = "planner"
 _CHECKER_ROLES = (AgentRole.REVIEWER, AgentRole.QA)
 _DEFAULT_MODEL = {AgentRole.ENGINEER: "claude-sonnet-4-6"}
+# Parked local statuses whose ticket can be *resumed* (engineer paused mid-work, no PR yet) rather
+# than rebuilt from a fresh clone when a human moves it back to ready_for_dev.
+_RESUMABLE_PARKED = frozenset({"awaiting_human", "no_changes"})
+_HTML_TAG = re.compile(r"<[^>]+>")
+
+
+@dataclass(frozen=True)
+class _Resume:
+    """A parked ticket being un-blocked: continue its saved Claude session (memory + working tree
+    intact) instead of a fresh build, feeding it the human's answer from the ticket thread."""
+
+    session_id: str
+    conversation: str
 
 
 @dataclass(frozen=True)
@@ -184,7 +198,8 @@ class Scheduler:
                 issue=issue,
             )
             await self._tickets.get_or_create(issue_id, project_id)
-            built = await self._build(ctx)
+            resume = await self._resume_context(ctx, existing)
+            built = await self._build(ctx, resume=resume)
             if built is not None:  # None → parked (needs input / no changes); no PR to review
                 ctx, session_id = built
                 try:
@@ -276,22 +291,35 @@ class Scheduler:
                 issue_id, project_id, target_repo=target, blocked_by=blocked_ids
             )
 
-    async def _build(self, ctx: _Pipeline) -> tuple[_Pipeline, str] | None:
+    async def _build(
+        self, ctx: _Pipeline, *, resume: _Resume | None = None
+    ) -> tuple[_Pipeline, str] | None:
         """Engineer stage: build the ticket, push its branch, open the PR. Returns the enriched
         context (with the PR url) and the engineer's session id for the review-loop resume — or
         `None` if the ticket was **parked** for a human (the engineer asked a question, or made no
-        changes), in which case there is nothing to review."""
+        changes), in which case there is nothing to review.
+
+        `resume` set → the ticket was parked and is being un-blocked: reuse its existing repo +
+        Claude-session volumes (no wipe, no re-clone) and continue the same `claude` session with
+        the human's answer, so the agent keeps its memory instead of rescanning the codebase."""
         await self._set_state(ctx, "in_progress", WorkflowState.IN_PROGRESS)
-        await self._volumes.prepare(
-            ticket_id=ctx.issue_id, github_repo=ctx.repo, base_branch=ctx.base_branch
-        )
+        if resume is None:
+            await self._volumes.prepare(
+                ticket_id=ctx.issue_id, github_repo=ctx.repo, base_branch=ctx.base_branch
+            )
+            prompt = _engineer_prompt(ctx.issue_id, ctx.issue)
+        else:
+            prompt = prompts.render(
+                "engineer_resume", ticket_id=ctx.issue_id, conversation=resume.conversation
+            )
         envelope = await self._dispatcher.run(
             AgentRun(
                 role=AgentRole.ENGINEER,
                 ticket_id=ctx.issue_id,
                 job_id=ctx.job_id,
-                prompt=_engineer_prompt(ctx.issue_id, ctx.issue),
+                prompt=prompt,
                 model=self._model(ctx.cfg, AgentRole.ENGINEER),
+                resume_session_id=resume.session_id if resume else None,
             )
         )
         await self._tickets.set_engineer_session(ctx.issue_id, envelope.session_id)
@@ -348,6 +376,44 @@ class Scheduler:
             await ctx.plane.post_comment(ctx.project_id, ctx.issue_id, _html_paragraphs(comment))
         except plane.PlaneError as exc:
             logger.warning("Could not post comment to %s: %s", ctx.issue_id, exc.detail)
+
+    async def _resume_context(self, ctx: _Pipeline, existing: Ticket | None) -> _Resume | None:
+        """A parked ticket moved back to ready_for_dev resumes with memory — rather than a fresh
+        clone — when it has a saved engineer session, a resumable parked status, and its volumes are
+        still present. Otherwise return None and the caller builds fresh."""
+        if existing is None or not existing.engineer_session_id:
+            return None
+        if existing.agent_status not in _RESUMABLE_PARKED:
+            return None
+        if not await self._volumes.has_session(ticket_id=ctx.issue_id):
+            logger.info("Ticket %s parked but its volumes are gone; rebuilding fresh", ctx.issue_id)
+            return None
+        logger.info(
+            "Resuming parked ticket %s from session %s",
+            ctx.issue_id,
+            existing.engineer_session_id,
+        )
+        return _Resume(
+            session_id=existing.engineer_session_id,
+            conversation=await self._recent_comments(ctx),
+        )
+
+    async def _recent_comments(self, ctx: _Pipeline, limit: int = 12) -> str:
+        """The tail of the ticket's Plane comment thread as plain text, so the resumed engineer sees
+        the human's answer to the question it paused on. Best-effort."""
+        try:
+            comments = await ctx.plane.list_comments(ctx.project_id, ctx.issue_id)
+        except plane.PlaneError as exc:
+            logger.warning("Could not fetch comments for %s: %s", ctx.issue_id, exc.detail)
+            return ""
+        texts = []
+        for comment in comments[-limit:]:
+            raw = comment.get("comment_stripped") or _HTML_TAG.sub(
+                "", str(comment.get("comment_html", ""))
+            )
+            if text := str(raw).strip():
+                texts.append(text)
+        return "\n\n".join(texts)
 
     async def _review_loop(self, ctx: _Pipeline, session_id: str) -> None:
         """Run reviewer + QA; on any fail, feed findings back to the engineer and re-review until
