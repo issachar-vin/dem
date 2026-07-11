@@ -13,11 +13,17 @@ class FakeContainer:
         stdout: bytes = b"{}",
         stderr: bytes = b"",
         wait_delay: float = 0.0,
+        stream_chunks: list[bytes] | None = None,
+        stream_delay: float = 0.0,
     ) -> None:
         self.exit_code = exit_code
         self._stdout = stdout
         self._stderr = stderr
         self._wait_delay = wait_delay
+        # When following logs live: yield these chunks (defaults to the whole stdout as one chunk),
+        # optionally after `stream_delay` seconds to simulate a still-running container.
+        self._stream_chunks = stream_chunks
+        self._stream_delay = stream_delay
         self.killed = False
         self.removed = False
 
@@ -26,8 +32,27 @@ class FakeContainer:
             time.sleep(self._wait_delay)
         return {"StatusCode": self.exit_code}
 
-    def logs(self, *, stdout: bool = True, stderr: bool = False) -> bytes:
+    def logs(
+        self,
+        *,
+        stdout: bool = True,
+        stderr: bool = False,
+        stream: bool = False,
+        follow: bool = False,
+    ) -> Any:
+        if stream:
+            return self._stream()
         return self._stdout if stdout else self._stderr
+
+    def _stream(self) -> Any:
+        waited = 0.0
+        while waited < self._stream_delay and not self.killed:  # stop early once killed
+            time.sleep(0.02)
+            waited += 0.02
+        for chunk in (
+            self._stream_chunks if self._stream_chunks is not None else [self._stdout]
+        ):
+            yield chunk
 
     def kill(self) -> None:
         self.killed = True

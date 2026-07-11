@@ -326,6 +326,7 @@ async def test_needs_input_parks_ticket(
     mappings: MappingStore,
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
+    await mappings.set_state("proj-1", WorkflowState.BLOCKED, "state-blocked")
     dispatcher = FakeDispatcher(
         engineer_result="NEEDS_INPUT: which auth provider should I use?"
     )
@@ -342,6 +343,8 @@ async def test_needs_input_parks_ticket(
     )  # the question reached the ticket
     ticket = await tickets.get("ISSUE-1")
     assert ticket is not None and ticket.agent_status == "awaiting_human"
+    # A parked ticket is surfaced on the Plane board's blocked column.
+    assert ("proj-1", "ISSUE-1", "state-blocked") in plane.moves
     assert await _job_status(sessionmaker, "ISSUE-1") == "done"
 
 

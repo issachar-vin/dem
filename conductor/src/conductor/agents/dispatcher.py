@@ -5,7 +5,7 @@ lives in volumes.py; this module assumes the ticket's volumes already exist."""
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Protocol
 
@@ -35,17 +35,20 @@ class AgentRun:
     ticket_id: str
     prompt: str
     model: str
+    job_id: int = 0  # the job driving this dispatch; scopes the captured run in the console
     resume_session_id: str | None = None
     loop_round: int = 0
 
 
 class RunRecorder(Protocol):
-    """Persists one agent run's captured output so the console can replay it after the container is
-    gone. Injected so the dispatcher stays free of DB/store coupling (and tests can drop it)."""
+    """Persists one agent run's captured output live so the console can watch it in progress and
+    replay it after the container is gone. Injected so the dispatcher stays free of DB/store
+    coupling (and tests can drop it). Lifecycle: `start` opens the run row, `append` streams stdout
+    into it, `finish` marks it terminal."""
 
-    async def __call__(
-        self, *, ticket_id: str, role: str, loop_round: int, output: str, ok: bool
-    ) -> None: ...
+    async def start(self, *, job_id: int, ticket_id: str, role: str, loop_round: int) -> int: ...
+    async def append(self, run_id: int, chunk: str) -> None: ...
+    async def finish(self, run_id: int, *, ok: bool, output: str | None = None) -> None: ...
 
 
 class Dispatcher:
@@ -84,6 +87,7 @@ class Dispatcher:
         async with self._semaphores[run.role]:
             cfg = await self._store.resolved()
             client = self._docker_factory()
+            run_id = await self._start(run)
             try:
                 stdout = await run_container(
                     client,
@@ -98,26 +102,48 @@ class Dispatcher:
                     mem_limit=cfg.get("agent_memory_limit"),
                     nano_cpus=_nano_cpus(cfg.get("agent_cpu_limit")),
                     timeout=_timeout_seconds(cfg),
+                    on_output=self._sink(run_id),
                 )
             except (ContainerFailed, ContainerTimeout) as exc:
-                await self._record(run, getattr(exc, "logs", str(exc)), ok=False)
+                await self._finish(run_id, ok=False, output=getattr(exc, "logs", str(exc)))
                 raise
-            await self._record(run, stdout, ok=True)
+            await self._finish(run_id, ok=True)
             return contracts.parse_envelope(stdout.strip())
 
-    async def _record(self, run: AgentRun, output: str, *, ok: bool) -> None:
+    async def _start(self, run: AgentRun) -> int | None:
         if self._recorder is None:
-            return
+            return None
         try:
-            await self._recorder(
+            return await self._recorder.start(
+                job_id=run.job_id,
                 ticket_id=run.ticket_id,
                 role=run.role.value,
                 loop_round=run.loop_round,
-                output=output,
-                ok=ok,
             )
         except Exception:  # capturing a log must never break a dispatch
-            logger.warning("Failed to record agent run for %s", run.ticket_id, exc_info=True)
+            logger.warning("Failed to open agent run for %s", run.ticket_id, exc_info=True)
+            return None
+
+    def _sink(self, run_id: int | None) -> Callable[[str], Awaitable[None]] | None:
+        if self._recorder is None or run_id is None:
+            return None
+        recorder = self._recorder
+
+        async def append(chunk: str) -> None:
+            try:
+                await recorder.append(run_id, chunk)
+            except Exception:  # a failed capture must never break the run
+                logger.warning("Failed to append agent run output", exc_info=True)
+
+        return append
+
+    async def _finish(self, run_id: int | None, *, ok: bool, output: str | None = None) -> None:
+        if self._recorder is None or run_id is None:
+            return
+        try:
+            await self._recorder.finish(run_id, ok=ok, output=output)
+        except Exception:  # capturing a log must never break a dispatch
+            logger.warning("Failed to finalize agent run", exc_info=True)
 
 
 def _build_command(run: AgentRun) -> list[str]:
@@ -127,11 +153,18 @@ def _build_command(run: AgentRun) -> list[str]:
     # stream-json (requires --verbose) emits incremental events — tool calls, messages — instead of
     # one buffered blob at the end, so the run is visible live in `docker logs` and captured for the
     # console. parse_envelope reads the final result event out of the JSONL.
+    #
+    # --dangerously-skip-permissions runs the agent in bypass-permissions mode: no human is at a
+    # permission prompt in a headless `claude -p`, so without it every Write/Edit/Bash-write blocks
+    # forever ("requested permissions to write … but you haven't granted it yet"). Safe here because
+    # each run is confined to its own throwaway per-ticket container + volumes (the image already
+    # records `bypassPermissionsModeAccepted` and runs as the non-root `agent` user).
     command += [
         run.prompt,
         "--output-format",
         "stream-json",
         "--verbose",
+        "--dangerously-skip-permissions",
         "--model",
         run.model,
     ]

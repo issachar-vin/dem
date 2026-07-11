@@ -42,6 +42,9 @@ class WorkflowState(StrEnum):
     IN_PROGRESS = "in_progress"
     IN_REVIEW = "in_review"
     CHANGES_REQUESTED = "changes_requested"
+    # A ticket the pipeline parked for a human: the agent asked for input, made no changes, or
+    # stalled. Mapped onto the operator's Plane "blocked" column so these surface on the board.
+    BLOCKED = "blocked"
     READY_FOR_APPROVAL = "ready_for_approval"
     DONE = "done"
 
@@ -216,17 +219,30 @@ class Ticket(Base):
     )
 
 
+class AgentRunStatus(StrEnum):
+    RUNNING = "running"  # container live; `output` is being appended to as events stream in
+    DONE = "done"
+    FAILED = "failed"
+
+
 class AgentRunLog(Base):
     """Captured output of one `claude -p` agent container run, so the console can show what an agent
     did (or why it failed) after the container is gone. One row per dispatch (engineer/reviewer/qa/
-    planner and each resume round), keyed by ticket."""
+    planner and each resume round), keyed by ticket. The row is created when the container starts
+    (`status=running`) and its `output` grows as stream-json events arrive, so the console can watch
+    a run live; `status` moves to done/failed on exit."""
 
     __tablename__ = "agent_runs"
 
     id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
+    # The job whose dispatch produced this run. Runs are scoped and deleted by job (a re-triggered
+    # ticket gets a new job, so its runs never collide with the old one's). Nullable for runs
+    # captured before this column existed. ticket_id is retained for role/container grouping.
+    job_id: Mapped[int | None] = mapped_column(_AutoPK, index=True, default=None)
     ticket_id: Mapped[str] = mapped_column(String(64), index=True)
     role: Mapped[str] = mapped_column(String(16))
     loop_round: Mapped[int] = mapped_column(default=0)
+    status: Mapped[str] = mapped_column(String(16), default=AgentRunStatus.RUNNING)
     ok: Mapped[bool] = mapped_column(Boolean, default=True)
     # Raw container stdout (stream-json events) on success, or captured failure logs. Tail-capped in
     # the store so a runaway agent can't bloat the DB.

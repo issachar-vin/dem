@@ -57,6 +57,39 @@ async def test_output_is_tail_capped(
     assert run.output.startswith("…[truncated]…")
 
 
+async def test_streaming_lifecycle_status_and_scoping(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    run_id = await agent_runs.start_run(
+        sessionmaker, job_id=5, ticket_id="T-9", role="engineer", loop_round=0
+    )
+    (live,) = await agent_runs.runs_for_job(sessionmaker, 5)
+    assert live.status == "running" and live.output == ""
+
+    await agent_runs.append_output(sessionmaker, run_id, "line1\n")
+    await agent_runs.append_output(sessionmaker, run_id, "line2\n")
+    await agent_runs.finish_run(sessionmaker, run_id, ok=True)
+
+    (done,) = await agent_runs.runs_for_job(sessionmaker, 5)
+    assert done.status == "done" and done.ok is True
+    assert done.output == "line1\nline2\n"
+    # A run for a different job is not returned here.
+    assert await agent_runs.runs_for_job(sessionmaker, 6) == []
+
+
+async def test_finish_failure_appends_logs(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    run_id = await agent_runs.start_run(
+        sessionmaker, job_id=1, ticket_id="T-1", role="engineer", loop_round=0
+    )
+    await agent_runs.append_output(sessionmaker, run_id, "partial")
+    await agent_runs.finish_run(sessionmaker, run_id, ok=False, output="\nboom")
+    (run,) = await agent_runs.runs_for_job(sessionmaker, 1)
+    assert run.status == "failed" and run.ok is False
+    assert run.output == "partial\nboom"
+
+
 def _stream(*events: dict) -> str:
     return "\n".join(json.dumps(e) for e in events)
 

@@ -4,14 +4,33 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.6):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+**Status (VERSION 0.5.7):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
 full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
 wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove: **PR #55 (merged)** —
 empty-diff/needs-input parking, clearer GitHub 422s, console stop-job; **PR #56 (merged)** —
-agent-run output capture + console log viewer; **PR #57 (open, 0.5.6)** — job-delete cascade,
-readable log viewer, EDT/EST display (below). Phases 1–4 provenance (PRs #39–#50) in the fold below.
+agent-run output capture + console log viewer; **PR #57 (merged)** — job-delete cascade, readable log
+viewer, EDT/EST display; **PR #58 (open, 0.5.7)** — live agent monitoring, agent write-permission fix,
+`blocked` state (below). Phases 1–4 provenance (PRs #39–#50) in the fold below.
 **Next is Phase 6 (observability)** — still waiting on the user for the otel-collector host:port and
 the ntfy/Slack notify target.
+
+**Console + pipeline hardening (PR #58, open, VERSION 0.5.7):** first real epic run exposed three
+things. (1) **Live agent monitoring** — `agent_runs` now carries `status` (running/done/failed) +
+`job_id` (migration `d5e6f7a8b9c0`); runs are scoped/deleted **by job**, not ticket (a re-triggered
+ticket no longer collides with an earlier job's logs). `run_container` gained an `on_output` path that
+*follows* the container stdout live and batches appends every ~1s; the dispatcher does
+`start_run → stream → finish_run`, and the console log modal auto-refreshes every 2s while a run is
+`running` (● LIVE badge + partial transcript), stopping on close. The stream is the same one Phase 6
+will pipe to Grafana/Loki. (2) **Agent write-permission fix** — headless `claude -p` never entered
+bypass mode, so every Write/Edit/Bash-write blocked forever; added `--dangerously-skip-permissions`
+(safe: throwaway per-ticket container, non-root `agent`, image already seeds
+`bypassPermissionsModeAccepted`). This **supersedes** the earlier "no --dangerously-skip-permissions
+needed" finding under PR #55 — that held for Edit on existing files but not for Write. (3) **`blocked`
+WorkflowState** — parked (needs-input / no-changes) tickets now mirror onto a Plane "blocked" column;
+the state auto-appears in the console mapping form (optional — board-mirroring skips it if unmapped).
+The engineer prompt also now tells the agent to raise a hard environmental blocker early via
+`NEEDS_INPUT` instead of grinding through workarounds. **Not yet browser/live-verified** — the
+NiceGUI auto-refresh and the permission fix need this image deployed.
 
 **Phase 5 Part 4 — merged-PR cleanup (PR #54, open):** the scheduler now selects `source="github"`
 jobs (previously filtered out by `_select_job`'s `source=="plane"` clause). `_run_cleanup`: a
