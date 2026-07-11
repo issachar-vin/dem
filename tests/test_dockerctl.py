@@ -54,6 +54,60 @@ async def test_timeout_kills_and_raises() -> None:
     assert container.removed is True
 
 
+async def test_streaming_flushes_chunks_and_returns_full_stdout() -> None:
+    container = FakeContainer(stream_chunks=[b'{"a":1}\n', b'{"b":2}\n'])
+    docker = FakeDocker(container)
+    flushed: list[str] = []
+
+    async def on_output(chunk: str) -> None:
+        flushed.append(chunk)
+
+    out = await run_container(
+        docker, image="img", command=["x"], name="c1", on_output=on_output
+    )
+    assert (
+        out == '{"a":1}\n{"b":2}\n'
+    )  # full stdout still returned for envelope parsing
+    assert "".join(flushed) == out  # everything was streamed live
+    assert container.removed is True
+
+
+async def test_streaming_nonzero_exit_raises_with_stderr() -> None:
+    container = FakeContainer(exit_code=1, stdout=b"partial\n", stderr=b"kaboom")
+
+    async def on_output(chunk: str) -> None:
+        pass
+
+    with pytest.raises(ContainerFailed) as exc:
+        await run_container(
+            FakeDocker(container),
+            image="img",
+            command=["x"],
+            name="c1",
+            on_output=on_output,
+        )
+    assert "kaboom" in exc.value.logs
+
+
+async def test_streaming_timeout_kills_and_raises() -> None:
+    container = FakeContainer(stream_delay=0.5, stream_chunks=[b"late\n"])
+
+    async def on_output(chunk: str) -> None:
+        pass
+
+    with pytest.raises(ContainerTimeout):
+        await run_container(
+            FakeDocker(container),
+            image="img",
+            command=["x"],
+            name="c1",
+            timeout=0.05,
+            on_output=on_output,
+        )
+    assert container.killed is True
+    assert container.removed is True
+
+
 class _KContainer:
     def __init__(self, name: str) -> None:
         self.name = name

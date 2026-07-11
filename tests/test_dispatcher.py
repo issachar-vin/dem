@@ -44,6 +44,7 @@ async def test_run_builds_command_and_volumes(store: ConfigStore) -> None:
         "--output-format",
         "stream-json",
         "--verbose",
+        "--dangerously-skip-permissions",
         "--model",
         "claude-x",
     ]
@@ -157,21 +158,36 @@ async def test_run_parsed_raises_after_second_malformed(store: ConfigStore) -> N
 
 
 class _Recorder:
-    def __init__(self) -> None:
-        self.calls: list[dict[str, object]] = []
+    """Captures the streaming lifecycle: one started run, its appended chunks, and the finish."""
 
-    async def __call__(
-        self, *, ticket_id: str, role: str, loop_round: int, output: str, ok: bool
-    ) -> None:
-        self.calls.append(
-            {
-                "ticket_id": ticket_id,
-                "role": role,
-                "loop_round": loop_round,
-                "output": output,
-                "ok": ok,
-            }
-        )
+    def __init__(self) -> None:
+        self.started: dict[str, object] | None = None
+        self.appended: list[str] = []
+        self.finished: dict[str, object] | None = None
+
+    async def start(
+        self, *, job_id: int, ticket_id: str, role: str, loop_round: int
+    ) -> int:
+        self.started = {
+            "job_id": job_id,
+            "ticket_id": ticket_id,
+            "role": role,
+            "loop_round": loop_round,
+        }
+        return 42
+
+    async def append(self, run_id: int, chunk: str) -> None:
+        assert run_id == 42
+        self.appended.append(chunk)
+
+    async def finish(self, run_id: int, *, ok: bool, output: str | None = None) -> None:
+        assert run_id == 42
+        self.finished = {"ok": ok, "output": output}
+
+    @property
+    def output(self) -> str:
+        extra = str((self.finished or {}).get("output") or "")
+        return "".join(self.appended) + extra
 
 
 async def test_run_records_success_output(store: ConfigStore) -> None:
@@ -179,15 +195,16 @@ async def test_run_records_success_output(store: ConfigStore) -> None:
     docker = FakeDocker(FakeContainer(stdout=b'{"session_id":"s","result":"ok"}'))
     recorder = _Recorder()
     await Dispatcher(store=store, docker_factory=lambda: docker, recorder=recorder).run(
-        _run(loop_round=2)
+        _run(job_id=7, loop_round=2)
     )
-    assert len(recorder.calls) == 1
-    call = recorder.calls[0]
-    assert call["ok"] is True
-    assert call["ticket_id"] == "T-1"
-    assert call["role"] == "engineer"
-    assert call["loop_round"] == 2
-    assert '"result":"ok"' in str(call["output"])
+    assert recorder.started == {
+        "job_id": 7,
+        "ticket_id": "T-1",
+        "role": "engineer",
+        "loop_round": 2,
+    }
+    assert recorder.finished is not None and recorder.finished["ok"] is True
+    assert '"result":"ok"' in recorder.output  # streamed live via append
 
 
 async def test_run_records_failure_logs_and_reraises(store: ConfigStore) -> None:
@@ -202,5 +219,5 @@ async def test_run_records_failure_logs_and_reraises(store: ConfigStore) -> None
         await Dispatcher(
             store=store, docker_factory=lambda: docker, recorder=recorder
         ).run(_run())
-    assert recorder.calls[0]["ok"] is False
-    assert "boom happened" in str(recorder.calls[0]["output"])
+    assert recorder.finished is not None and recorder.finished["ok"] is False
+    assert "boom happened" in recorder.output

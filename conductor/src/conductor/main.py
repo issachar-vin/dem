@@ -80,23 +80,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     resolved = await store.resolved()
 
-    async def _record_run(
-        *, ticket_id: str, role: str, loop_round: int, output: str, ok: bool
-    ) -> None:
-        await agent_runs.record_run(
-            sessionmaker,
-            ticket_id=ticket_id,
-            role=role,
-            loop_round=loop_round,
-            output=output,
-            ok=ok,
-        )
-
     dispatcher = Dispatcher(
         store=store,
         docker_factory=docker_factory,
         max_concurrent=_int(resolved.get("max_concurrent_agents"), 1),
-        recorder=_record_run,
+        recorder=agent_runs.DbRunRecorder(sessionmaker),
     )
     sched = scheduler.Scheduler(
         sessionmaker=sessionmaker,

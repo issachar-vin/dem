@@ -760,7 +760,7 @@ async def jobs_page() -> None:
             """,
         )
         table.on("info", lambda e: _show_payloads(int(e.args["id"]), payloads[int(e.args["id"])]))
-        table.on("logs", lambda e: _show_logs(str(e.args["ticket_id"])))
+        table.on("logs", lambda e: _show_logs(int(e.args["id"])))
         table.on("stop", lambda e: _stop_job(int(e.args["id"])))
         table.on("delete", lambda e: _delete_job(int(e.args["id"])))
 
@@ -777,28 +777,48 @@ def _show_payloads(job_id: int, raw_payloads: list[dict[str, Any]]) -> None:
     dialog.open()
 
 
-async def _show_logs(ticket_id: str) -> None:
-    runs = await agent_runs.runs_for_ticket(get_context().sessionmaker, ticket_id)
-    with kit.dialog_card(f"Agent runs — {ticket_id} ({len(runs)})", min_width=820) as dialog:
+async def _show_logs(job_id: int) -> None:
+    """Agent runs for a job. A run still in progress streams into its row, so the modal
+    auto-refreshes (every 2s) to show live activity; the timer stops when the dialog closes."""
+    sessionmaker = get_context().sessionmaker
+
+    @ui.refreshable
+    async def body() -> None:
+        runs = await agent_runs.runs_for_job(sessionmaker, job_id)
         if not runs:
             ui.label("No agent runs recorded yet.").classes("text-sm").style(f"color:{kit.MUTED}")
+            return
         for run in runs:
             _run_entry(run)
+
+    with kit.dialog_card(f"Agent runs — job {job_id}", min_width=820) as dialog:
+        with ui.column().classes("w-full gap-3"):
+            await body()
+        timer = ui.timer(2.0, body.refresh)
         with ui.row().classes("w-full justify-end"):
             kit.secondary_button("Close", on_click=dialog.close)
+    dialog.on("hide", timer.cancel)  # stop polling once the modal is closed
     dialog.open()
 
 
 def _run_entry(run: agent_runs.AgentRunView) -> None:
-    """One captured run as a readable card: outcome pill, plain-language transcript, and a clickable
-    result indicator that opens the raw stream-json in a second modal."""
+    """One run as a readable card: status pill, plain-language transcript, and a clickable result
+    indicator that opens the raw stream-json in a second modal. A `running` run shows a live badge
+    and its partial transcript."""
     summary = agent_runs.summarize_output(run.output)
+    live = run.status == "running"
     ok = run.ok and not summary.is_error
-    color = kit.GREEN if ok else kit.RED
+    if live:
+        color, badge = kit.ORANGE, "● live"
+    else:
+        color, badge = (
+            (kit.GREEN if ok else kit.RED),
+            (summary.outcome or ("ok" if ok else "failed")),
+        )
     with ui.element("div").classes("v2-row w-full p-4 gap-3 flex flex-col"):
         with ui.row().classes("w-full items-center justify-between no-wrap"):
             with ui.row().classes("items-center gap-3 no-wrap"):
-                kit.pill(summary.outcome or ("ok" if ok else "failed"), color=color)
+                kit.pill(badge, color=color)
                 ui.label(f"{run.role} · round {run.loop_round}").classes("font-medium").style(
                     f"color:{kit.TEXT}"
                 )
@@ -811,7 +831,8 @@ def _run_entry(run: agent_runs.AgentRunView) -> None:
                 for sentence in summary.sentences:
                     ui.label(sentence).classes("text-sm leading-snug").style(f"color:{kit.TEXT}")
         else:
-            ui.label("No transcript captured.").classes("text-sm").style(f"color:{kit.MUTED}")
+            waiting = "Waiting for output…" if live else "No transcript captured."
+            ui.label(waiting).classes("text-sm").style(f"color:{kit.MUTED}")
 
         indicator = ui.element("div").classes(
             "v2-row w-full p-3 cursor-pointer v2-lift flex items-center"
@@ -819,7 +840,8 @@ def _run_entry(run: agent_runs.AgentRunView) -> None:
         )
         with indicator:
             with ui.column().classes("gap-0 min-w-0"):
-                ui.label(summary.result_text or "View raw JSON").classes(
+                fallback = "Streaming…" if live else "View raw JSON"
+                ui.label(summary.result_text or fallback).classes(
                     "text-sm font-medium ellipsis"
                 ).style(f"color:{color}")
                 if summary.meta:

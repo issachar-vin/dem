@@ -52,6 +52,7 @@ class _Pipeline:
     cfg: dict[str, str]
     plane: PlaneClient
     github: GitHubClient
+    job_id: int  # the driving job; scopes every agent run captured during this dispatch
     project_id: str
     issue_id: str
     repo: str
@@ -175,6 +176,7 @@ class Scheduler:
                 cfg=cfg,
                 plane=plane_client,
                 github=self._github_factory(cfg),
+                job_id=job.id,
                 project_id=project_id,
                 issue_id=issue_id,
                 repo=repo,
@@ -212,6 +214,7 @@ class Scheduler:
                 AgentRun(
                     role=AgentRole.PLANNER,
                     ticket_id=epic_id,
+                    job_id=job.id,
                     prompt=_planner_prompt(epic, repos),
                     model=self._model(cfg, AgentRole.PLANNER),
                 ),
@@ -273,6 +276,7 @@ class Scheduler:
             AgentRun(
                 role=AgentRole.ENGINEER,
                 ticket_id=ctx.issue_id,
+                job_id=ctx.job_id,
                 prompt=_engineer_prompt(ctx.issue_id, ctx.issue),
                 model=self._model(ctx.cfg, AgentRole.ENGINEER),
             )
@@ -304,11 +308,20 @@ class Scheduler:
         logger.info("Engineer built ticket %s → PR %s", ctx.issue_id, pr.number)
         return replace(ctx, pr_url=pr.html_url), envelope.session_id
 
-    async def _park(self, ctx: _Pipeline, status: str, comment: str) -> None:
-        """Stop the pipeline for a ticket that needs a human: post the reason as a Plane comment and
-        set a terminal local status (not `done`, so blocked dependents stay blocked). Best-effort on
-        the comment — a Plane hiccup shouldn't turn a valid park into a failure."""
+    async def _park(
+        self,
+        ctx: _Pipeline,
+        status: str,
+        comment: str,
+        *,
+        workflow_state: WorkflowState = WorkflowState.BLOCKED,
+    ) -> None:
+        """Stop the pipeline for a ticket that needs a human: mirror it onto the Plane board's
+        blocked column, post the reason as a comment, and set a terminal local status (not `done`,
+        so blocked dependents stay blocked). Best-effort on the Plane calls — a hiccup shouldn't
+        turn a valid park into a failure."""
         await self._tickets.set_status(ctx.issue_id, status)
+        await self._move_plane_state(ctx, workflow_state)
         try:
             await ctx.plane.post_comment(ctx.project_id, ctx.issue_id, _html_paragraphs(comment))
         except plane.PlaneError as exc:
@@ -359,6 +372,7 @@ class Scheduler:
                 AgentRun(
                     role=role,
                     ticket_id=ctx.issue_id,
+                    job_id=ctx.job_id,
                     prompt=_checker_prompt(role, ctx),
                     model=self._model(ctx.cfg, role),
                 ),
@@ -378,6 +392,7 @@ class Scheduler:
             AgentRun(
                 role=AgentRole.ENGINEER,
                 ticket_id=ctx.issue_id,
+                job_id=ctx.job_id,
                 prompt=prompts.render(
                     "engineer_followup",
                     ticket_id=ctx.issue_id,
@@ -408,6 +423,9 @@ class Scheduler:
         """Advance the ticket's local status and mirror it onto the Plane board. Best-effort: an
         unmapped state or a Plane error is logged, and the dispatch still continues."""
         await self._tickets.set_status(ctx.issue_id, local_status)
+        await self._move_plane_state(ctx, workflow_state)
+
+    async def _move_plane_state(self, ctx: _Pipeline, workflow_state: WorkflowState) -> None:
         state_id = await self._mappings.get_state_id(ctx.project_id, workflow_state)
         if state_id is None:
             logger.info(

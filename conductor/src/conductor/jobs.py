@@ -188,16 +188,16 @@ async def list_jobs(
 
 
 async def delete_job(sessionmaker: async_sessionmaker[AsyncSession], job_id: int) -> bool:
-    """Delete a job and every record tied to its ticket: the agent-run log history and the ticket's
-    pipeline-mirror row (there is no DB-level FK — jobs reach their ticket through the payload's
-    `issue_id` — so the cascade is done here explicitly)."""
+    """Delete a job and every record it produced: its agent-run log history (scoped by job, so a
+    re-triggered ticket's earlier runs are left alone) and, if the job drove a ticket, that ticket's
+    pipeline-mirror row. There is no DB-level FK, so the cascade is done here explicitly."""
     async with sessionmaker() as session:
         row = await session.get(Job, job_id)
         if row is None:
             return False
+        await session.execute(delete(AgentRunLog).where(AgentRunLog.job_id == job_id))
         ticket_id = str(row.payload.get("issue_id") or "")
         if ticket_id:
-            await session.execute(delete(AgentRunLog).where(AgentRunLog.ticket_id == ticket_id))
             await session.execute(delete(Ticket).where(Ticket.ticket_id == ticket_id))
         await session.delete(row)
         await session.commit()

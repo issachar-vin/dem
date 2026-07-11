@@ -172,7 +172,7 @@ async def test_list_and_delete_jobs(
     assert len(await list_jobs(sessionmaker)) == 1
 
 
-async def test_delete_job_cascades_ticket_records(
+async def test_delete_job_cascades_its_runs_and_ticket(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     from conductor import agent_runs
@@ -180,18 +180,17 @@ async def test_delete_job_cascades_ticket_records(
     from conductor.models import AgentRunLog, Ticket
 
     async with sessionmaker() as session:
-        job = Job(source="plane", event_type="e", payload={"issue_id": "T-1"})
-        session.add_all(
-            [
-                job,
-                Ticket(ticket_id="T-1", project_id="P"),
-                Ticket(ticket_id="T-2", project_id="P"),
-            ]
-        )
+        job1 = Job(source="plane", event_type="e", payload={"issue_id": "T-1"})
+        job2 = Job(
+            source="plane", event_type="e", payload={"issue_id": "T-1"}
+        )  # ticket re-trigger
+        session.add_all([job1, job2, Ticket(ticket_id="T-1", project_id="P")])
         await session.commit()
-        job_id = job.id
+        job1_id, job2_id = job1.id, job2.id
+    # Both jobs share ticket T-1, but their runs are scoped by job_id.
     await agent_runs.record_run(
         sessionmaker,
+        job_id=job1_id,
         ticket_id="T-1",
         role="engineer",
         loop_round=0,
@@ -200,22 +199,23 @@ async def test_delete_job_cascades_ticket_records(
     )
     await agent_runs.record_run(
         sessionmaker,
-        ticket_id="T-2",
+        job_id=job2_id,
+        ticket_id="T-1",
         role="engineer",
         loop_round=0,
         output="b",
         ok=True,
     )
 
-    assert await delete_job(sessionmaker, job_id) is True
+    assert await delete_job(sessionmaker, job1_id) is True
 
     async with sessionmaker() as session:
-        assert await session.get(Ticket, "T-1") is None
         assert (
-            await session.get(Ticket, "T-2") is not None
-        )  # unrelated ticket untouched
+            await session.get(Ticket, "T-1") is None
+        )  # the job's ticket is cleaned up
         remaining = (await session.execute(select(AgentRunLog))).scalars().all()
-        assert [r.ticket_id for r in remaining] == ["T-2"]
+        # Only job1's run is gone; the re-trigger's run survives despite the shared ticket_id.
+        assert [r.job_id for r in remaining] == [job2_id]
 
 
 async def test_delete_job_without_issue_id_leaves_records(

@@ -9,10 +9,16 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from conductor.models import AgentRunLog
+from conductor.models import AgentRunLog, AgentRunStatus
 
 # Keep the tail (which holds the final result event) so a runaway agent can't bloat the DB.
 _MAX_OUTPUT_CHARS = 200_000
+
+
+def _cap(output: str) -> str:
+    if len(output) <= _MAX_OUTPUT_CHARS:
+        return output
+    return "…[truncated]…\n" + output[-_MAX_OUTPUT_CHARS:]
 
 
 class AgentRunView(BaseModel):
@@ -21,9 +27,64 @@ class AgentRunView(BaseModel):
     id: int
     role: str
     loop_round: int
+    status: str
     ok: bool
     output: str
     created_at: datetime
+
+
+async def start_run(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    *,
+    job_id: int,
+    ticket_id: str,
+    role: str,
+    loop_round: int,
+) -> int:
+    """Open a `running` run row before the container's first byte and return its id; the streamed
+    output is appended to it as events arrive."""
+    async with sessionmaker() as session:
+        row = AgentRunLog(
+            job_id=job_id,
+            ticket_id=ticket_id,
+            role=role,
+            loop_round=loop_round,
+            status=AgentRunStatus.RUNNING,
+        )
+        session.add(row)
+        await session.commit()
+        return row.id
+
+
+async def append_output(
+    sessionmaker: async_sessionmaker[AsyncSession], run_id: int, chunk: str
+) -> None:
+    async with sessionmaker() as session:
+        row = await session.get(AgentRunLog, run_id)
+        if row is None:
+            return
+        row.output = _cap(row.output + chunk)
+        await session.commit()
+
+
+async def finish_run(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    run_id: int,
+    *,
+    ok: bool,
+    output: str | None = None,
+) -> None:
+    """Mark a run terminal. `output`, if given, is appended first (used for the failure logs a
+    streamed run never saw on stdout)."""
+    async with sessionmaker() as session:
+        row = await session.get(AgentRunLog, run_id)
+        if row is None:
+            return
+        if output:
+            row.output = _cap(row.output + output)
+        row.ok = ok
+        row.status = AgentRunStatus.DONE if ok else AgentRunStatus.FAILED
+        await session.commit()
 
 
 async def record_run(
@@ -34,25 +95,56 @@ async def record_run(
     loop_round: int,
     output: str,
     ok: bool,
+    job_id: int | None = None,
 ) -> None:
-    if len(output) > _MAX_OUTPUT_CHARS:
-        output = "…[truncated]…\n" + output[-_MAX_OUTPUT_CHARS:]
+    """Persist a finished run in one shot (non-streamed capture / tests)."""
     async with sessionmaker() as session:
         session.add(
-            AgentRunLog(ticket_id=ticket_id, role=role, loop_round=loop_round, output=output, ok=ok)
+            AgentRunLog(
+                job_id=job_id,
+                ticket_id=ticket_id,
+                role=role,
+                loop_round=loop_round,
+                output=_cap(output),
+                ok=ok,
+                status=AgentRunStatus.DONE if ok else AgentRunStatus.FAILED,
+            )
         )
         await session.commit()
 
 
-async def runs_for_ticket(
-    sessionmaker: async_sessionmaker[AsyncSession], ticket_id: str
+class DbRunRecorder:
+    """The dispatcher's `RunRecorder`, bound to the DB: the streaming lifecycle expressed over the
+    `agent_runs` store. Injected so the dispatcher stays free of DB coupling."""
+
+    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]) -> None:
+        self._sessionmaker = sessionmaker
+
+    async def start(self, *, job_id: int, ticket_id: str, role: str, loop_round: int) -> int:
+        return await start_run(
+            self._sessionmaker,
+            job_id=job_id,
+            ticket_id=ticket_id,
+            role=role,
+            loop_round=loop_round,
+        )
+
+    async def append(self, run_id: int, chunk: str) -> None:
+        await append_output(self._sessionmaker, run_id, chunk)
+
+    async def finish(self, run_id: int, *, ok: bool, output: str | None = None) -> None:
+        await finish_run(self._sessionmaker, run_id, ok=ok, output=output)
+
+
+async def _runs_where(
+    sessionmaker: async_sessionmaker[AsyncSession], clause: Any
 ) -> list[AgentRunView]:
     async with sessionmaker() as session:
         rows = (
             (
                 await session.execute(
                     select(AgentRunLog)
-                    .where(AgentRunLog.ticket_id == ticket_id)
+                    .where(clause)
                     .order_by(AgentRunLog.created_at.asc(), AgentRunLog.id.asc())
                 )
             )
@@ -60,6 +152,18 @@ async def runs_for_ticket(
             .all()
         )
         return [AgentRunView.model_validate(row) for row in rows]
+
+
+async def runs_for_job(
+    sessionmaker: async_sessionmaker[AsyncSession], job_id: int
+) -> list[AgentRunView]:
+    return await _runs_where(sessionmaker, AgentRunLog.job_id == job_id)
+
+
+async def runs_for_ticket(
+    sessionmaker: async_sessionmaker[AsyncSession], ticket_id: str
+) -> list[AgentRunView]:
+    return await _runs_where(sessionmaker, AgentRunLog.ticket_id == ticket_id)
 
 
 class RunSummary(BaseModel):

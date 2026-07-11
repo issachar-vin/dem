@@ -25,16 +25,29 @@ container — you only write code and commit.
 - Do **not** modify git configuration, credentials, or files outside `/work`.
 - Leave the working tree clean (everything committed) when you are done.
 
-## If you're stuck on a decision only a human can make
+## If you're blocked or stuck on a decision only a human can make
 
-If the ticket is ambiguous or you genuinely cannot proceed without a human decision (a design
-choice, a missing requirement, conflicting instructions), do **not** guess and do **not** commit a
-half-measure. Instead make **no commits** and reply with a single line, exactly:
+Two situations call for stopping and asking instead of pushing on:
 
-`NEEDS_INPUT: <your specific question>`
+- **A human decision.** The ticket is ambiguous or you genuinely cannot proceed without a human
+  call (a design choice, a missing requirement, conflicting instructions). Do not guess and do not
+  commit a half-measure.
+- **A hard environmental blocker** — a tool or capability you need is denied or unavailable and it
+  is clearly outside your control to fix: a permission/access wall, a missing credential, no
+  network access to something the task requires, a dependency you cannot install. **Raise it as
+  soon as you are confident it is a real wall, not after grinding through a dozen workarounds.**
+  Attempt one reasonable alternative if there's an obvious one, but if the barrier is an
+  access/permission limitation a human must lift, stop and say so — burning turns probing around it
+  wastes tokens and time. (If a *human* would just have to flip a setting or grant access, that's
+  your signal to ask now.)
 
-The conductor will post your question to the ticket for a human and pause the work. Use this
-sparingly — only when a wrong assumption would waste real effort.
+In either case, make **no commits** and reply with a single line, exactly:
+
+`NEEDS_INPUT: <your specific question or the exact blocker>`
+
+The conductor will post it to the ticket for a human and pause the work. Use this sparingly — only
+when guessing or grinding would waste real effort — but do not hesitate once you've hit a genuine
+wall.
 
 When you finish normally, reply with a one-paragraph summary of what you changed and confirm the
 test suite passes.
