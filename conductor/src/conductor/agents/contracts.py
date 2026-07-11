@@ -6,6 +6,7 @@ Malformed output is a `MalformedAgentOutput`; the dispatcher's policy is to re-p
 valid JSON and, failing that, park the ticket for a human — the policy lives there, not here."""
 
 import json
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -101,9 +102,28 @@ def parse_plan(result: str) -> Plan:
     return _parse(Plan, result)
 
 
+_FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
+
+
+def _extract_json(raw: str) -> str:
+    """Pull the JSON payload out of an agent's reply. Models routinely wrap the contract JSON in a
+    ```json code fence and pad it with prose ("Perfect. Here's my assessment: ```json … ``` Summary:
+    …"), so a bare `json.loads` fails on otherwise-valid output. Prefer a fenced block if present,
+    else fall back to the outermost {...}; return the input unchanged if neither is found (the parse
+    then fails as before)."""
+    text = raw.strip()
+    fence = _FENCE.search(text)
+    if fence:
+        text = fence.group(1).strip()
+    start, end = text.find("{"), text.rfind("}")
+    if 0 <= start < end:
+        return text[start : end + 1]
+    return text
+
+
 def _parse[T: BaseModel](model: type[T], raw: str) -> T:
     try:
-        data: Any = json.loads(raw)
+        data: Any = json.loads(_extract_json(raw))
     except json.JSONDecodeError as exc:
         raise MalformedAgentOutput(f"not valid JSON: {exc}") from exc
     return _validate(model, data)

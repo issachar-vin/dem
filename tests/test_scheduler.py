@@ -262,9 +262,9 @@ async def test_tick_dispatches_engineer(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     dispatcher, volumes = FakeDispatcher(session_id="s-42"), FakeVolumes()
-    github = FakeGitHub()
+    github, plane = FakeGitHub(), FakePlane()
     scheduler, tickets = await _scheduler(
-        store, mappings, sessionmaker, dispatcher, volumes, github=github
+        store, mappings, sessionmaker, dispatcher, volumes, plane=plane, github=github
     )
     await _enqueue(sessionmaker, "ISSUE-1")
 
@@ -295,6 +295,8 @@ async def test_tick_dispatches_engineer(
         assert ticket.agent_status == "ready_for_approval"
         assert ticket.pr_number == 7
         assert ticket.pr_url == "https://github.com/octo/backend/pull/7"
+    # The PR link is posted to the ticket as a comment (before review).
+    assert any("pull/7" in c[2] for c in plane.comments)
 
 
 async def test_no_changes_parks_ticket(
@@ -370,9 +372,9 @@ async def test_review_fail_then_pass_resumes_engineer(
     assert len(engineer_runs) == 2
     assert engineer_runs[1].resume_session_id == "sess-1"
     assert "null deref" in engineer_runs[1].prompt
-    assert (
-        len(plane.comments) == 1
-    )  # findings posted as a ticket comment for the failing round
+    # The PR-opened comment, then the round-1 findings comment.
+    assert any("Pull request opened" in c[2] for c in plane.comments)
+    assert any("null deref" in c[2] for c in plane.comments)
     assert any("ready for approval" in m for m in notify.messages)
     async with sessionmaker() as session:
         ticket = await session.get(Ticket, "ISSUE-1")
@@ -408,21 +410,37 @@ async def test_stall_detection_marks_stalled(
         assert ticket.agent_status == "stalled"
 
 
-async def test_malformed_verdict_parks_ticket(
+async def test_unscorable_verdict_parks_with_pr_not_failed(
     store: ConfigStore,
     mappings: MappingStore,
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
+    await mappings.set_state("proj-1", WorkflowState.BLOCKED, "state-blocked")
     dispatcher = FakeDispatcher(parse_error=MalformedAgentOutput("still not JSON"))
-    scheduler, tickets = await _scheduler(
-        store, mappings, sessionmaker, dispatcher, FakeVolumes()
+    github, plane = FakeGitHub(), FakePlane()
+    scheduler, _ = await _scheduler(
+        store,
+        mappings,
+        sessionmaker,
+        dispatcher,
+        FakeVolumes(),
+        plane=plane,
+        github=github,
     )
     await _enqueue(sessionmaker, "ISSUE-1")
 
     await scheduler.tick()
 
-    assert await _job_status(sessionmaker, "ISSUE-1") == "failed"
-    assert await tickets.in_flight_ids() == set()  # parked at "error"
+    # A PR was opened before review, so an unscorable verdict parks for a human — it does not fail
+    # the job and discard the work.
+    assert github.created  # PR was opened
+    assert await _job_status(sessionmaker, "ISSUE-1") == "done"
+    async with sessionmaker() as session:
+        ticket = await session.get(Ticket, "ISSUE-1")
+        assert ticket is not None and ticket.agent_status == "review_unscored"
+    # PR link is posted to the ticket and the board shows blocked.
+    assert any("pull/7" in c[2] for c in plane.comments)
+    assert ("proj-1", "ISSUE-1", "state-blocked") in plane.moves
 
 
 async def test_no_jobs_returns_false(

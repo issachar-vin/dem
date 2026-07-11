@@ -187,7 +187,20 @@ class Scheduler:
             built = await self._build(ctx)
             if built is not None:  # None → parked (needs input / no changes); no PR to review
                 ctx, session_id = built
-                await self._review_loop(ctx, session_id)
+                try:
+                    await self._review_loop(ctx, session_id)
+                except contracts.MalformedAgentOutput as exc:
+                    # A PR already exists, so an unscorable verdict is a park for a human, not a job
+                    # failure that discards real work. Surface it on the board with the PR link.
+                    await self._park(
+                        ctx,
+                        "review_unscored",
+                        f"A reviewer/QA verdict could not be scored (unparseable agent output): "
+                        f"{exc}\n\nThe PR is open for manual review: {ctx.pr_url}",
+                    )
+                    logger.warning(
+                        "Review unscored for %s; parked with PR %s", issue_id, ctx.pr_url
+                    )
             await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
         except Exception as exc:
             await complete_job(self._sessionmaker, job.id, status=JobStatus.FAILED, error=str(exc))
@@ -304,9 +317,13 @@ class Scheduler:
             body=_pr_body(ctx.issue_id, ctx.issue),
         )
         await self._tickets.set_pr(ctx.issue_id, pr.number, pr.html_url)
+        ctx = replace(ctx, pr_url=pr.html_url)
+        # Post the PR link to the ticket now, before review — so it's on the work item regardless of
+        # how the review turns out, not only on the ready-for-approval path.
+        await self._post_comment(ctx, f"Pull request opened: {pr.html_url}")
         await self._set_state(ctx, "in_review", WorkflowState.IN_REVIEW)
         logger.info("Engineer built ticket %s → PR %s", ctx.issue_id, pr.number)
-        return replace(ctx, pr_url=pr.html_url), envelope.session_id
+        return ctx, envelope.session_id
 
     async def _park(
         self,
@@ -322,11 +339,15 @@ class Scheduler:
         turn a valid park into a failure."""
         await self._tickets.set_status(ctx.issue_id, status)
         await self._move_plane_state(ctx, workflow_state)
+        await self._post_comment(ctx, comment)
+        logger.info("Ticket %s parked (%s)", ctx.issue_id, status)
+
+    async def _post_comment(self, ctx: _Pipeline, comment: str) -> None:
+        """Best-effort Plane comment — a Plane hiccup must never turn valid work into a failure."""
         try:
             await ctx.plane.post_comment(ctx.project_id, ctx.issue_id, _html_paragraphs(comment))
         except plane.PlaneError as exc:
-            logger.warning("Could not post park comment to %s: %s", ctx.issue_id, exc.detail)
-        logger.info("Ticket %s parked (%s)", ctx.issue_id, status)
+            logger.warning("Could not post comment to %s: %s", ctx.issue_id, exc.detail)
 
     async def _review_loop(self, ctx: _Pipeline, session_id: str) -> None:
         """Run reviewer + QA; on any fail, feed findings back to the engineer and re-review until
