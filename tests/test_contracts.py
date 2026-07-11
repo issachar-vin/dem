@@ -14,6 +14,32 @@ def test_parse_envelope_extracts_session_and_result() -> None:
     assert env.result == "hi"
 
 
+def test_parse_envelope_reads_result_event_from_stream_json() -> None:
+    # stream-json output: many events, the final type=result one carries session_id + result.
+    raw = "\n".join(
+        [
+            json.dumps({"type": "system", "subtype": "init", "session_id": "s2"}),
+            json.dumps({"type": "assistant", "message": {"content": "working…"}}),
+            json.dumps(
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "session_id": "s2",
+                    "result": "done",
+                }
+            ),
+        ]
+    )
+    env = contracts.parse_envelope(raw)
+    assert env.session_id == "s2"
+    assert env.result == "done"
+
+
+def test_parse_envelope_empty_raises() -> None:
+    with pytest.raises(contracts.MalformedAgentOutput):
+        contracts.parse_envelope("   \n  ")
+
+
 def test_parse_verdict_accepts_pass_alias() -> None:
     verdict = contracts.parse_verdict(
         json.dumps(

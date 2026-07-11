@@ -5,10 +5,12 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     DateTime,
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     func,
     text,
@@ -212,3 +214,21 @@ class Ticket(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class AgentRunLog(Base):
+    """Captured output of one `claude -p` agent container run, so the console can show what an agent
+    did (or why it failed) after the container is gone. One row per dispatch (engineer/reviewer/qa/
+    planner and each resume round), keyed by ticket."""
+
+    __tablename__ = "agent_runs"
+
+    id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
+    ticket_id: Mapped[str] = mapped_column(String(64), index=True)
+    role: Mapped[str] = mapped_column(String(16))
+    loop_round: Mapped[int] = mapped_column(default=0)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Raw container stdout (stream-json events) on success, or captured failure logs. Tail-capped in
+    # the store so a runaway agent can't bloat the DB.
+    output: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

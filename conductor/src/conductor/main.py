@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI
 
-from conductor import __version__, poller, scheduler, telemetry, ui
+from conductor import __version__, agent_runs, poller, scheduler, telemetry, ui
 from conductor.agents.dispatcher import Dispatcher
 from conductor.agents.dockerctl import default_factory
 from conductor.agents.volumes import VolumeManager
@@ -79,10 +79,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     resolved = await store.resolved()
+
+    async def _record_run(
+        *, ticket_id: str, role: str, loop_round: int, output: str, ok: bool
+    ) -> None:
+        await agent_runs.record_run(
+            sessionmaker,
+            ticket_id=ticket_id,
+            role=role,
+            loop_round=loop_round,
+            output=output,
+            ok=ok,
+        )
+
     dispatcher = Dispatcher(
         store=store,
         docker_factory=docker_factory,
         max_concurrent=_int(resolved.get("max_concurrent_agents"), 1),
+        recorder=_record_run,
     )
     sched = scheduler.Scheduler(
         sessionmaker=sessionmaker,
