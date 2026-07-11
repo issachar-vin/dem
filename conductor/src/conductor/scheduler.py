@@ -5,8 +5,11 @@ Plane blocking relationships, and dispatches one agent container per role (MAX_C
 The engineer trigger runs the full build+review pipeline for one ticket, synchronously within one
 job: build the ticket in a container, push its branch, open a PR, then loop reviewer + QA — feeding
 their findings back to the engineer via `--resume` until both pass (→ ready_for_approval) or the
-engineer's diff stops changing (→ stalled). The Plane board is mirrored across the transitions. The
-planner and GitHub triggers are later Phase-5 parts; those jobs are left queued for now."""
+engineer's diff stops changing (→ stalled). The planner trigger decomposes an epic: it clones the
+project's repos read-only, dispatches the planner, then creates a Plane issue per planned ticket in
+ready_for_dev (each carrying its target repo + blocking graph locally). The Plane board is mirrored
+across the transitions. GitHub PR-event triggers (merged-PR cleanup) are Part 4; those jobs stay
+queued for now."""
 
 import asyncio
 import contextlib
@@ -20,13 +23,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from conductor import github, notify, plane, prompts
 from conductor.agents import contracts
-from conductor.agents.contracts import Finding, Verdict
+from conductor.agents.contracts import Finding, Plan, Verdict
 from conductor.agents.dispatcher import AgentRun, Dispatcher
 from conductor.agents.roles import MODEL_SETTING, AgentRole
-from conductor.agents.volumes import VolumeManager
+from conductor.agents.volumes import RepoClone, VolumeManager
 from conductor.github import GitHubClient
 from conductor.jobs import claim_job, complete_job, requeue_running
-from conductor.mappings import MappingStore
+from conductor.mappings import MappingStore, RepoMappingView
 from conductor.models import Job, JobStatus, WorkflowState
 from conductor.plane import PlaneClient
 from conductor.store import ConfigStore
@@ -36,6 +39,7 @@ logger = logging.getLogger("conductor")
 
 _INTERVAL_SECONDS = 5.0
 _ENGINEER_TRIGGER = "engineer"
+_PLANNER_TRIGGER = "planner"
 _CHECKER_ROLES = (AgentRole.REVIEWER, AgentRole.QA)
 _DEFAULT_MODEL = {AgentRole.ENGINEER: "claude-sonnet-4-6"}
 
@@ -81,16 +85,19 @@ class Scheduler:
         self._notify = notify_fn
 
     async def tick(self) -> bool:
-        """Select and run at most one ticket. Returns True if work was dispatched this tick."""
-        job = await self._select_engineer_job()
+        """Select and run at most one job. Returns True if work was dispatched this tick."""
+        job = await self._select_job()
         if job is None:
             return False
         if not await claim_job(self._sessionmaker, job.id):
             return False  # another worker won the race
-        await self._run_engineer(job)
+        if job.payload.get("trigger") == _PLANNER_TRIGGER:
+            await self._run_planner(job)
+        else:
+            await self._run_engineer(job)
         return True
 
-    async def _select_engineer_job(self) -> Job | None:
+    async def _select_job(self) -> Job | None:
         async with self._sessionmaker() as session:
             jobs = (
                 (
@@ -106,8 +113,8 @@ class Scheduler:
         in_flight = await self._tickets.in_flight_ids()
         candidates: list[Job] = []
         for job in jobs:
-            if job.payload.get("trigger") != _ENGINEER_TRIGGER:
-                continue  # planner / other triggers are Phase 5
+            if job.payload.get("trigger") not in (_ENGINEER_TRIGGER, _PLANNER_TRIGGER):
+                continue  # GitHub PR triggers are Part 4
             if await self._is_blocked(job):
                 continue
             candidates.append(job)
@@ -116,16 +123,23 @@ class Scheduler:
         return candidates[0] if candidates else None
 
     async def _is_blocked(self, job: Job) -> bool:
-        """Plane blocking-relationship eligibility gate. Phase 5 seam: the planner does not create
-        blocking relationships until Phase 5, and the CE relations endpoint must be validated live
-        before we call it — so nothing is blocked yet."""
-        return False
+        """A ticket is blocked until every issue in its `blocked_by` graph is `done` (merged — set
+        by the Part-4 cleanup handler). The planner records the graph locally; a blocker not yet
+        created, or not yet done, keeps the ticket queued. Epics/human tickets carry no graph."""
+        issue_id = str(job.payload.get("issue_id", ""))
+        ticket = await self._tickets.get(issue_id)
+        if ticket is None or not ticket.blocked_by:
+            return False
+        statuses = await self._tickets.statuses_for(ticket.blocked_by)
+        return any(statuses.get(blocker) != "done" for blocker in ticket.blocked_by)
 
     async def _run_engineer(self, job: Job) -> None:
         project_id = str(job.payload.get("project_id", ""))
         issue_id = str(job.payload.get("issue_id", ""))
         try:
-            repo, base_branch = await self._resolve_repo(project_id)
+            existing = await self._tickets.get(issue_id)
+            target_repo = existing.target_repo if existing else None
+            repo, base_branch = await self._resolve_repo(project_id, target_repo)
             cfg = await self._store.resolved()
             plane_client = self._plane_factory(cfg)
             issue = await plane_client.get_issue(project_id, issue_id)
@@ -149,6 +163,72 @@ class Scheduler:
                 await self._tickets.set_status(issue_id, "error")
             logger.exception("Ticket pipeline failed for %s", issue_id)
 
+    async def _run_planner(self, job: Job) -> None:
+        project_id = str(job.payload.get("project_id", ""))
+        epic_id = str(job.payload.get("issue_id", ""))
+        try:
+            cfg = await self._store.resolved()
+            plane_client = self._plane_factory(cfg)
+            repos = await self._mappings.list_repos(project_id)
+            if not repos:
+                raise RuntimeError(f"project {project_id} has no mapped repo")
+            epic = await plane_client.get_issue(project_id, epic_id)
+            await self._volumes.prepare_planner(
+                epic_id=epic_id,
+                repos=[RepoClone(r.key, r.github_repo, r.base_branch) for r in repos],
+            )
+            _, plan = await self._dispatcher.run_parsed(
+                AgentRun(
+                    role=AgentRole.PLANNER,
+                    ticket_id=epic_id,
+                    prompt=_planner_prompt(epic, repos),
+                    model=self._model(cfg, AgentRole.PLANNER),
+                ),
+                contracts.parse_plan,
+            )
+            await self._materialize_plan(plane_client, project_id, plan, repos)
+            await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
+            logger.info("Planner decomposed epic %s into %d ticket(s)", epic_id, len(plan.tickets))
+        except Exception as exc:
+            await complete_job(self._sessionmaker, job.id, status=JobStatus.FAILED, error=str(exc))
+            logger.exception("Planner failed for epic %s", epic_id)
+
+    async def _materialize_plan(
+        self, plane_client: PlaneClient, project_id: str, plan: Plan, repos: list[RepoMappingView]
+    ) -> None:
+        """Create a Plane issue per planned ticket (dropped into ready_for_dev so the webhook fires
+        an engineer job) and pre-create the local Ticket carrying its target repo and — once every
+        issue id is known — its resolved blocking graph."""
+        repo_keys = {r.key for r in repos}
+        ready_state = await self._mappings.get_state_id(project_id, WorkflowState.READY_FOR_DEV)
+        if ready_state is None:
+            logger.warning(
+                "No ready_for_dev state mapped for project %s; planner tickets won't auto-dispatch",
+                project_id,
+            )
+        created: list[tuple[Any, str, str | None]] = []
+        for planned in plan.tickets:
+            target = planned.target_repo if planned.target_repo in repo_keys else None
+            if target is None:
+                logger.warning(
+                    "Planned ticket %s target_repo %r not in project repos; routing to first repo",
+                    planned.key,
+                    planned.target_repo,
+                )
+            fields: dict[str, Any] = {"description_html": _plan_issue_html(planned)}
+            if ready_state:
+                fields["state"] = ready_state
+            issue = await plane_client.create_issue(project_id, name=planned.title, **fields)
+            issue_id = str(issue.get("id", ""))
+            if issue_id:
+                created.append((planned, issue_id, target))
+        key_to_id = {planned.key: issue_id for planned, issue_id, _ in created}
+        for planned, issue_id, target in created:
+            blocked_ids = [key_to_id[k] for k in planned.blocked_by if k in key_to_id]
+            await self._tickets.create_planned(
+                issue_id, project_id, target_repo=target, blocked_by=blocked_ids
+            )
+
     async def _build(self, ctx: _Pipeline) -> tuple[_Pipeline, str]:
         """Engineer stage: build the ticket, push its branch, open the PR. Returns the enriched
         context (with the PR url) and the engineer's session id for the review-loop resume."""
@@ -161,7 +241,7 @@ class Scheduler:
                 role=AgentRole.ENGINEER,
                 ticket_id=ctx.issue_id,
                 prompt=_engineer_prompt(ctx.issue_id, ctx.issue),
-                model=self._model(ctx, AgentRole.ENGINEER),
+                model=self._model(ctx.cfg, AgentRole.ENGINEER),
             )
         )
         await self._tickets.set_engineer_session(ctx.issue_id, envelope.session_id)
@@ -223,7 +303,7 @@ class Scheduler:
                     role=role,
                     ticket_id=ctx.issue_id,
                     prompt=_checker_prompt(role, ctx),
-                    model=self._model(ctx, role),
+                    model=self._model(ctx.cfg, role),
                 ),
                 contracts.parse_verdict,
             )
@@ -246,7 +326,7 @@ class Scheduler:
                     ticket_id=ctx.issue_id,
                     findings=_format_findings(verdicts),
                 ),
-                model=self._model(ctx, AgentRole.ENGINEER),
+                model=self._model(ctx.cfg, AgentRole.ENGINEER),
                 resume_session_id=session_id,
                 loop_round=round_no,
             )
@@ -262,8 +342,8 @@ class Scheduler:
         except plane.PlaneError as exc:  # the resume still carries the findings in its prompt
             logger.warning("Could not post findings to issue %s: %s", ctx.issue_id, exc.detail)
 
-    def _model(self, ctx: _Pipeline, role: AgentRole) -> str:
-        return ctx.cfg.get(MODEL_SETTING[role], _DEFAULT_MODEL.get(role, "claude-haiku-4-5"))
+    def _model(self, cfg: dict[str, str], role: AgentRole) -> str:
+        return cfg.get(MODEL_SETTING[role], _DEFAULT_MODEL.get(role, "claude-haiku-4-5"))
 
     async def _set_state(
         self, ctx: _Pipeline, local_status: str, workflow_state: WorkflowState
@@ -289,13 +369,20 @@ class Scheduler:
                 exc.detail,
             )
 
-    async def _resolve_repo(self, project_id: str) -> tuple[str, str]:
-        """The target repo for a ticket. Phase 5's planner assigns each ticket one repo key; until
-        then (human-created ready_for_dev tickets) take the project's first mapped repo."""
+    async def _resolve_repo(self, project_id: str, target_repo: str | None) -> tuple[str, str]:
+        """The repo a ticket builds in: the planner-assigned `target_repo` key, else the project's
+        first mapped repo (human-created tickets have no assignment)."""
         repos = await self._mappings.list_repos(project_id)
         if not repos:
             raise RuntimeError(f"project {project_id} has no mapped repo")
-        repo = repos[0]
+        repo = next((r for r in repos if r.key == target_repo), None) if target_repo else None
+        if target_repo and repo is None:
+            logger.warning(
+                "Ticket target_repo %r not mapped in project %s; using first repo",
+                target_repo,
+                project_id,
+            )
+        repo = repo or repos[0]
         return repo.github_repo, repo.base_branch
 
     async def recover(self) -> None:
@@ -334,6 +421,22 @@ def _engineer_prompt(issue_id: str, issue: dict[str, object]) -> str:
 def _pr_body(issue_id: str, issue: dict[str, object]) -> str:
     body = _issue_body(issue)
     return f"Automated implementation of ticket `{issue_id}`.\n\n{body}".rstrip()
+
+
+def _planner_prompt(epic: dict[str, object], repos: list[RepoMappingView]) -> str:
+    repo_lines = "\n".join(
+        f"- `{r.key}` → {r.github_repo} (base branch `{r.base_branch}`)" for r in repos
+    )
+    return prompts.render(
+        "planner", title=_issue_title(epic), body=_issue_body(epic), repos=repo_lines
+    )
+
+
+def _plan_issue_html(planned: contracts.PlannedTicket) -> str:
+    html = f"<p>{planned.body}</p>"
+    if planned.acceptance_criteria:
+        html += f"<p><b>Acceptance criteria</b></p><p>{planned.acceptance_criteria}</p>"
+    return html
 
 
 def _checker_prompt(role: AgentRole, ctx: _Pipeline) -> str:

@@ -196,6 +196,12 @@ class Ticket(Base):
     ticket_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(64), index=True)
     agent_status: Mapped[str] = mapped_column(String(32), default="pending")
+    # The repo key (from RepoMapping) the planner assigned this ticket; None → human-created ticket,
+    # routed to the project's first repo. Drives clone/branch/PR/webhook routing.
+    target_repo: Mapped[str | None] = mapped_column(String(64), default=None)
+    # Ticket ids (Plane issue ids) that must reach `done` before this one may build. Set by the
+    # planner from its plan's blocking graph; the scheduler gates on it.
+    blocked_by: Mapped[list[str]] = mapped_column(JSON, default=list)
     pr_number: Mapped[int | None] = mapped_column(default=None)
     pr_url: Mapped[str | None] = mapped_column(String(512), default=None)
     engineer_session_id: Mapped[str | None] = mapped_column(String(128), default=None)
