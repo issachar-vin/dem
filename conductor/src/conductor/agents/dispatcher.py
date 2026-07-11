@@ -7,10 +7,16 @@ import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from typing import Protocol
 
 from conductor.agents import contracts
 from conductor.agents.contracts import MalformedAgentOutput
-from conductor.agents.dockerctl import DockerFactory, run_container
+from conductor.agents.dockerctl import (
+    ContainerFailed,
+    ContainerTimeout,
+    DockerFactory,
+    run_container,
+)
 from conductor.agents.roles import AgentRole
 from conductor.catalog import DEFAULT_AGENT_IMAGE
 from conductor.store import ConfigStore
@@ -33,6 +39,15 @@ class AgentRun:
     loop_round: int = 0
 
 
+class RunRecorder(Protocol):
+    """Persists one agent run's captured output so the console can replay it after the container is
+    gone. Injected so the dispatcher stays free of DB/store coupling (and tests can drop it)."""
+
+    async def __call__(
+        self, *, ticket_id: str, role: str, loop_round: int, output: str, ok: bool
+    ) -> None: ...
+
+
 class Dispatcher:
     def __init__(
         self,
@@ -40,9 +55,11 @@ class Dispatcher:
         store: ConfigStore,
         docker_factory: DockerFactory,
         max_concurrent: int = 1,
+        recorder: RunRecorder | None = None,
     ) -> None:
         self._store = store
         self._docker_factory = docker_factory
+        self._recorder = recorder
         # Per-role semaphore: at most `max_concurrent` engineers / reviewers / QA at a time (v1 is
         # 1 — serial builds). One agent per role, not one across all roles, so review can run while
         # a different ticket's engineer holds its own slot.
@@ -67,28 +84,57 @@ class Dispatcher:
         async with self._semaphores[run.role]:
             cfg = await self._store.resolved()
             client = self._docker_factory()
-            stdout = await run_container(
-                client,
-                image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
-                command=_build_command(run),
-                name=f"psa-{run.role.value}-{run.ticket_id}",
-                environment=_build_env(run, cfg),
-                volumes={
-                    f"psa-repo-{run.ticket_id}": "/work",
-                    f"psa-claude-{run.ticket_id}": "/home/agent/.claude",
-                },
-                mem_limit=cfg.get("agent_memory_limit"),
-                nano_cpus=_nano_cpus(cfg.get("agent_cpu_limit")),
-                timeout=_timeout_seconds(cfg),
-            )
+            try:
+                stdout = await run_container(
+                    client,
+                    image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
+                    command=_build_command(run),
+                    name=f"psa-{run.role.value}-{run.ticket_id}",
+                    environment=_build_env(run, cfg),
+                    volumes={
+                        f"psa-repo-{run.ticket_id}": "/work",
+                        f"psa-claude-{run.ticket_id}": "/home/agent/.claude",
+                    },
+                    mem_limit=cfg.get("agent_memory_limit"),
+                    nano_cpus=_nano_cpus(cfg.get("agent_cpu_limit")),
+                    timeout=_timeout_seconds(cfg),
+                )
+            except (ContainerFailed, ContainerTimeout) as exc:
+                await self._record(run, getattr(exc, "logs", str(exc)), ok=False)
+                raise
+            await self._record(run, stdout, ok=True)
             return contracts.parse_envelope(stdout.strip())
+
+    async def _record(self, run: AgentRun, output: str, *, ok: bool) -> None:
+        if self._recorder is None:
+            return
+        try:
+            await self._recorder(
+                ticket_id=run.ticket_id,
+                role=run.role.value,
+                loop_round=run.loop_round,
+                output=output,
+                ok=ok,
+            )
+        except Exception:  # capturing a log must never break a dispatch
+            logger.warning("Failed to record agent run for %s", run.ticket_id, exc_info=True)
 
 
 def _build_command(run: AgentRun) -> list[str]:
     command = ["claude", "-p"]
     if run.resume_session_id:
         command += ["--resume", run.resume_session_id]
-    command += [run.prompt, "--output-format", "json", "--model", run.model]
+    # stream-json (requires --verbose) emits incremental events — tool calls, messages — instead of
+    # one buffered blob at the end, so the run is visible live in `docker logs` and captured for the
+    # console. parse_envelope reads the final result event out of the JSONL.
+    command += [
+        run.prompt,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        run.model,
+    ]
     return command
 
 

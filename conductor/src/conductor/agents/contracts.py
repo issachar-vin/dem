@@ -74,7 +74,23 @@ class EngineerResult(BaseModel):
 
 
 def parse_envelope(raw: str) -> ClaudeEnvelope:
-    return _parse(ClaudeEnvelope, raw)
+    """Extract the result envelope from a `claude -p` run. With `--output-format stream-json` the
+    output is JSONL — many events, the last `type == "result"` one carrying session_id + result;
+    falls back to parsing a single JSON object (the non-streaming `json` format) for back-compat."""
+    lines = [line for line in raw.splitlines() if line.strip()]
+    if not lines:
+        raise MalformedAgentOutput("empty agent output")
+    result_event: dict[str, Any] | None = None
+    for line in lines:
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("type") == "result":
+            result_event = obj  # last result event wins
+    if result_event is not None:
+        return _validate(ClaudeEnvelope, result_event)
+    return _parse(ClaudeEnvelope, lines[-1])
 
 
 def parse_verdict(result: str) -> Verdict:
@@ -90,6 +106,10 @@ def _parse[T: BaseModel](model: type[T], raw: str) -> T:
         data: Any = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise MalformedAgentOutput(f"not valid JSON: {exc}") from exc
+    return _validate(model, data)
+
+
+def _validate[T: BaseModel](model: type[T], data: Any) -> T:
     try:
         return model.model_validate(data)
     except ValidationError as exc:

@@ -15,8 +15,8 @@ import yaml
 from cryptography.fernet import InvalidToken
 from nicegui import ui
 
+from conductor import agent_runs, plane, verify
 from conductor import jobs as jobs_mod
-from conductor import plane, verify
 from conductor.agents import dockerctl
 from conductor.mappings import MappingStore, RepoMappingView
 from conductor.models import WorkflowState
@@ -695,6 +695,7 @@ async def jobs_page() -> None:
                 "event_type": job.event_type,
                 "status": job.status,
                 "status_color": _STATUS_COLOR.get(job.status, kit.MUTED),
+                "ticket_id": str(job.payload.get("issue_id") or ""),
                 "dedupe_key": job.dedupe_key or "—",
                 "deliveries": len(job.raw_payloads),
                 "created_at": job.created_at.strftime("%Y-%m-%d %H:%M"),
@@ -741,6 +742,10 @@ async def jobs_page() -> None:
                        @click="() => $parent.$emit('info', props.row)">
                     <q-tooltip>Raw payloads</q-tooltip>
                 </q-btn>
+                <q-btn v-if="props.row.ticket_id" flat round dense icon="terminal"
+                       @click="() => $parent.$emit('logs', props.row)">
+                    <q-tooltip>Agent run logs</q-tooltip>
+                </q-btn>
                 <q-btn v-if="props.row.status === 'queued' || props.row.status === 'running'"
                        flat round dense color="warning" icon="stop"
                        @click="() => $parent.$emit('stop', props.row)">
@@ -754,6 +759,7 @@ async def jobs_page() -> None:
             """,
         )
         table.on("info", lambda e: _show_payloads(int(e.args["id"]), payloads[int(e.args["id"])]))
+        table.on("logs", lambda e: _show_logs(str(e.args["ticket_id"])))
         table.on("stop", lambda e: _stop_job(int(e.args["id"])))
         table.on("delete", lambda e: _delete_job(int(e.args["id"])))
 
@@ -768,6 +774,44 @@ def _show_payloads(job_id: int, raw_payloads: list[dict[str, Any]]) -> None:
         with ui.row().classes("w-full justify-end"):
             kit.secondary_button("Close", on_click=dialog.close)
     dialog.open()
+
+
+async def _show_logs(ticket_id: str) -> None:
+    runs = await agent_runs.runs_for_ticket(get_context().sessionmaker, ticket_id)
+    with kit.dialog_card(f"Agent runs — {ticket_id} ({len(runs)})", min_width=820) as dialog:
+        if not runs:
+            ui.label("No agent runs recorded yet.").classes("text-sm").style(f"color:{kit.MUTED}")
+        for run in runs:
+            state = "ok" if run.ok else "failed"
+            when = run.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            title = f"{run.role} · round {run.loop_round} · {state} · {when}"
+            with ui.expansion(title).classes("w-full").props(f"header-style=color:{kit.TEXT}"):
+                ui.json_editor(
+                    {
+                        "content": {"json": _parse_events(run.output)},
+                        "readOnly": True,
+                        "mode": "tree",
+                    }
+                ).classes("w-full")
+        with ui.row().classes("w-full justify-end"):
+            kit.secondary_button("Close", on_click=dialog.close)
+    dialog.open()
+
+
+def _parse_events(output: str) -> list[dict[str, Any]]:
+    """The captured stdout is stream-json (JSONL); parse each line into an event, wrapping any
+    non-JSON line as raw so a partial/failed run still renders."""
+    events: list[dict[str, Any]] = []
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            events.append({"raw": line})
+            continue
+        events.append(parsed if isinstance(parsed, dict) else {"value": parsed})
+    return events
 
 
 async def _stop_job(job_id: int) -> None:

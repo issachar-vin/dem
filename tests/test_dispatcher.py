@@ -42,7 +42,8 @@ async def test_run_builds_command_and_volumes(store: ConfigStore) -> None:
         "-p",
         "build it",
         "--output-format",
-        "json",
+        "stream-json",
+        "--verbose",
         "--model",
         "claude-x",
     ]
@@ -153,3 +154,53 @@ async def test_run_parsed_raises_after_second_malformed(store: ConfigStore) -> N
         await Dispatcher(store=store, docker_factory=lambda: docker).run_parsed(
             _run(role=AgentRole.REVIEWER), parse_verdict
         )
+
+
+class _Recorder:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def __call__(
+        self, *, ticket_id: str, role: str, loop_round: int, output: str, ok: bool
+    ) -> None:
+        self.calls.append(
+            {
+                "ticket_id": ticket_id,
+                "role": role,
+                "loop_round": loop_round,
+                "output": output,
+                "ok": ok,
+            }
+        )
+
+
+async def test_run_records_success_output(store: ConfigStore) -> None:
+    await store.set_secret("claude_code_oauth_token", "sk-oat")
+    docker = FakeDocker(FakeContainer(stdout=b'{"session_id":"s","result":"ok"}'))
+    recorder = _Recorder()
+    await Dispatcher(store=store, docker_factory=lambda: docker, recorder=recorder).run(
+        _run(loop_round=2)
+    )
+    assert len(recorder.calls) == 1
+    call = recorder.calls[0]
+    assert call["ok"] is True
+    assert call["ticket_id"] == "T-1"
+    assert call["role"] == "engineer"
+    assert call["loop_round"] == 2
+    assert '"result":"ok"' in str(call["output"])
+
+
+async def test_run_records_failure_logs_and_reraises(store: ConfigStore) -> None:
+    import pytest
+
+    from conductor.agents.dockerctl import ContainerFailed
+
+    await store.set_secret("claude_code_oauth_token", "sk-oat")
+    docker = FakeDocker(FakeContainer(exit_code=1, stderr=b"boom happened"))
+    recorder = _Recorder()
+    with pytest.raises(ContainerFailed):
+        await Dispatcher(
+            store=store, docker_factory=lambda: docker, recorder=recorder
+        ).run(_run())
+    assert recorder.calls[0]["ok"] is False
+    assert "boom happened" in str(recorder.calls[0]["output"])
