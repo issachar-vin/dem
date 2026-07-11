@@ -11,6 +11,8 @@ logger = logging.getLogger("conductor")
 
 
 class Container(Protocol):
+    name: str
+
     def wait(self) -> dict[str, Any]: ...
     def logs(self, *, stdout: bool = ..., stderr: bool = ...) -> bytes: ...
     def kill(self) -> None: ...
@@ -19,6 +21,7 @@ class Container(Protocol):
 
 class ContainerCollection(Protocol):
     def run(self, image: str, command: Sequence[str], **kwargs: Any) -> Container: ...
+    def list(self, **kwargs: Any) -> list[Container]: ...
 
 
 class Volume(Protocol):
@@ -59,6 +62,26 @@ def default_factory(docker_host: str | None) -> DockerFactory:
         return cast(DockerClient, docker.from_env())
 
     return make
+
+
+async def kill_containers(client: DockerClient, ticket_id: str) -> list[str]:
+    """Kill any live `psa-*-<ticket_id>` agent/helper containers (engineer, clone, push, diff,
+    count, planner, reviewer, qa). Used to cancel a job from the console without a shell on the
+    host. Best-effort: a container that vanished mid-kill is ignored. Returns the names killed."""
+
+    def _list_and_kill() -> list[str]:
+        killed: list[str] = []
+        for container in client.containers.list(filters={"name": ticket_id}):
+            if not (container.name.startswith("psa-") and container.name.endswith(ticket_id)):
+                continue  # substring filter can over-match; require the exact psa-*-<id> shape
+            try:
+                container.kill()
+                killed.append(container.name)
+            except Exception:  # already exited / removed between list and kill
+                logger.debug("Container %s not killed (likely gone)", container.name)
+        return killed
+
+    return await asyncio.to_thread(_list_and_kill)
 
 
 async def run_container(

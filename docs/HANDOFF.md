@@ -145,10 +145,36 @@ queryable directly via Loki's `query_range` API (no Grafana token needed).
 
 ---
 
-## ▶ RESUME: Phase 5 live acceptance, then Phase 6 (observability)
+## ▶ RESUME: finish Phase 5 live acceptance (+ agent-run observability), then Phase 6
 
-**Phase 5 is code-complete (PR #54 closes it).** Before Phase 6, run the **live acceptance on
-barad-dur** — the whole pipeline has only ever been unit-tested with fakes end-to-end:
+**Live acceptance is underway on barad-dur.** First real epic/ticket exposed and fixed a batch of
+issues (PR #55, open — VERSION 0.5.4):
+
+- **First live finding:** a "Review the README" ticket ran the engineer ~19 min, made **no commits**,
+  and the pipeline hard-crashed on PR creation with a GitHub **422** ("No commits between main and
+  ticket/…"). Cleared en route: **headless permission mode works** — the engineer edited/committed/
+  pushed; only PR creation failed. So `claude -p` isn't blocked on Edit/Bash (no `--dangerously-skip-
+  permissions` needed for that).
+- **PR #55 fixes:** empty-diff guard (zero commits → post a Plane comment + park `no_changes`, no
+  422); surface GitHub `errors[]` in `_error_detail`; engineer `NEEDS_INPUT: <q>` feedback channel
+  (post to ticket + park `awaiting_human`); console **stop-job** button that kills a job's
+  `psa-*-<ticket>` containers (job → `stopped`, ticket → `stopped`), delete also kills containers.
+  `complete_job` is now compare-and-set on `running` so a manual stop isn't clobbered.
+
+**Next agent-run observability PR (recommended before more live runs — the pipeline is a black box
+mid-run):** switch the agent invocation to `claude -p --output-format stream-json --verbose`
+(streaming requires `--verbose`), which emits incremental JSON events (tool calls, messages) instead
+of one buffered blob at the end — so `docker logs` shows progress live. Requires updating
+`dispatcher._build_command` **and** `contracts.parse_envelope` (parse the final `type:"result"` line
+of the JSONL, not one object). Then **persist** that streamed output as logs (the container is
+force-removed on exit, so logs must be captured to survive) and add a **log-modal button** on the
+Jobs page. This one feature covers the "verbose / log button / live output" asks together.
+
+**Other deferred follow-up:** auto-resume a parked `awaiting_human` ticket when a human replies —
+consume Plane **issue-comment** webhooks and `claude -p --resume` the engineer with the answer.
+
+Also still run the **full happy-path live acceptance** — the whole pipeline has only ever been
+unit-tested with fakes end-to-end:
 
 - Seed the fixture (`tests/fixtures/demo-repo`, a tiny FastAPI todo app) or a real chessbro epic;
   drive an epic → planner → tickets → engineer → PR → reviewer/QA → ready_for_approval, merge, and

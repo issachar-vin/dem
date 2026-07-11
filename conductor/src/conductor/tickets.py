@@ -72,6 +72,20 @@ class TicketStore:
             )
             await session.commit()
 
+    async def set_status_unless(
+        self, ticket_id: str, status: str, protected: tuple[str, ...]
+    ) -> None:
+        """Set the status unless the ticket is already in a protected state — used so the failure
+        handler doesn't clobber a `stopped` ticket with `error` when a manual stop killed its
+        container."""
+        async with self._sessionmaker() as session:
+            await session.execute(
+                update(Ticket)
+                .where(Ticket.ticket_id == ticket_id, Ticket.agent_status.not_in(protected))
+                .values(agent_status=status)
+            )
+            await session.commit()
+
     async def set_pr(self, ticket_id: str, number: int, url: str) -> None:
         async with self._sessionmaker() as session:
             await session.execute(

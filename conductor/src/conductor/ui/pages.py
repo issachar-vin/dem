@@ -17,10 +17,12 @@ from nicegui import ui
 
 from conductor import jobs as jobs_mod
 from conductor import plane, verify
+from conductor.agents import dockerctl
 from conductor.mappings import MappingStore, RepoMappingView
 from conductor.models import WorkflowState
 from conductor.plane import PlaneError
 from conductor.store import ConfigFieldView, ConfigStore
+from conductor.tickets import TicketStore
 from conductor.ui import kit, widgets
 from conductor.ui.context import get_context
 from conductor.ui.shell import layout, page
@@ -662,7 +664,11 @@ _STATUS_COLOR = {
     "running": kit.ORANGE,
     "done": kit.GREEN,
     "failed": kit.RED,
+    "stopped": kit.RED,
 }
+
+# Jobs still in flight can be stopped (kills their containers); terminal jobs can only be deleted.
+_ACTIVE_JOB_STATUSES = {"queued", "running"}
 
 
 @ui.page("/jobs")
@@ -735,6 +741,11 @@ async def jobs_page() -> None:
                        @click="() => $parent.$emit('info', props.row)">
                     <q-tooltip>Raw payloads</q-tooltip>
                 </q-btn>
+                <q-btn v-if="props.row.status === 'queued' || props.row.status === 'running'"
+                       flat round dense color="warning" icon="stop"
+                       @click="() => $parent.$emit('stop', props.row)">
+                    <q-tooltip>Stop job (kills its containers)</q-tooltip>
+                </q-btn>
                 <q-btn flat round dense color="negative" icon="delete"
                        @click="() => $parent.$emit('delete', props.row)">
                     <q-tooltip>Delete job</q-tooltip>
@@ -743,6 +754,7 @@ async def jobs_page() -> None:
             """,
         )
         table.on("info", lambda e: _show_payloads(int(e.args["id"]), payloads[int(e.args["id"])]))
+        table.on("stop", lambda e: _stop_job(int(e.args["id"])))
         table.on("delete", lambda e: _delete_job(int(e.args["id"])))
 
 
@@ -758,7 +770,35 @@ def _show_payloads(job_id: int, raw_payloads: list[dict[str, Any]]) -> None:
     dialog.open()
 
 
+async def _stop_job(job_id: int) -> None:
+    ctx = get_context()
+    job = await jobs_mod.stop_job(ctx.sessionmaker, job_id)
+    if job is None:
+        ui.notify(f"Job {job_id} already finished — nothing to stop.")
+        ui.navigate.reload()
+        return
+    killed = await _kill_job_containers(job)
+    suffix = f" and killed {len(killed)} container(s)" if killed else ""
+    ui.notify(f"Stopped job {job_id}{suffix}.")
+    ui.navigate.reload()
+
+
 async def _delete_job(job_id: int) -> None:
-    await jobs_mod.delete_job(get_context().sessionmaker, job_id)
+    ctx = get_context()
+    job = await jobs_mod.get_job(ctx.sessionmaker, job_id)
+    if job is not None and job.status in _ACTIVE_JOB_STATUSES:
+        await _kill_job_containers(job)  # don't leave an orphaned container when deleting live work
+    await jobs_mod.delete_job(ctx.sessionmaker, job_id)
     ui.notify(f"Deleted job {job_id}.")
     ui.navigate.reload()
+
+
+async def _kill_job_containers(job: Any) -> list[str]:
+    """Kill the agent/helper containers for a job's ticket and mark that ticket `stopped`. Only
+    Plane engineer/planner jobs run containers; GitHub jobs carry no `issue_id` and are a no-op."""
+    ctx = get_context()
+    ticket_id = str(job.payload.get("issue_id", ""))
+    if not ticket_id:
+        return []
+    await TicketStore(ctx.sessionmaker).set_status(ticket_id, "stopped")
+    return await dockerctl.kill_containers(ctx.docker_factory(), ticket_id)

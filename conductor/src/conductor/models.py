@@ -27,6 +27,7 @@ class JobStatus(StrEnum):
     RUNNING = "running"
     DONE = "done"
     FAILED = "failed"
+    STOPPED = "stopped"  # cancelled from the console; terminal, so it frees the dedupe key
 
 
 class WorkflowState(StrEnum):

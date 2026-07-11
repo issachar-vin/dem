@@ -107,6 +107,26 @@ class VolumeManager:
             user="root",
         )
 
+    async def commit_count(self, *, ticket_id: str, base_branch: str) -> int:
+        """Number of commits the engineer added on `ticket/<id>` over the base branch. Zero means
+        the engineer left no work — pushing that branch and opening a PR would 422 ('No commits
+        between …'), so the scheduler parks the ticket instead."""
+        cfg = await self._store.resolved()
+        client = self._docker_factory()
+        stdout = await run_container(
+            client,
+            image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
+            entrypoint=["bash", "-c"],
+            command=[_commit_count_script(base_branch)],
+            name=f"psa-count-{ticket_id}",
+            volumes={f"psa-repo-{ticket_id}": "/work"},
+            user="root",
+        )
+        try:
+            return int(stdout.strip() or "0")
+        except ValueError:
+            return 0
+
     async def diff_hash(self, *, ticket_id: str, base_branch: str) -> str:
         """sha256 of `git diff <base>...HEAD` on the ticket branch. The stall detector compares this
         across rounds — an identical hash twice means the engineer's resume produced no new work."""
@@ -161,6 +181,17 @@ def _planner_clone_script(repos: Sequence[RepoClone]) -> str:
         ]
     lines.append("chown -R agent:agent /work")
     return "\n".join(lines)
+
+
+def _commit_count_script(base_branch: str) -> str:
+    return "\n".join(
+        [
+            "set -euo pipefail",
+            "git config --global --add safe.directory /work",
+            "cd /work",
+            f'git rev-list --count "{base_branch}..HEAD"',
+        ]
+    )
 
 
 def _diff_hash_script(base_branch: str) -> str:
