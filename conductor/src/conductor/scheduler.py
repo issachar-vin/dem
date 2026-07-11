@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from conductor import github, notify, plane, prompts
+from conductor import github, job_events, notify, plane, prompts
 from conductor.agents import contracts
 from conductor.agents.contracts import Finding, Plan, Verdict
 from conductor.agents.dispatcher import AgentRun, Dispatcher
@@ -170,10 +170,17 @@ class Scheduler:
                 return
             await self._tickets.set_status(ticket.ticket_id, "done")
             await self._volumes.destroy(ticket_id=ticket.ticket_id)
+            await self._emit(
+                job.id,
+                f"Merged PR #{pr_number} → done, volumes reclaimed",
+                ticket_id=ticket.ticket_id,
+                level="success",
+            )
             await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
             logger.info("Ticket %s merged (%s) → done, volumes reclaimed", ticket.ticket_id, pr_url)
         except Exception as exc:
             await complete_job(self._sessionmaker, job.id, status=JobStatus.FAILED, error=str(exc))
+            await self._emit(job.id, f"Cleanup failed: {exc}", level="error")
             logger.exception("Cleanup failed for job %s", job.id)
 
     async def _run_engineer(self, job: Job) -> None:
@@ -219,6 +226,7 @@ class Scheduler:
             await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
         except Exception as exc:
             await complete_job(self._sessionmaker, job.id, status=JobStatus.FAILED, error=str(exc))
+            await self._emit(job.id, f"Failed: {exc}", ticket_id=issue_id, level="error")
             if issue_id:
                 # Don't clobber a ticket a concurrent console stop already parked as `stopped`.
                 await self._tickets.set_status_unless(issue_id, "error", ("stopped",))
@@ -234,6 +242,11 @@ class Scheduler:
             if not repos:
                 raise RuntimeError(f"project {project_id} has no mapped repo")
             epic = await plane_client.get_issue(project_id, epic_id)
+            await self._emit(
+                job.id,
+                f"Preparing planner workspace — cloning {len(repos)} repo(s)",
+                ticket_id=epic_id,
+            )
             await self._volumes.prepare_planner(
                 epic_id=epic_id,
                 repos=[RepoClone(r.key, r.github_repo, r.base_branch) for r in repos],
@@ -249,10 +262,17 @@ class Scheduler:
                 contracts.parse_plan,
             )
             await self._materialize_plan(plane_client, project_id, plan, repos)
+            await self._emit(
+                job.id,
+                f"Decomposed epic into {len(plan.tickets)} ticket(s)",
+                ticket_id=epic_id,
+                level="success",
+            )
             await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
             logger.info("Planner decomposed epic %s into %d ticket(s)", epic_id, len(plan.tickets))
         except Exception as exc:
             await complete_job(self._sessionmaker, job.id, status=JobStatus.FAILED, error=str(exc))
+            await self._emit(job.id, f"Planner failed: {exc}", ticket_id=epic_id, level="error")
             logger.exception("Planner failed for epic %s", epic_id)
 
     async def _materialize_plan(
@@ -304,11 +324,19 @@ class Scheduler:
         the human's answer, so the agent keeps its memory instead of rescanning the codebase."""
         await self._set_state(ctx, "in_progress", WorkflowState.IN_PROGRESS)
         if resume is None:
+            await self._emit(
+                ctx.job_id, f"Preparing repository — cloning {ctx.repo}", ticket_id=ctx.issue_id
+            )
             await self._volumes.prepare(
                 ticket_id=ctx.issue_id, github_repo=ctx.repo, base_branch=ctx.base_branch
             )
             prompt = _engineer_prompt(ctx.issue_id, ctx.issue)
         else:
+            await self._emit(
+                ctx.job_id,
+                "Resuming from the saved session — reusing the existing checkout, no re-clone",
+                ticket_id=ctx.issue_id,
+            )
             prompt = prompts.render(
                 "engineer_resume", ticket_id=ctx.issue_id, conversation=resume.conversation
             )
@@ -346,6 +374,9 @@ class Scheduler:
         )
         await self._tickets.set_pr(ctx.issue_id, pr.number, pr.html_url)
         ctx = replace(ctx, pr_url=pr.html_url)
+        await self._emit(
+            ctx.job_id, f"Opened PR #{pr.number}", ticket_id=ctx.issue_id, level="success"
+        )
         # Post the PR link to the ticket now, before review — so it's on the work item regardless of
         # how the review turns out, not only on the ready-for-approval path.
         await self._post_comment(ctx, f"Pull request opened: {pr.html_url}")
@@ -368,7 +399,26 @@ class Scheduler:
         await self._tickets.set_status(ctx.issue_id, status)
         await self._move_plane_state(ctx, workflow_state)
         await self._post_comment(ctx, comment)
+        await self._emit(
+            ctx.job_id, f"Parked for a human ({status})", ticket_id=ctx.issue_id, level="warning"
+        )
         logger.info("Ticket %s parked (%s)", ctx.issue_id, status)
+
+    async def _emit(
+        self, job_id: int, message: str, *, ticket_id: str = "", level: str = "info"
+    ) -> None:
+        """Record a pipeline-step event for the job's console timeline. Best-effort — never let a
+        failed event write break a dispatch."""
+        try:
+            await job_events.record_event(
+                self._sessionmaker,
+                job_id=job_id,
+                message=message,
+                ticket_id=ticket_id,
+                level=level,
+            )
+        except Exception:
+            logger.warning("Failed to record job event", exc_info=True)
 
     async def _post_comment(self, ctx: _Pipeline, comment: str) -> None:
         """Best-effort Plane comment — a Plane hiccup must never turn valid work into a failure."""
@@ -426,6 +476,12 @@ class Scheduler:
             verdicts = await self._run_checkers(ctx)
             if all(verdict.passed for _, verdict in verdicts):
                 await self._set_state(ctx, "ready_for_approval", WorkflowState.READY_FOR_APPROVAL)
+                await self._emit(
+                    ctx.job_id,
+                    "Review passed → ready for approval",
+                    ticket_id=ctx.issue_id,
+                    level="success",
+                )
                 await self._notify(
                     ctx.cfg, f"Ticket {ctx.issue_id} ready for approval: {ctx.pr_url}"
                 )
@@ -434,6 +490,12 @@ class Scheduler:
             await self._post_findings(ctx, verdicts)
             round_no = await self._tickets.bump_loop_round(ctx.issue_id)
             await self._set_state(ctx, "changes_requested", WorkflowState.CHANGES_REQUESTED)
+            await self._emit(
+                ctx.job_id,
+                f"Review requested changes → resuming engineer (round {round_no})",
+                ticket_id=ctx.issue_id,
+                level="warning",
+            )
             await self._resume_engineer(ctx, session_id, verdicts, round_no)
             await self._volumes.push(ticket_id=ctx.issue_id, github_repo=ctx.repo)
             new_hash = await self._volumes.diff_hash(
@@ -441,6 +503,12 @@ class Scheduler:
             )
             if new_hash == last_hash:  # engineer resume produced an identical diff → stalled
                 await self._tickets.set_status(ctx.issue_id, "stalled")
+                await self._emit(
+                    ctx.job_id,
+                    f"Stalled at round {round_no} — the engineer produced no new changes",
+                    ticket_id=ctx.issue_id,
+                    level="warning",
+                )
                 await self._notify(
                     ctx.cfg, f"Ticket {ctx.issue_id} stalled at round {round_no}: {ctx.pr_url}"
                 )

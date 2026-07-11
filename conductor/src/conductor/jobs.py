@@ -12,7 +12,7 @@ from sqlalchemy import CursorResult, delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from conductor.models import AgentRunLog, Job, JobStatus, Ticket
+from conductor.models import AgentRunLog, Job, JobEvent, JobStatus, Ticket
 
 logger = logging.getLogger("conductor")
 
@@ -26,6 +26,7 @@ class JobView(BaseModel):
     status: str
     dedupe_key: str | None
     delivery_id: str | None
+    error: str | None
     payload: dict[str, Any]
     raw_payloads: list[dict[str, Any]]
     created_at: datetime
@@ -179,6 +180,7 @@ async def list_jobs(
                 status=r.status,
                 dedupe_key=r.dedupe_key,
                 delivery_id=r.delivery_id,
+                error=r.error,
                 payload=r.payload,
                 raw_payloads=r.raw_payloads,
                 created_at=r.created_at,
@@ -196,6 +198,7 @@ async def delete_job(sessionmaker: async_sessionmaker[AsyncSession], job_id: int
         if row is None:
             return False
         await session.execute(delete(AgentRunLog).where(AgentRunLog.job_id == job_id))
+        await session.execute(delete(JobEvent).where(JobEvent.job_id == job_id))
         ticket_id = str(row.payload.get("issue_id") or "")
         if ticket_id:
             await session.execute(delete(Ticket).where(Ticket.ticket_id == ticket_id))
