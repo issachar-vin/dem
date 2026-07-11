@@ -778,23 +778,38 @@ def _show_payloads(job_id: int, raw_payloads: list[dict[str, Any]]) -> None:
 
 
 async def _show_logs(job_id: int) -> None:
-    """Agent runs for a job. A run still in progress streams into its row, so the modal
-    auto-refreshes (every 2s) to show live activity; the timer stops when the dialog closes."""
+    """Agent runs for a job. A run still in progress streams into its row, so the modal polls every
+    2s — but it only re-renders when the runs actually changed (no idle flicker), and keeps the view
+    pinned to the newest output while you're at the bottom (sticky tail), restoring your position if
+    you'd scrolled up. The timer stops when the dialog closes."""
     sessionmaker = get_context().sessionmaker
+    state: dict[str, Any] = {"sig": None, "pct": 1.0, "at_bottom": True}
 
-    @ui.refreshable
-    async def body() -> None:
-        runs = await agent_runs.runs_for_job(sessionmaker, job_id)
-        if not runs:
-            ui.label("No agent runs recorded yet.").classes("text-sm").style(f"color:{kit.MUTED}")
-            return
-        for run in runs:
-            _run_entry(run)
+    def _on_scroll(event: Any) -> None:
+        state["pct"] = event.vertical_percentage
+        state["at_bottom"] = event.vertical_percentage > 0.95
 
     with kit.dialog_card(f"Agent runs — job {job_id}", min_width=820) as dialog:
-        with ui.column().classes("w-full gap-3"):
-            await body()
-        timer = ui.timer(2.0, body.refresh)
+        scroll = ui.scroll_area().classes("w-full gap-3").style("height:60vh").on_scroll(_on_scroll)
+
+        async def refresh() -> None:
+            runs = await agent_runs.runs_for_job(sessionmaker, job_id)
+            sig = [(r.id, r.status, len(r.output)) for r in runs]
+            if sig == state["sig"]:
+                return  # nothing changed → skip the rebuild that caused the flicker
+            state["sig"] = sig
+            scroll.clear()
+            with scroll:
+                if not runs:
+                    ui.label("No agent runs recorded yet.").classes("text-sm").style(
+                        f"color:{kit.MUTED}"
+                    )
+                for run in runs:
+                    _run_entry(run)
+            scroll.scroll_to(percent=1.0 if state["at_bottom"] else state["pct"])
+
+        await refresh()
+        timer = ui.timer(2.0, refresh)
         with ui.row().classes("w-full justify-end"):
             kit.secondary_button("Close", on_click=dialog.close)
     dialog.on("hide", timer.cancel)  # stop polling once the modal is closed
@@ -835,15 +850,16 @@ def _run_entry(run: agent_runs.AgentRunView) -> None:
             ui.label(waiting).classes("text-sm").style(f"color:{kit.MUTED}")
 
         indicator = ui.element("div").classes(
-            "v2-row w-full p-3 cursor-pointer v2-lift flex items-center"
+            "v2-row w-full p-3 cursor-pointer v2-lift flex items-start"
             " justify-between no-wrap gap-3"
         )
         with indicator:
-            with ui.column().classes("gap-0 min-w-0"):
+            with ui.column().classes("gap-0 min-w-0 grow"):
                 fallback = "Streaming…" if live else "View raw JSON"
-                ui.label(summary.result_text or fallback).classes(
-                    "text-sm font-medium ellipsis"
-                ).style(f"color:{color}")
+                # Word-wrap the result — it can be a long paragraph; never truncate it.
+                ui.label(summary.result_text or fallback).classes("text-sm font-medium").style(
+                    f"color:{color};white-space:normal;overflow-wrap:anywhere"
+                )
                 if summary.meta:
                     ui.label(summary.meta).classes("text-xs").style(f"color:{kit.MUTED}")
             kit.licon("braces", color=kit.MUTED, size=16)
