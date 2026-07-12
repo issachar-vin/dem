@@ -84,9 +84,10 @@ async def test_push_pushes_ticket_branch_with_token(store: ConfigStore) -> None:
 
     script = command[0]
     assert "cd /work/backend" in script  # pushes from the repo's subdir
-    # Token comes from $CLONE_TOKEN, never the token-stripped stored remote.
+    # Token comes from $CLONE_TOKEN, never the token-stripped stored remote. Force-push because the
+    # conductor owns the ticket branch and a re-run leaves a divergent branch on the remote.
     assert (
-        'git push "https://x-access-token:${CLONE_TOKEN}@github.com/octo/backend.git"'
+        'git push --force "https://x-access-token:${CLONE_TOKEN}@github.com/octo/backend.git"'
         in script
     )
     assert '"ticket/T-4"' in script
