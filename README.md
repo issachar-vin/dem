@@ -43,9 +43,34 @@ That gives you the only two mandatory variables:
 
 ### 2. Start it
 
+Two ways to run, both landing on the same console at `http://localhost:8420`.
+
+#### Setup with Docker (recommended)
+
+The bundled [`docker-compose.yml`](docker-compose.yml) pulls the images published to GHCR — no build:
+
 ```bash
-make dev        # docker compose up — conductor + console at :8420
+docker compose up -d
 ```
+
+This runs the `dem-conductor` image, mounts the host Docker socket (so the conductor can launch the
+`dem-agent` container per ticket), and persists the DB in the `conductor_data` volume. It expects the
+`.env` from step 1 in the same directory. To take a new release, `docker compose pull && docker
+compose up -d`.
+
+#### Build manually
+
+To build the conductor from source (developing on it, or running an unreleased revision), use the dev
+compose — it builds the image locally and mounts `conductor/src` with live reload:
+
+```bash
+make dev        # docker compose -f docker-compose.dev.yml up --build
+```
+
+You'll also need the agent image the dispatcher runs per ticket: `make agent-build` (tags
+`dem-agent:latest` locally), then set the console's **Advanced → agent image** to `dem-agent:latest`.
+
+---
 
 `GET /health` returns `{"status": "ok"}`. Open the console and you'll land on the **setup wizard**.
 
