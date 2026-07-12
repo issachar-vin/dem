@@ -4,7 +4,7 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.13):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+**Status (VERSION 0.5.14):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
 full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
 wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove **PRs #55–#59
 (merged)** — parking/422s/stop-job, agent-run capture + console log viewer, job-delete cascade +
@@ -61,6 +61,12 @@ comments now linkify bare URLs into `<a href target=_blank>` (`_html_paragraphs`
 links on a work item are clickable — **unverified**: depends on Plane's comment sanitizer accepting
 anchors; the URL text survives regardless.
 Then Phase 6 (observability) — still waiting on the otel-collector host:port and ntfy/Slack target.
+
+**README refresh (PR pending, VERSION 0.5.14):** rewrote `README.md` for the current state — purpose
+(easy-to-deploy autonomous AI SWE tool, two human touchpoints), setup (two-var `.env` + wizard
+walkthrough per credential), config backup via Config → Migration (encrypted bundle export/import as
+the fast re-setup path), and a brief "how it works" (intake → planner → engineer → review loop →
+cleanup). Docs-only; no code change.
 
 **Live-run fixes (PR #59, open, VERSION 0.5.8):** first real epic run surfaced a parser bug that
 looked like three bugs. The **reviewer passed** (`{"pass": true, "findings": []}`) but wrapped it in
