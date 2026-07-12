@@ -668,40 +668,38 @@ _STATUS_COLOR = {
 _ACTIVE_JOB_STATUSES = {"queued", "running"}
 
 
+def _job_row(job: jobs_mod.JobView) -> dict[str, Any]:
+    return {
+        "id": job.id,
+        "source": job.source,
+        "event_type": job.event_type,
+        "status": job.status,
+        "status_color": _STATUS_COLOR.get(job.status, kit.MUTED),
+        "error": job.error or "",
+        "ticket_id": str(job.payload.get("issue_id") or ""),
+        "dedupe_key": job.dedupe_key or "—",
+        "deliveries": len(job.raw_payloads),
+        "created_at": format_display(job.created_at),
+    }
+
+
 @ui.page("/jobs")
 async def jobs_page() -> None:
     layout("/jobs")
-    jobs = await jobs_mod.list_jobs(get_context().sessionmaker)
+    sessionmaker = get_context().sessionmaker
+    # Keep the (potentially large) payloads server-side, keyed by id, rather than shipping them into
+    # every table row; the info modal looks them up on click. Mutated in place so the click handlers
+    # keep seeing the latest set across auto-refreshes.
+    payloads: dict[int, list[dict[str, Any]]] = {}
+    state: dict[str, Any] = {"sig": None}
+
     with page(wide=True):
         kit.page_header(
             "Jobs",
             "Intake queue — webhook/poll deliveries turned into work, consumed by the scheduler.",
         )
-        if not jobs:
-            with kit.panel():
-                ui.label("No jobs yet.").classes("text-sm").style(f"color:{kit.MUTED}")
-            return
-
-        # Keep the (potentially large) payloads server-side, keyed by id, rather than shipping
-        # them into every table row; the info modal looks them up on click.
-        payloads = {job.id: job.raw_payloads for job in jobs}
-        rows = [
-            {
-                "id": job.id,
-                "source": job.source,
-                "event_type": job.event_type,
-                "status": job.status,
-                "status_color": _STATUS_COLOR.get(job.status, kit.MUTED),
-                "error": job.error or "",
-                "ticket_id": str(job.payload.get("issue_id") or ""),
-                "dedupe_key": job.dedupe_key or "—",
-                "deliveries": len(job.raw_payloads),
-                "created_at": format_display(job.created_at),
-            }
-            for job in jobs
-        ]
         table = (
-            ui.table(columns=_JOB_COLUMNS, rows=rows, row_key="id", pagination=25)
+            ui.table(columns=_JOB_COLUMNS, rows=[], row_key="id", pagination=25)
             .classes("w-full v2-table")
             .props("flat")
         )
@@ -762,6 +760,25 @@ async def jobs_page() -> None:
         table.on("logs", lambda e: _show_logs(int(e.args["id"])))
         table.on("stop", lambda e: _stop_job(int(e.args["id"])))
         table.on("delete", lambda e: _delete_job(int(e.args["id"])))
+
+        empty = ui.label("No jobs yet.").classes("text-sm px-1").style(f"color:{kit.MUTED}")
+
+        async def refresh() -> None:
+            jobs = await jobs_mod.list_jobs(sessionmaker)
+            rows = [_job_row(job) for job in jobs]
+            # Only push an update when something actually changed → no flicker on a steady table.
+            sig = [(r["id"], r["status"], r["deliveries"], r["error"]) for r in rows]
+            if sig == state["sig"]:
+                return
+            state["sig"] = sig
+            payloads.clear()
+            payloads.update({job.id: job.raw_payloads for job in jobs})
+            table.rows = rows  # in-place row swap: Quasar diffs the cells, no full re-render
+            table.update()
+            empty.set_visibility(not rows)
+
+        await refresh()
+        ui.timer(3.0, refresh)  # live job states; page-scoped, auto-cancelled on navigate away
 
 
 def _show_payloads(job_id: int, raw_payloads: list[dict[str, Any]]) -> None:
