@@ -74,6 +74,14 @@ class EngineerResult(BaseModel):
     done: bool = True
 
 
+class RepoRoute(BaseModel):
+    """Router output: the repo keys a ticket needs work in."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    repos: list[str] = Field(default_factory=list)
+
+
 def parse_envelope(raw: str) -> ClaudeEnvelope:
     """Extract the result envelope from a `claude -p` run. With `--output-format stream-json` the
     output is JSONL — many events, the last `type == "result"` one carrying session_id + result;
@@ -100,6 +108,10 @@ def parse_verdict(result: str) -> Verdict:
 
 def parse_plan(result: str) -> Plan:
     return _parse(Plan, result)
+
+
+def parse_route(result: str) -> RepoRoute:
+    return _parse(RepoRoute, result)
 
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)

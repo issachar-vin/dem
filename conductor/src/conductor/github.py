@@ -1,3 +1,4 @@
+import base64
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -82,6 +83,25 @@ class GitHubClient:
             lambda c: c.get(f"{GITHUB_API_BASE}/user", headers=github_headers(self.token))
         )
         return GitHubUser.model_validate(result)
+
+    async def get_readme(self, repo: str) -> str:
+        """The repo's README as text (best-effort — empty if none). Fetched conductor-side so the
+        router can be told what each repo is *for* without the agent ever touching GitHub."""
+        try:
+            result = await self._json(
+                lambda c: c.get(
+                    f"{GITHUB_API_BASE}/repos/{repo}/readme", headers=github_headers(self.token)
+                )
+            )
+        except GitHubError:
+            return ""
+        content = result.get("content") if isinstance(result, dict) else None
+        if not isinstance(content, str):
+            return ""
+        try:
+            return base64.b64decode(content).decode("utf-8", errors="replace")
+        except (ValueError, UnicodeDecodeError):
+            return ""
 
     async def create_pull_request(
         self, repo: str, *, head: str, base: str, title: str, body: str

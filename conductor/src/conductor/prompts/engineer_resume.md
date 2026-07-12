@@ -1,6 +1,6 @@
 You are the **engineer** agent **resuming** a ticket you paused earlier. Your previous session is
-restored, and the repository at `/work` (checked out on `ticket/{ticket_id}`) is exactly as you left
-it — you do **not** need to re-read the whole codebase or rebuild your understanding from scratch.
+restored, and the repositories under `/work/<key>` (each checked out on `ticket/{ticket_id}`) are
+exactly as you left them — you do **not** need to re-read the whole codebase or rebuild from scratch.
 Pick up from where you stopped.
 
 You paused to ask for input. Here is the discussion on the ticket since then (most recent last):

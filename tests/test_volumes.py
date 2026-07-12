@@ -1,8 +1,14 @@
-from conductor.agents.volumes import VolumeManager
+from conductor.agents.volumes import RepoClone, VolumeManager
 from conductor.github import GitHubUser
 from conductor.store import ConfigStore
 
 from agents_fakes import FakeContainer, FakeDocker
+
+
+def _target(
+    key: str = "backend", repo: str = "octo/backend", branch: str = "main"
+) -> RepoClone:
+    return RepoClone(key, repo, branch)
 
 
 class FakeGitHub:
@@ -26,7 +32,7 @@ async def test_prepare_creates_volumes_and_clones(store: ConfigStore) -> None:
     docker = FakeDocker()
     user = GitHubUser(login="bot", id=42, name="Bot", email=None)
     await _manager(store, docker, user).prepare(
-        ticket_id="T-1", github_repo="octo/backend", base_branch="main"
+        ticket_id="T-1", targets=[_target("backend", "octo/backend", "main")]
     )
     assert set(docker.volumes.created) == {"psa-repo-T-1", "psa-claude-T-1"}
 
@@ -40,11 +46,10 @@ async def test_prepare_creates_volumes_and_clones(store: ConfigStore) -> None:
     assert kwargs["volumes"] == {"psa-repo-T-1": {"bind": "/work", "mode": "rw"}}
 
     script = command[0]
-    assert "git config --global --add safe.directory /work" in script
     assert 'git clone --depth 50 --branch "main"' in script
-    assert "octo/backend.git" in script
-    assert 'git checkout -b "ticket/T-1"' in script
-    assert 'git config user.email "42+bot@users.noreply.github.com"' in script
+    assert 'octo/backend.git" "/work/backend"' in script  # cloned under /work/<key>
+    assert 'git -C "/work/backend" checkout -b "ticket/T-1"' in script
+    assert 'config user.email "42+bot@users.noreply.github.com"' in script
     assert "chown -R agent:agent /work" in script
 
 
@@ -53,10 +58,13 @@ async def test_clone_strips_token_from_remote(store: ConfigStore) -> None:
     docker = FakeDocker()
     user = GitHubUser(login="bot", id=1)
     await _manager(store, docker, user).prepare(
-        ticket_id="T-2", github_repo="octo/ui", base_branch="dev"
+        ticket_id="T-2", targets=[_target("ui", "octo/ui", "dev")]
     )
     script = docker.containers.calls[0][1][0]
-    assert 'git remote set-url origin "https://github.com/octo/ui.git"' in script
+    assert (
+        'git -C "/work/ui" remote set-url origin "https://github.com/octo/ui.git"'
+        in script
+    )
 
 
 async def test_push_pushes_ticket_branch_with_token(store: ConfigStore) -> None:
@@ -64,17 +72,18 @@ async def test_push_pushes_ticket_branch_with_token(store: ConfigStore) -> None:
     docker = FakeDocker()
     user = GitHubUser(login="bot", id=1)
     await _manager(store, docker, user).push(
-        ticket_id="T-4", github_repo="octo/backend"
+        ticket_id="T-4", key="backend", github_repo="octo/backend"
     )
 
     image, command, kwargs = docker.containers.calls[0]
-    assert kwargs["name"] == "psa-push-T-4"
+    assert kwargs["name"] == "psa-push-backend-T-4"
     assert kwargs["user"] == "root"
     assert kwargs["entrypoint"] == ["bash", "-c"]
     assert kwargs["environment"]["CLONE_TOKEN"] == "ghtok"
     assert kwargs["volumes"] == {"psa-repo-T-4": {"bind": "/work", "mode": "rw"}}
 
     script = command[0]
+    assert "cd /work/backend" in script  # pushes from the repo's subdir
     # Token comes from $CLONE_TOKEN, never the token-stripped stored remote.
     assert (
         'git push "https://x-access-token:${CLONE_TOKEN}@github.com/octo/backend.git"'
@@ -114,11 +123,12 @@ async def test_commit_count_parses_rev_list(store: ConfigStore) -> None:
     docker = FakeDocker(FakeContainer(stdout=b"3\n"))
     user = GitHubUser(login="bot", id=1)
     count = await _manager(store, docker, user).commit_count(
-        ticket_id="T-6", base_branch="main"
+        ticket_id="T-6", key="backend", base_branch="main"
     )
     assert count == 3
     _, command, kwargs = docker.containers.calls[0]
-    assert kwargs["name"] == "psa-count-T-6"
+    assert kwargs["name"] == "psa-count-backend-T-6"
+    assert "cd /work/backend" in command[0]
     assert 'git rev-list --count "main..HEAD"' in command[0]
 
 
@@ -126,7 +136,7 @@ async def test_commit_count_zero_on_unparseable(store: ConfigStore) -> None:
     docker = FakeDocker(FakeContainer(stdout=b""))
     user = GitHubUser(login="bot", id=1)
     count = await _manager(store, docker, user).commit_count(
-        ticket_id="T-7", base_branch="main"
+        ticket_id="T-7", key="backend", base_branch="main"
     )
     assert count == 0
 
@@ -135,7 +145,7 @@ async def test_diff_hash_runs_git_diff_and_returns_stdout(store: ConfigStore) ->
     docker = FakeDocker(FakeContainer(stdout=b"abc123\n"))
     user = GitHubUser(login="bot", id=1)
     result = await _manager(store, docker, user).diff_hash(
-        ticket_id="T-5", base_branch="main"
+        ticket_id="T-5", targets=[_target("backend", "octo/backend", "main")]
     )
     assert result == "abc123"  # stdout stripped
 
@@ -144,7 +154,8 @@ async def test_diff_hash_runs_git_diff_and_returns_stdout(store: ConfigStore) ->
     assert kwargs["entrypoint"] == ["bash", "-c"]
     assert kwargs["volumes"] == {"psa-repo-T-5": {"bind": "/work", "mode": "rw"}}
     script = command[0]
-    assert 'git diff "main...HEAD" | sha256sum' in script
+    assert 'git -C "/work/backend" diff "main...HEAD"' in script
+    assert "sha256sum" in script
 
 
 async def test_destroy_removes_both_volumes(store: ConfigStore) -> None:
@@ -152,7 +163,7 @@ async def test_destroy_removes_both_volumes(store: ConfigStore) -> None:
     docker = FakeDocker()
     user = GitHubUser(login="bot", id=1)
     manager = _manager(store, docker, user)
-    await manager.prepare(ticket_id="T-3", github_repo="octo/ui", base_branch="main")
+    await manager.prepare(ticket_id="T-3", targets=[_target("ui", "octo/ui", "main")])
     await manager.destroy(ticket_id="T-3")
     assert docker.volumes.store["psa-repo-T-3"].removed is True
     assert docker.volumes.store["psa-claude-T-3"].removed is True
@@ -185,6 +196,6 @@ async def test_prepare_clears_stale_volumes_first(store: ConfigStore) -> None:
     stale = docker.volumes.create("psa-repo-T-9")
     user = GitHubUser(login="bot", id=1)
     await _manager(store, docker, user).prepare(
-        ticket_id="T-9", github_repo="octo/ui", base_branch="main"
+        ticket_id="T-9", targets=[_target("ui", "octo/ui", "main")]
     )
     assert stale.removed is True

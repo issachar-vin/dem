@@ -219,6 +219,23 @@ class Ticket(Base):
     )
 
 
+class TicketPR(Base):
+    """One PR a ticket opened, in one of its target repos. A ticket that spans repos opens several
+    (one per repo with commits); the ticket is `done` only once every one of these has merged."""
+
+    __tablename__ = "ticket_prs"
+    __table_args__ = (UniqueConstraint("ticket_id", "repo_key"),)
+
+    id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
+    ticket_id: Mapped[str] = mapped_column(String(64), index=True)
+    repo_key: Mapped[str] = mapped_column(String(64))
+    github_repo: Mapped[str] = mapped_column(String(255))
+    pr_number: Mapped[int] = mapped_column()
+    pr_url: Mapped[str] = mapped_column(String(512), index=True)
+    merged: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class AgentRunStatus(StrEnum):
     RUNNING = "running"  # container live; `output` is being appended to as events stream in
     DONE = "done"
