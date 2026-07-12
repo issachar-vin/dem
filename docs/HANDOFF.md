@@ -35,10 +35,17 @@ call (no container) taking the ticket + a catalog of `{repo_key, README}` and re
 the ticket needs; the **conductor** fetches each README (`GitHubClient.get_readme`) so the agent gets
 no GitHub access. The scheduler routes a human ticket to the chosen repo (planner `target_repo` wins;
 single-repo projects skip it) and emits `Determined repo(s) needed: …` to the timeline; failure falls
-back to the first repo. `route_fn` is injected for tests. **Still being added to this PR:** when the
-router picks >1 repo — clone each into `/work/<key>`, engineer across them, one **PR per repo with
-commits**, all PR links as comments, reviewer reviews **all** PRs, cleanup per PR (ticket `done` only
-when all merge). Today the build still targets the first chosen repo.
+back to the first repo. `route_fn` is injected for tests.
+
+**Multi-repo build + multi-PR (PR #62, added):** the whole pipeline now unifies on `/work/<key>` —
+`VolumeManager.prepare(targets)` clones **every** chosen repo into its own `/work/<key>` subdir on the
+ticket branch; `push`/`commit_count` are per-repo (`key` arg), `diff_hash(targets)` spans them all for
+stall detection. The engineer/reviewer/qa prompts describe the `/work/<key>` layout and the reviewer +
+QA review **every** repo the ticket touched. `_build` opens **one PR per repo with commits** (new
+`ticket_prs` table, `TicketStore.add_pr`), posts all links as one ticket comment, and emits an
+`Opened PR #n in <key>` timeline event each. `_run_cleanup` records each merged PR
+(`mark_pr_merged`); the ticket is `done` (volumes reclaimed, dependents released) only once
+`all_prs_merged`. A single-repo ticket is just the one-target case. Migration `f7a8b9c0d1e2`.
 Then Phase 6 (observability) — still waiting on the otel-collector host:port and ntfy/Slack target.
 
 **Live-run fixes (PR #59, open, VERSION 0.5.8):** first real epic run surfaced a parser bug that
