@@ -177,12 +177,18 @@ class VolumeManager:
 def _push_script(github_repo: str, ticket_id: str, key: str) -> str:
     # The stored remote is token-stripped (see _clone_script), so push to an explicit tokened URL
     # rather than `origin`; the token stays in $CLONE_TOKEN and never lands in the volume.
+    #
+    # --force: the conductor solely owns `ticket/<id>` on each repo. Re-running a ticket (or an
+    # earlier aborted run) leaves a divergent branch on the remote, and a fast-forward push then
+    # fails ("Updates were rejected … fetch first"). Each build is authoritative for its branch, so
+    # overwrite it.
     return "\n".join(
         [
             "set -euo pipefail",
             "git config --global --add safe.directory '*'",
             f"cd /work/{key}",
-            f'git push "https://x-access-token:${{CLONE_TOKEN}}@github.com/{github_repo}.git" '
+            "git push --force "
+            f'"https://x-access-token:${{CLONE_TOKEN}}@github.com/{github_repo}.git" '
             f'"ticket/{ticket_id}"',
         ]
     )
