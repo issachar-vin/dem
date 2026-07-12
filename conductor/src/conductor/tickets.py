@@ -5,7 +5,7 @@ cares about (Phase 5 will also push it to Plane custom properties)."""
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from conductor.models import Ticket
+from conductor.models import Ticket, TicketPR
 
 # Tickets past the ready_for_dev gate — the scheduler finishes these before pulling a new ticket.
 IN_FLIGHT_STATUSES = frozenset({"in_progress", "in_review", "changes_requested"})
@@ -94,6 +94,67 @@ class TicketStore:
                 .values(pr_number=number, pr_url=url)
             )
             await session.commit()
+
+    async def add_pr(
+        self,
+        ticket_id: str,
+        *,
+        repo_key: str,
+        github_repo: str,
+        pr_number: int,
+        pr_url: str,
+    ) -> None:
+        """Record one of a ticket's PRs (one per repo it changed). Idempotent per (ticket, repo)."""
+        async with self._sessionmaker() as session:
+            existing = (
+                await session.execute(
+                    select(TicketPR).where(
+                        TicketPR.ticket_id == ticket_id, TicketPR.repo_key == repo_key
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing is not None:
+                existing.pr_number = pr_number
+                existing.pr_url = pr_url
+                existing.github_repo = github_repo
+                existing.merged = False
+            else:
+                session.add(
+                    TicketPR(
+                        ticket_id=ticket_id,
+                        repo_key=repo_key,
+                        github_repo=github_repo,
+                        pr_number=pr_number,
+                        pr_url=pr_url,
+                    )
+                )
+            await session.commit()
+
+    async def mark_pr_merged(self, pr_url: str) -> str | None:
+        """Mark the PR at `pr_url` merged; return the ticket it belongs to (None if untracked)."""
+        async with self._sessionmaker() as session:
+            row = (
+                await session.execute(select(TicketPR).where(TicketPR.pr_url == pr_url))
+            ).scalar_one_or_none()
+            if row is None:
+                return None
+            row.merged = True
+            await session.commit()
+            return row.ticket_id
+
+    async def all_prs_merged(self, ticket_id: str) -> bool:
+        """True once every PR the ticket opened has merged (and it opened at least one)."""
+        async with self._sessionmaker() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(TicketPR.merged).where(TicketPR.ticket_id == ticket_id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            return bool(rows) and all(rows)
 
     async def bump_loop_round(self, ticket_id: str) -> int:
         async with self._sessionmaker() as session:

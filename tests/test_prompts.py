@@ -5,7 +5,11 @@ from conductor import prompts
 
 def test_render_engineer_interpolates_ticket() -> None:
     rendered = prompts.render(
-        "engineer", ticket_id="T-1", title="Add login", body="It must accept OAuth."
+        "engineer",
+        ticket_id="T-1",
+        title="Add login",
+        body="It must accept OAuth.",
+        repos="- `/work/backend` — octo/backend (branch `main`)",
     )
     assert "T-1" in rendered
     assert "Add login" in rendered

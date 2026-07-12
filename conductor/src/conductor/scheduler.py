@@ -16,7 +16,7 @@ import contextlib
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from sqlalchemy import select
@@ -69,10 +69,10 @@ class _Pipeline:
     job_id: int  # the driving job; scopes every agent run captured during this dispatch
     project_id: str
     issue_id: str
-    repo: str
-    base_branch: str
+    targets: list[RepoClone]  # the repo(s) this ticket builds in, each cloned at /work/<key>
     issue: dict[str, Any]
-    pr_url: str = ""
+    built: list[RepoClone] = field(default_factory=list)  # targets that got commits (→ a PR each)
+    pr_url: str = ""  # first PR's url, for the ready-for-approval notify line
 
 
 class Scheduler:
@@ -156,30 +156,40 @@ class Scheduler:
         return any(statuses.get(blocker) != "done" for blocker in ticket.blocked_by)
 
     async def _run_cleanup(self, job: Job) -> None:
-        """Handle a GitHub PR job. A merged PR marks its ticket `done` (which releases dependents
-        from the blocking gate) and reclaims its volumes; every other PR delivery (opened, review,
-        comment) has no consumer today and is drained so the queue doesn't grow unbounded."""
+        """Handle a GitHub PR job. A merged PR is recorded against its ticket; only once **every**
+        PR the ticket opened has merged is the ticket marked `done` (releasing dependents from the
+        blocking gate) and its volumes reclaimed. Every other PR delivery (opened, review, comment,
+        unmerged close) has no consumer and is drained so the queue can't grow unbounded."""
         try:
             pr_number = job.payload.get("pr_number")
             if not job.payload.get("merged") or not isinstance(pr_number, int):
                 await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
                 return
             pr_url = f"https://github.com/{job.payload.get('repo', '')}/pull/{pr_number}"
-            ticket = await self._tickets.get_by_pr_url(pr_url)
-            if ticket is None:
+            ticket_id = await self._tickets.mark_pr_merged(pr_url)
+            if ticket_id is None:
                 await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
                 logger.info("Merged PR %s has no tracked ticket; nothing to clean up", pr_url)
                 return
-            await self._tickets.set_status(ticket.ticket_id, "done")
-            await self._volumes.destroy(ticket_id=ticket.ticket_id)
+            if not await self._tickets.all_prs_merged(ticket_id):
+                await self._emit(
+                    job.id,
+                    f"Merged PR #{pr_number}; waiting on the ticket's other PR(s)",
+                    ticket_id=ticket_id,
+                    level="success",
+                )
+                await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
+                return
+            await self._tickets.set_status(ticket_id, "done")
+            await self._volumes.destroy(ticket_id=ticket_id)
             await self._emit(
                 job.id,
-                f"Merged PR #{pr_number} → done, volumes reclaimed",
-                ticket_id=ticket.ticket_id,
+                f"All PRs merged (last: #{pr_number}) → done, volumes reclaimed",
+                ticket_id=ticket_id,
                 level="success",
             )
             await complete_job(self._sessionmaker, job.id, status=JobStatus.DONE)
-            logger.info("Ticket %s merged (%s) → done, volumes reclaimed", ticket.ticket_id, pr_url)
+            logger.info("Ticket %s fully merged → done, volumes reclaimed", ticket_id)
         except Exception as exc:
             await complete_job(self._sessionmaker, job.id, status=JobStatus.FAILED, error=str(exc))
             await self._emit(job.id, f"Cleanup failed: {exc}", level="error")
@@ -199,7 +209,7 @@ class Scheduler:
                 f"Determined repo(s) needed: {', '.join(r.key for r in chosen)}",
                 ticket_id=issue_id,
             )
-            repo, base_branch = chosen[0].github_repo, chosen[0].base_branch
+            targets = [RepoClone(r.key, r.github_repo, r.base_branch) for r in chosen]
             ctx = _Pipeline(
                 cfg=cfg,
                 plane=plane_client,
@@ -207,8 +217,7 @@ class Scheduler:
                 job_id=job.id,
                 project_id=project_id,
                 issue_id=issue_id,
-                repo=repo,
-                base_branch=base_branch,
+                targets=targets,
                 issue=issue,
             )
             await self._tickets.get_or_create(issue_id, project_id)
@@ -321,23 +330,22 @@ class Scheduler:
     async def _build(
         self, ctx: _Pipeline, *, resume: _Resume | None = None
     ) -> tuple[_Pipeline, str] | None:
-        """Engineer stage: build the ticket, push its branch, open the PR. Returns the enriched
-        context (with the PR url) and the engineer's session id for the review-loop resume — or
-        `None` if the ticket was **parked** for a human (the engineer asked a question, or made no
-        changes), in which case there is nothing to review.
+        """Engineer stage: build the ticket across its target repos, then open one PR per repo that
+        got commits. Returns the enriched context (its built repos + first PR url) and the
+        engineer's session id for the review-loop resume — or `None` if the ticket was **parked**
+        (the engineer asked a question, or made no changes in any repo).
 
         `resume` set → the ticket was parked and is being un-blocked: reuse its existing repo +
         Claude-session volumes (no wipe, no re-clone) and continue the same `claude` session with
         the human's answer, so the agent keeps its memory instead of rescanning the codebase."""
         await self._set_state(ctx, "in_progress", WorkflowState.IN_PROGRESS)
+        keys = ", ".join(t.key for t in ctx.targets)
         if resume is None:
             await self._emit(
-                ctx.job_id, f"Preparing repository — cloning {ctx.repo}", ticket_id=ctx.issue_id
+                ctx.job_id, f"Preparing repositories — cloning {keys}", ticket_id=ctx.issue_id
             )
-            await self._volumes.prepare(
-                ticket_id=ctx.issue_id, github_repo=ctx.repo, base_branch=ctx.base_branch
-            )
-            prompt = _engineer_prompt(ctx.issue_id, ctx.issue)
+            await self._volumes.prepare(ticket_id=ctx.issue_id, targets=ctx.targets)
+            prompt = _engineer_prompt(ctx.issue_id, ctx.issue, ctx.targets)
         else:
             await self._emit(
                 ctx.job_id,
@@ -363,33 +371,61 @@ class Scheduler:
         if question is not None:
             await self._park(ctx, "awaiting_human", f"The engineer needs a decision:\n\n{question}")
             return None
-        if (
-            await self._volumes.commit_count(ticket_id=ctx.issue_id, base_branch=ctx.base_branch)
-            == 0
-        ):
+
+        built = [
+            t
+            for t in ctx.targets
+            if await self._volumes.commit_count(
+                ticket_id=ctx.issue_id, key=t.key, base_branch=t.base_branch
+            )
+            > 0
+        ]
+        if not built:
             summary = envelope.result.strip() or "(no summary)"
             await self._park(ctx, "no_changes", f"The engineer made no changes.\n\n{summary}")
             return None
 
-        await self._volumes.push(ticket_id=ctx.issue_id, github_repo=ctx.repo)
-        pr = await ctx.github.create_pull_request(
-            ctx.repo,
-            head=f"ticket/{ctx.issue_id}",
-            base=ctx.base_branch,
-            title=_issue_title(ctx.issue),
-            body=_pr_body(ctx.issue_id, ctx.issue),
-        )
-        await self._tickets.set_pr(ctx.issue_id, pr.number, pr.html_url)
-        ctx = replace(ctx, pr_url=pr.html_url)
-        await self._emit(
-            ctx.job_id, f"Opened PR #{pr.number}", ticket_id=ctx.issue_id, level="success"
-        )
-        # Post the PR link to the ticket now, before review — so it's on the work item regardless of
-        # how the review turns out, not only on the ready-for-approval path.
-        await self._post_comment(ctx, f"Pull request opened: {pr.html_url}")
+        prs = await self._open_prs(ctx, built)
+        ctx = replace(ctx, built=built, pr_url=prs[0].html_url)
         await self._set_state(ctx, "in_review", WorkflowState.IN_REVIEW)
-        logger.info("Engineer built ticket %s → PR %s", ctx.issue_id, pr.number)
+        logger.info("Engineer built ticket %s → %d PR(s)", ctx.issue_id, len(prs))
         return ctx, envelope.session_id
+
+    async def _open_prs(self, ctx: _Pipeline, built: list[RepoClone]) -> list[github.PullRequest]:
+        """Push and open a PR for each repo the engineer changed, record it, and post all the links
+        to the ticket as one comment (before review — so they're on the work item regardless of how
+        the review turns out)."""
+        prs: list[github.PullRequest] = []
+        for target in built:
+            await self._volumes.push(
+                ticket_id=ctx.issue_id, key=target.key, github_repo=target.github_repo
+            )
+            pr = await ctx.github.create_pull_request(
+                target.github_repo,
+                head=f"ticket/{ctx.issue_id}",
+                base=target.base_branch,
+                title=_issue_title(ctx.issue),
+                body=_pr_body(ctx.issue_id, ctx.issue),
+            )
+            await self._tickets.add_pr(
+                ctx.issue_id,
+                repo_key=target.key,
+                github_repo=target.github_repo,
+                pr_number=pr.number,
+                pr_url=pr.html_url,
+            )
+            await self._emit(
+                ctx.job_id,
+                f"Opened PR #{pr.number} in {target.key}",
+                ticket_id=ctx.issue_id,
+                level="success",
+            )
+            prs.append(pr)
+        # Keep the ticket's primary PR fields populated (UI/notify) — the first opened PR.
+        await self._tickets.set_pr(ctx.issue_id, prs[0].number, prs[0].html_url)
+        links = "\n\n".join(f"{t.key}: {pr.html_url}" for t, pr in zip(built, prs, strict=True))
+        await self._post_comment(ctx, f"Pull request(s) opened:\n\n{links}")
+        return prs
 
     async def _park(
         self,
@@ -475,9 +511,7 @@ class Scheduler:
     async def _review_loop(self, ctx: _Pipeline, session_id: str) -> None:
         """Run reviewer + QA; on any fail, feed findings back to the engineer and re-review until
         both pass (→ ready_for_approval) or the engineer's diff stops changing (→ stalled)."""
-        last_hash = await self._volumes.diff_hash(
-            ticket_id=ctx.issue_id, base_branch=ctx.base_branch
-        )
+        last_hash = await self._volumes.diff_hash(ticket_id=ctx.issue_id, targets=ctx.built)
         await self._tickets.set_diff_hash(ctx.issue_id, last_hash)
         while True:
             verdicts = await self._run_checkers(ctx)
@@ -504,10 +538,11 @@ class Scheduler:
                 level="warning",
             )
             await self._resume_engineer(ctx, session_id, verdicts, round_no)
-            await self._volumes.push(ticket_id=ctx.issue_id, github_repo=ctx.repo)
-            new_hash = await self._volumes.diff_hash(
-                ticket_id=ctx.issue_id, base_branch=ctx.base_branch
-            )
+            for target in ctx.built:
+                await self._volumes.push(
+                    ticket_id=ctx.issue_id, key=target.key, github_repo=target.github_repo
+                )
+            new_hash = await self._volumes.diff_hash(ticket_id=ctx.issue_id, targets=ctx.built)
             if new_hash == last_hash:  # engineer resume produced an identical diff → stalled
                 await self._tickets.set_status(ctx.issue_id, "stalled")
                 await self._emit(
@@ -656,9 +691,19 @@ def _issue_body(issue: dict[str, object]) -> str:
     return str(issue.get("description_stripped") or issue.get("description_html") or "")
 
 
-def _engineer_prompt(issue_id: str, issue: dict[str, object]) -> str:
+def _repos_block(targets: list[RepoClone]) -> str:
+    return "\n".join(
+        f"- `/work/{t.key}` — {t.github_repo} (branch `{t.base_branch}`)" for t in targets
+    )
+
+
+def _engineer_prompt(issue_id: str, issue: dict[str, object], targets: list[RepoClone]) -> str:
     return prompts.render(
-        "engineer", ticket_id=issue_id, title=_issue_title(issue), body=_issue_body(issue)
+        "engineer",
+        ticket_id=issue_id,
+        title=_issue_title(issue),
+        body=_issue_body(issue),
+        repos=_repos_block(targets),
     )
 
 
@@ -706,9 +751,9 @@ def _checker_prompt(role: AgentRole, ctx: _Pipeline) -> str:
     return prompts.render(
         role.value,
         ticket_id=ctx.issue_id,
-        base_branch=ctx.base_branch,
         title=_issue_title(ctx.issue),
         body=_issue_body(ctx.issue),
+        repos=_repos_block(ctx.built or ctx.targets),
     )
 
 

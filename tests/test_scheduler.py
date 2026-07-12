@@ -88,19 +88,13 @@ class FakeVolumes:
         self._diff_hashes = list(diff_hashes) if diff_hashes is not None else None
         self._diff_calls = 0
 
-    async def prepare(
-        self, *, ticket_id: str, github_repo: str, base_branch: str
-    ) -> None:
-        self.prepared.append(
-            {
-                "ticket_id": ticket_id,
-                "github_repo": github_repo,
-                "base_branch": base_branch,
-            }
-        )
+    async def prepare(self, *, ticket_id: str, targets: Any) -> None:
+        self.prepared.append({"ticket_id": ticket_id, "targets": list(targets)})
 
-    async def push(self, *, ticket_id: str, github_repo: str) -> None:
-        self.pushed.append({"ticket_id": ticket_id, "github_repo": github_repo})
+    async def push(self, *, ticket_id: str, key: str, github_repo: str) -> None:
+        self.pushed.append(
+            {"ticket_id": ticket_id, "key": key, "github_repo": github_repo}
+        )
 
     async def prepare_planner(self, *, epic_id: str, repos: Any) -> None:
         self.planner_prepared.append({"epic_id": epic_id, "repos": list(repos)})
@@ -111,10 +105,10 @@ class FakeVolumes:
     async def destroy(self, *, ticket_id: str) -> None:
         self.destroyed.append(ticket_id)
 
-    async def commit_count(self, *, ticket_id: str, base_branch: str) -> int:
+    async def commit_count(self, *, ticket_id: str, key: str, base_branch: str) -> int:
         return self._commit_count
 
-    async def diff_hash(self, *, ticket_id: str, base_branch: str) -> str:
+    async def diff_hash(self, *, ticket_id: str, targets: Any) -> str:
         self._diff_calls += 1
         if self._diff_hashes is not None:
             return self._diff_hashes.pop(0)
@@ -314,9 +308,11 @@ async def test_tick_dispatches_engineer(
     assert (
         "ISSUE-1" in run.prompt and "do the thing" in run.prompt
     )  # real engineer prompt
-    assert volumes.prepared[0]["github_repo"] == "octo/backend"
+    assert volumes.prepared[0]["targets"][0].github_repo == "octo/backend"
     # The branch is pushed and a PR opened before review runs.
-    assert volumes.pushed == [{"ticket_id": "ISSUE-1", "github_repo": "octo/backend"}]
+    assert volumes.pushed == [
+        {"ticket_id": "ISSUE-1", "key": "backend", "github_repo": "octo/backend"}
+    ]
     assert github.created[0] == {
         "repo": "octo/backend",
         "head": "ticket/ISSUE-1",
@@ -337,7 +333,7 @@ async def test_tick_dispatches_engineer(
     assert any("pull/7" in c[2] for c in plane.comments)
     # The console timeline captured the conductor's pipeline steps.
     events = await _event_messages(sessionmaker)
-    assert any("Preparing repository" in e for e in events)
+    assert any("Preparing repositories" in e for e in events)
     assert any("Opened PR #7" in e for e in events)
     assert any("Review passed" in e for e in events)
 
@@ -363,11 +359,83 @@ async def test_router_selects_repo_for_human_ticket(
     await scheduler.tick()
 
     # Routed to ui — not the first-mapped backend — and the decision is on the timeline.
-    assert volumes.prepared[0]["github_repo"] == "octo/ui"
+    assert volumes.prepared[0]["targets"][0].github_repo == "octo/ui"
     assert any(
         "Determined repo(s) needed: ui" in e
         for e in await _event_messages(sessionmaker)
     )
+
+
+async def test_multi_repo_ticket_opens_a_pr_per_repo(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    await mappings.set_repo("proj-1", "ui", github_repo="octo/ui", base_branch="main")
+    dispatcher, volumes = FakeDispatcher(), FakeVolumes()
+    github, plane = FakeGitHub(), FakePlane()
+
+    async def route(cfg: Any, *, ticket: str, catalog: Any) -> list[str]:
+        return ["backend", "ui"]
+
+    scheduler, tickets = await _scheduler(
+        store,
+        mappings,
+        sessionmaker,
+        dispatcher,
+        volumes,
+        plane=plane,
+        github=github,
+        route_fn=route,
+    )
+    await _enqueue(sessionmaker, "ISSUE-1")
+
+    await scheduler.tick()
+
+    # Both repos cloned under /work/<key>, a PR opened + pushed in each.
+    assert {t.key for t in volumes.prepared[0]["targets"]} == {"backend", "ui"}
+    assert {p["key"] for p in volumes.pushed} == {"backend", "ui"}
+    assert {c["repo"] for c in github.created} == {"octo/backend", "octo/ui"}
+    # Both PR links land in one ticket comment.
+    assert any(
+        "octo/backend/pull/7" in c[2] and "octo/ui/pull/7" in c[2]
+        for c in plane.comments
+    )
+    async with sessionmaker() as session:
+        from conductor.models import TicketPR
+
+        prs = (await session.execute(select(TicketPR))).scalars().all()
+        assert {p.repo_key for p in prs} == {"backend", "ui"}
+
+
+async def test_ticket_done_only_when_all_its_prs_merge(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    dispatcher, volumes = FakeDispatcher(), FakeVolumes()
+    scheduler, tickets = await _scheduler(
+        store, mappings, sessionmaker, dispatcher, volumes
+    )
+    await tickets.get_or_create("ISSUE-1", "proj-1")
+    for key, repo, num in (("backend", "octo/backend", 7), ("ui", "octo/ui", 3)):
+        await tickets.add_pr(
+            "ISSUE-1",
+            repo_key=key,
+            github_repo=repo,
+            pr_number=num,
+            pr_url=f"https://github.com/{repo}/pull/{num}",
+        )
+
+    await _enqueue_github(sessionmaker, repo="octo/backend", pr_number=7, merged=True)
+    assert await scheduler.tick() is True
+    assert volumes.destroyed == []  # one PR still open → not done yet
+    assert (await tickets.get("ISSUE-1")).agent_status != "done"  # type: ignore[union-attr]
+
+    await _enqueue_github(sessionmaker, repo="octo/ui", pr_number=3, merged=True)
+    assert await scheduler.tick() is True
+    assert volumes.destroyed == ["ISSUE-1"]  # all merged → cleaned up
+    assert (await tickets.get("ISSUE-1")).agent_status == "done"  # type: ignore[union-attr]
 
 
 async def test_no_changes_parks_ticket(
@@ -495,7 +563,7 @@ async def test_review_fail_then_pass_resumes_engineer(
     assert engineer_runs[1].resume_session_id == "sess-1"
     assert "null deref" in engineer_runs[1].prompt
     # The PR-opened comment, then the round-1 findings comment.
-    assert any("Pull request opened" in c[2] for c in plane.comments)
+    assert any("Pull request(s) opened" in c[2] for c in plane.comments)
     assert any("null deref" in c[2] for c in plane.comments)
     assert any("ready for approval" in m for m in notify.messages)
     async with sessionmaker() as session:
@@ -640,8 +708,8 @@ async def test_engineer_routes_to_planner_assigned_repo(
     await _enqueue(sessionmaker, "ISSUE-1")
 
     await scheduler.tick()
-    assert volumes.prepared[0]["github_repo"] == "octo/ui"
-    assert volumes.prepared[0]["base_branch"] == "dev"
+    assert volumes.prepared[0]["targets"][0].github_repo == "octo/ui"
+    assert volumes.prepared[0]["targets"][0].base_branch == "dev"
 
 
 async def test_blocked_ticket_is_skipped_until_blocker_done(
@@ -680,7 +748,13 @@ async def test_merged_pr_cleans_up_ticket(
         store, mappings, sessionmaker, dispatcher, volumes
     )
     await tickets.get_or_create("ISSUE-1", "proj-1")
-    await tickets.set_pr("ISSUE-1", 7, "https://github.com/octo/backend/pull/7")
+    await tickets.add_pr(
+        "ISSUE-1",
+        repo_key="backend",
+        github_repo="octo/backend",
+        pr_number=7,
+        pr_url="https://github.com/octo/backend/pull/7",
+    )
     await tickets.set_status("ISSUE-1", "in_review")
     await _enqueue_github(sessionmaker, repo="octo/backend", pr_number=7, merged=True)
 
@@ -701,7 +775,13 @@ async def test_unmerged_pr_job_is_drained(
         store, mappings, sessionmaker, dispatcher, volumes
     )
     await tickets.get_or_create("ISSUE-1", "proj-1")
-    await tickets.set_pr("ISSUE-1", 7, "https://github.com/octo/backend/pull/7")
+    await tickets.add_pr(
+        "ISSUE-1",
+        repo_key="backend",
+        github_repo="octo/backend",
+        pr_number=7,
+        pr_url="https://github.com/octo/backend/pull/7",
+    )
     await _enqueue_github(sessionmaker, pr_number=7, merged=False)
 
     assert await scheduler.tick() is True
@@ -738,7 +818,13 @@ async def test_merged_pr_releases_blocked_ticket(
     await tickets.create_planned(
         "BLOCKER", "proj-1", target_repo="backend", blocked_by=[]
     )
-    await tickets.set_pr("BLOCKER", 7, "https://github.com/octo/backend/pull/7")
+    await tickets.add_pr(
+        "BLOCKER",
+        repo_key="backend",
+        github_repo="octo/backend",
+        pr_number=7,
+        pr_url="https://github.com/octo/backend/pull/7",
+    )
     await _enqueue(sessionmaker, "DEP")
 
     assert await scheduler.tick() is False  # DEP blocked by BLOCKER (not done)

@@ -39,9 +39,10 @@ class VolumeManager:
         self._docker_factory = docker_factory
         self._github_factory = github_factory
 
-    async def prepare(self, *, ticket_id: str, github_repo: str, base_branch: str) -> None:
-        """Create both volumes and populate the repo volume with a fresh clone on branch
-        `ticket/<id>`, git identity configured from the token's own account."""
+    async def prepare(self, *, ticket_id: str, targets: Sequence[RepoClone]) -> None:
+        """Create both volumes and clone each target repo into `/work/<key>` on branch
+        `ticket/<id>`, git identity configured from the token's own account. A single-repo ticket is
+        just the one-target case (its checkout lives at `/work/<key>`, not the repo root)."""
         cfg = await self._store.resolved()
         identity = await self._github_factory(cfg).get_user()
         client = self._docker_factory()
@@ -61,7 +62,7 @@ class VolumeManager:
             # Override the agent entrypoint: it asserts a Claude credential before running anything,
             # but this helper only clones (no Claude creds, by design), so it must not run it.
             entrypoint=["bash", "-c"],
-            command=[_clone_script(github_repo, base_branch, ticket_id, identity)],
+            command=[_clone_script(targets, ticket_id, identity)],
             name=f"psa-clone-{ticket_id}",
             environment={"CLONE_TOKEN": cfg.get("github_token", "")},
             volumes={repo_vol: "/work"},
@@ -90,35 +91,35 @@ class VolumeManager:
             user="root",
         )
 
-    async def push(self, *, ticket_id: str, github_repo: str) -> None:
-        """Push the engineer's `ticket/<id>` branch to origin. Credentialed (the token is stripped
-        from the volume's stored remote), so it runs conductor-side in a root helper — the same
-        reason the clone does — keeping the token out of the agent container."""
+    async def push(self, *, ticket_id: str, key: str, github_repo: str) -> None:
+        """Push one repo's `ticket/<id>` branch to origin, from its `/work/<key>` checkout.
+        Credentialed (the token is stripped from the volume's stored remote), so it runs
+        conductor-side in a root helper — keeping the token out of the agent container."""
         cfg = await self._store.resolved()
         client = self._docker_factory()
         await run_container(
             client,
             image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
             entrypoint=["bash", "-c"],
-            command=[_push_script(github_repo, ticket_id)],
-            name=f"psa-push-{ticket_id}",
+            command=[_push_script(github_repo, ticket_id, key)],
+            name=f"psa-push-{key}-{ticket_id}",
             environment={"CLONE_TOKEN": cfg.get("github_token", "")},
             volumes={f"psa-repo-{ticket_id}": "/work"},
             user="root",
         )
 
-    async def commit_count(self, *, ticket_id: str, base_branch: str) -> int:
-        """Number of commits the engineer added on `ticket/<id>` over the base branch. Zero means
-        the engineer left no work — pushing that branch and opening a PR would 422 ('No commits
-        between …'), so the scheduler parks the ticket instead."""
+    async def commit_count(self, *, ticket_id: str, key: str, base_branch: str) -> int:
+        """Number of commits the engineer added on one repo's `ticket/<id>` branch over its base.
+        Zero means no work in that repo — so no PR is opened for it (and if *every* repo is zero,
+        the scheduler parks the ticket)."""
         cfg = await self._store.resolved()
         client = self._docker_factory()
         stdout = await run_container(
             client,
             image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
             entrypoint=["bash", "-c"],
-            command=[_commit_count_script(base_branch)],
-            name=f"psa-count-{ticket_id}",
+            command=[_commit_count_script(base_branch, key)],
+            name=f"psa-count-{key}-{ticket_id}",
             volumes={f"psa-repo-{ticket_id}": "/work"},
             user="root",
         )
@@ -127,16 +128,17 @@ class VolumeManager:
         except ValueError:
             return 0
 
-    async def diff_hash(self, *, ticket_id: str, base_branch: str) -> str:
-        """sha256 of `git diff <base>...HEAD` on the ticket branch. The stall detector compares this
-        across rounds — an identical hash twice means the engineer's resume produced no new work."""
+    async def diff_hash(self, *, ticket_id: str, targets: Sequence[RepoClone]) -> str:
+        """sha256 over every target repo's `git diff <base>...HEAD`. The stall detector compares
+        this across rounds — an identical hash twice means the engineer's resume produced no new
+        work in any repo."""
         cfg = await self._store.resolved()
         client = self._docker_factory()
         stdout = await run_container(
             client,
             image=cfg.get("agent_image") or DEFAULT_AGENT_IMAGE,
             entrypoint=["bash", "-c"],
-            command=[_diff_hash_script(base_branch)],
+            command=[_diff_hash_script(targets)],
             name=f"psa-diff-{ticket_id}",
             volumes={f"psa-repo-{ticket_id}": "/work"},
             user="root",
@@ -172,14 +174,14 @@ class VolumeManager:
                 logger.debug("Volume %s not removed (likely absent)", name)
 
 
-def _push_script(github_repo: str, ticket_id: str) -> str:
+def _push_script(github_repo: str, ticket_id: str, key: str) -> str:
     # The stored remote is token-stripped (see _clone_script), so push to an explicit tokened URL
     # rather than `origin`; the token stays in $CLONE_TOKEN and never lands in the volume.
     return "\n".join(
         [
             "set -euo pipefail",
-            "git config --global --add safe.directory /work",
-            "cd /work",
+            "git config --global --add safe.directory '*'",
+            f"cd /work/{key}",
             f'git push "https://x-access-token:${{CLONE_TOKEN}}@github.com/{github_repo}.git" '
             f'"ticket/{ticket_id}"',
         ]
@@ -199,46 +201,41 @@ def _planner_clone_script(repos: Sequence[RepoClone]) -> str:
     return "\n".join(lines)
 
 
-def _commit_count_script(base_branch: str) -> str:
+def _commit_count_script(base_branch: str, key: str) -> str:
     return "\n".join(
         [
             "set -euo pipefail",
-            "git config --global --add safe.directory /work",
-            "cd /work",
+            "git config --global --add safe.directory '*'",
+            f"cd /work/{key}",
             f'git rev-list --count "{base_branch}..HEAD"',
         ]
     )
 
 
-def _diff_hash_script(base_branch: str) -> str:
-    return "\n".join(
-        [
-            "set -euo pipefail",
-            "git config --global --add safe.directory /work",
-            "cd /work",
-            f'git diff "{base_branch}...HEAD" | sha256sum | cut -d" " -f1',
-        ]
-    )
+def _diff_hash_script(targets: Sequence[RepoClone]) -> str:
+    # Concatenate every repo's diff (prefixed by key so identical diffs in different repos don't
+    # collide), then hash the whole thing — the stall detector wants "did *anything* change".
+    lines = ["set -euo pipefail", "git config --global --add safe.directory '*'", "{"]
+    for t in targets:
+        lines.append(f'echo "== {t.key} =="; git -C "/work/{t.key}" diff "{t.base_branch}...HEAD"')
+    lines.append('} | sha256sum | cut -d" " -f1')
+    return "\n".join(lines)
 
 
-def _clone_script(github_repo: str, base_branch: str, ticket_id: str, identity: GitHubUser) -> str:
-    # Token is passed via $CLONE_TOKEN (env), not the command line, then stripped from the stored
-    # remote so it never persists in a volume the agent can read.
-    return "\n".join(
-        [
-            "set -euo pipefail",
-            # The volume mounts owned by the image's `agent` user, but this helper runs as root to
-            # clone + chown. Since git 2.35.2 that ownership mismatch trips "dubious ownership" and
-            # aborts, even for root — so trust /work explicitly. The final chown hands the tree to
-            # the agent, whose own git then sees a matching owner and needs no such exception.
-            "git config --global --add safe.directory /work",
-            f'git clone --depth 50 --branch "{base_branch}" '
-            f'"https://x-access-token:${{CLONE_TOKEN}}@github.com/{github_repo}.git" /work',
-            "cd /work",
-            f'git remote set-url origin "https://github.com/{github_repo}.git"',
-            f'git checkout -b "ticket/{ticket_id}"',
-            f'git config user.name "{identity.git_name}"',
-            f'git config user.email "{identity.git_email}"',
-            "chown -R agent:agent /work",
+def _clone_script(targets: Sequence[RepoClone], ticket_id: str, identity: GitHubUser) -> str:
+    # Token is passed via $CLONE_TOKEN (env), not the command line, then stripped from each stored
+    # remote so it never persists in a volume the agent can read. Each repo lands at /work/<key> on
+    # its own ticket branch; the final chown hands the whole tree to the agent user.
+    lines = ["set -euo pipefail", "git config --global --add safe.directory '*'"]
+    for t in targets:
+        dest = f"/work/{t.key}"
+        lines += [
+            f'git clone --depth 50 --branch "{t.base_branch}" '
+            f'"https://x-access-token:${{CLONE_TOKEN}}@github.com/{t.github_repo}.git" "{dest}"',
+            f'git -C "{dest}" remote set-url origin "https://github.com/{t.github_repo}.git"',
+            f'git -C "{dest}" checkout -b "ticket/{ticket_id}"',
+            f'git -C "{dest}" config user.name "{identity.git_name}"',
+            f'git -C "{dest}" config user.email "{identity.git_email}"',
         ]
-    )
+    lines.append("chown -R agent:agent /work")
+    return "\n".join(lines)
