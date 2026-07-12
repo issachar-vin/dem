@@ -431,7 +431,7 @@ async def _github_panel(tabs: ui.tabs, page_origin: str) -> None:
 @dataclass
 class _RepoRow:
     exp: ui.expansion
-    role: ui.select
+    role: ui.input
     repo: ValueElement[Any]
     branch: ui.input
 
@@ -467,17 +467,13 @@ def _project_section(
                     ui.label(title).classes("text-sm").style(f"color:{kit.TEXT}")
                 with exp, ui.column().classes("w-full gap-4 pt-2"):
                     with widgets.labeled(
-                        "Repository Identifier",
-                        helper="Unique name used by the system. Examples: frontend, backend, docs",
+                        "Repository key",
+                        helper="Any short name you choose (e.g. ui, backend, docs, mobile). Agents "
+                        "use this key to decide which repo a ticket needs — name it meaningfully.",
                     ):
                         role_in = (
-                            ui.select(
-                                options=list(kit.ROLE_SUGGESTIONS),
-                                value=role or None,
-                                with_input=True,
-                                new_value_mode="add-unique",
-                            )
-                            .props("outlined dense options-dark")
+                            ui.input(value=role or "", placeholder="e.g. ui, backend, docs")
+                            .props("outlined dense")
                             .classes("w-full v2-field")
                         )
                     repo_in = widgets.github_repo_field(list(repo_defaults), repo)

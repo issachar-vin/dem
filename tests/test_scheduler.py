@@ -275,6 +275,16 @@ async def _job_status(
         return job.status
 
 
+async def _event_messages(sessionmaker: async_sessionmaker[AsyncSession]) -> list[str]:
+    from conductor.models import JobEvent
+
+    async with sessionmaker() as session:
+        rows = (
+            await session.execute(select(JobEvent.message).order_by(JobEvent.id.asc()))
+        ).scalars()
+        return list(rows)
+
+
 async def test_tick_dispatches_engineer(
     store: ConfigStore,
     mappings: MappingStore,
@@ -316,6 +326,11 @@ async def test_tick_dispatches_engineer(
         assert ticket.pr_url == "https://github.com/octo/backend/pull/7"
     # The PR link is posted to the ticket as a comment (before review).
     assert any("pull/7" in c[2] for c in plane.comments)
+    # The console timeline captured the conductor's pipeline steps.
+    events = await _event_messages(sessionmaker)
+    assert any("Preparing repository" in e for e in events)
+    assert any("Opened PR #7" in e for e in events)
+    assert any("Review passed" in e for e in events)
 
 
 async def test_no_changes_parks_ticket(

@@ -225,6 +225,23 @@ class AgentRunStatus(StrEnum):
     FAILED = "failed"
 
 
+class JobEvent(Base):
+    """A conductor-side pipeline step (not agent stdout) — "preparing repo", "opened PR #8",
+    "review passed", "failed: …" — recorded so the console can render a timeline of what the
+    scheduler did for a job, interleaved with that job's agent runs by timestamp."""
+
+    __tablename__ = "job_events"
+
+    id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
+    job_id: Mapped[int] = mapped_column(_AutoPK, index=True)
+    ticket_id: Mapped[str] = mapped_column(String(64), default="")
+    level: Mapped[str] = mapped_column(
+        String(16), default="info"
+    )  # info | success | warning | error
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class AgentRunLog(Base):
     """Captured output of one `claude -p` agent container run, so the console can show what an agent
     did (or why it failed) after the container is gone. One row per dispatch (engineer/reviewer/qa/
