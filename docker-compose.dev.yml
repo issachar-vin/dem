@@ -1,0 +1,17 @@
+services:
+  conductor:
+    build: ./conductor
+    container_name: dem-conductor
+    restart: unless-stopped
+    ports:
+      - "8420:8420"
+    env_file:
+      - .env
+    volumes:
+      - ./conductor/src:/app/src
+      - /var/run/docker.sock:/var/run/docker.sock
+      - conductor_data:/data
+    command: sh -c "uv run alembic upgrade head && uv run uvicorn conductor.main:create_app --factory --host 0.0.0.0 --port 8420 --reload"
+
+volumes:
+  conductor_data:

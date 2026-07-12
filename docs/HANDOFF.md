@@ -4,7 +4,7 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.14):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+**Status (VERSION 0.5.15):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
 full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
 wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove **PRs #55–#59
 (merged)** — parking/422s/stop-job, agent-run capture + console log viewer, job-delete cascade +
@@ -62,11 +62,18 @@ links on a work item are clickable — **unverified**: depends on Plane's commen
 anchors; the URL text survives regardless.
 Then Phase 6 (observability) — still waiting on the otel-collector host:port and ntfy/Slack target.
 
-**README refresh (PR pending, VERSION 0.5.14):** rewrote `README.md` for the current state — purpose
-(easy-to-deploy autonomous AI SWE tool, two human touchpoints), setup (two-var `.env` + wizard
-walkthrough per credential), config backup via Config → Migration (encrypted bundle export/import as
-the fast re-setup path), and a brief "how it works" (intake → planner → engineer → review loop →
-cleanup). Docs-only; no code change.
+**README refresh (PR #65, merged, VERSION 0.5.14):** rewrote `README.md` for the current state —
+purpose (easy-to-deploy autonomous AI SWE tool, two human touchpoints), setup (two-var `.env` +
+wizard walkthrough per credential), config backup via Config → Migration (encrypted bundle
+export/import as the fast re-setup path), and a brief "how it works" (intake → planner → engineer →
+review loop → cleanup).
+
+**Docker deploy compose (PR pending, VERSION 0.5.15):** the default `docker-compose.yml` is now a
+**production deploy** off the published GHCR images (`ghcr.io/issachar-vin/dem-conductor:latest` +
+`dem-agent:latest`), no build — it mounts the host Docker socket (the old compose didn't, so the
+dispatcher couldn't launch agents) and seeds `AGENT_IMAGE`. The old build-from-source compose moved to
+`docker-compose.dev.yml`; `make dev/up/restart/down/clean` point at it. README now has **Setup with
+Docker (recommended)** vs **Build manually** sections.
 
 **Live-run fixes (PR #59, open, VERSION 0.5.8):** first real epic run surfaced a parser bug that
 looked like three bugs. The **reviewer passed** (`{"pass": true, "findings": []}`) but wrapped it in

@@ -1,16 +1,22 @@
+# Production deploy: runs the images published to GHCR by release.yml. No build step.
+# For a source build (local development, hacking on the conductor) use docker-compose.dev.yml.
 services:
   conductor:
-    build: ./conductor
+    image: ghcr.io/issachar-vin/dem-conductor:latest
     container_name: dem-conductor
     restart: unless-stopped
     ports:
       - "8420:8420"
     env_file:
       - .env
+    environment:
+      # The agent image the dispatcher runs per ticket; seeds the console's Advanced field on
+      # first boot so the pipeline works out of the box.
+      AGENT_IMAGE: ghcr.io/issachar-vin/dem-agent:latest
     volumes:
-      - ./conductor/src:/app/src
+      # The dispatcher launches agent containers on the host via the Docker socket.
+      - /var/run/docker.sock:/var/run/docker.sock
       - conductor_data:/data
-    command: sh -c "uv run alembic upgrade head && uv run uvicorn conductor.main:create_app --factory --host 0.0.0.0 --port 8420 --reload"
 
 volumes:
   conductor_data:

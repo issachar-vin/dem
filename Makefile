@@ -9,21 +9,22 @@ setup:
 	$(CONDUCTOR) sync
 	$(CONDUCTOR) run pre-commit install
 
-# Rebuild the image from scratch (no cache) and bring the stack back up.
+# Rebuild the image from scratch (no cache) and bring the dev stack back up.
 restart:
-	docker compose down
-	docker compose build --no-cache
-	docker compose up -d
+	docker compose -f docker-compose.dev.yml down
+	docker compose -f docker-compose.dev.yml build --no-cache
+	docker compose -f docker-compose.dev.yml up -d
 	@echo "Conductor + console: http://localhost:8420"
 
 migrate:
 	$(CONDUCTOR) run alembic upgrade head
 
+# Local source build with live reload. Production uses docker-compose.yml (published images).
 dev up:
-	docker compose up --build
+	docker compose -f docker-compose.dev.yml up --build
 
 down:
-	docker compose down
+	docker compose -f docker-compose.dev.yml down
 
 lint:
 	$(CONDUCTOR) run ruff format .
@@ -47,7 +48,7 @@ agent-smoke:
 	bash scripts/agent-smoke.sh
 
 clean:
-	docker compose down
+	docker compose -f docker-compose.dev.yml down
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type d -name .venv -exec rm -rf {} +
 
