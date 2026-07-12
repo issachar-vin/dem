@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from conductor import github, job_events, notify, plane, prompts
+from conductor import github, job_events, notify, plane, prompts, router
 from conductor.agents import contracts
 from conductor.agents.contracts import Finding, Plan, Verdict
 from conductor.agents.dispatcher import AgentRun, Dispatcher
@@ -88,6 +88,7 @@ class Scheduler:
         plane_factory: Callable[[dict[str, str]], PlaneClient] = plane.client_from_resolved,
         github_factory: Callable[[dict[str, str]], GitHubClient] = github.client_from_resolved,
         notify_fn: Callable[[dict[str, str], str], Awaitable[None]] = notify.notify,
+        route_fn: Callable[..., Awaitable[list[str]]] = router.route_repos,
     ) -> None:
         self._sessionmaker = sessionmaker
         self._store = store
@@ -98,6 +99,7 @@ class Scheduler:
         self._plane_factory = plane_factory
         self._github_factory = github_factory
         self._notify = notify_fn
+        self._route_fn = route_fn
 
     async def tick(self) -> bool:
         """Select and run at most one job. Returns True if work was dispatched this tick."""
@@ -188,11 +190,16 @@ class Scheduler:
         issue_id = str(job.payload.get("issue_id", ""))
         try:
             existing = await self._tickets.get(issue_id)
-            target_repo = existing.target_repo if existing else None
-            repo, base_branch = await self._resolve_repo(project_id, target_repo)
             cfg = await self._store.resolved()
             plane_client = self._plane_factory(cfg)
             issue = await plane_client.get_issue(project_id, issue_id)
+            chosen = await self._route_repos(cfg, project_id, issue, existing)
+            await self._emit(
+                job.id,
+                f"Determined repo(s) needed: {', '.join(r.key for r in chosen)}",
+                ticket_id=issue_id,
+            )
+            repo, base_branch = chosen[0].github_repo, chosen[0].base_branch
             ctx = _Pipeline(
                 cfg=cfg,
                 plane=plane_client,
@@ -599,21 +606,28 @@ class Scheduler:
                 exc.detail,
             )
 
-    async def _resolve_repo(self, project_id: str, target_repo: str | None) -> tuple[str, str]:
-        """The repo a ticket builds in: the planner-assigned `target_repo` key, else the project's
-        first mapped repo (human-created tickets have no assignment)."""
+    async def _route_repos(
+        self,
+        cfg: dict[str, str],
+        project_id: str,
+        issue: dict[str, Any],
+        existing: Ticket | None,
+    ) -> list[RepoMappingView]:
+        """The repo(s) a ticket needs work in. A planner-assigned `target_repo` wins; a single-repo
+        project is trivial; otherwise the router decides from the ticket text + each repo's README
+        (fetched conductor-side). Always returns at least one repo."""
         repos = await self._mappings.list_repos(project_id)
         if not repos:
             raise RuntimeError(f"project {project_id} has no mapped repo")
-        repo = next((r for r in repos if r.key == target_repo), None) if target_repo else None
-        if target_repo and repo is None:
-            logger.warning(
-                "Ticket target_repo %r not mapped in project %s; using first repo",
-                target_repo,
-                project_id,
-            )
-        repo = repo or repos[0]
-        return repo.github_repo, repo.base_branch
+        if existing and existing.target_repo:
+            return [r for r in repos if r.key == existing.target_repo] or repos[:1]
+        if len(repos) == 1:
+            return repos[:1]
+        gh = self._github_factory(cfg)
+        catalog = [(r.key, await gh.get_readme(r.github_repo)) for r in repos]
+        ticket_text = f"{_issue_title(issue)}\n\n{_issue_body(issue)}"
+        keys = await self._route_fn(cfg, ticket=ticket_text, catalog=catalog)
+        return [r for r in repos if r.key in keys] or repos[:1]
 
     async def recover(self) -> None:
         """Requeue jobs left RUNNING by a previous process (e.g. a redeploy mid-dispatch)."""

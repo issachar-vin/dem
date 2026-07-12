@@ -177,6 +177,9 @@ class FakeGitHub:
         self._error = error
         self.created: list[dict[str, str]] = []
 
+    async def get_readme(self, repo: str) -> str:
+        return f"readme for {repo}"
+
     async def create_pull_request(
         self, repo: str, *, head: str, base: str, title: str, body: str
     ) -> PullRequest:
@@ -197,12 +200,17 @@ async def _scheduler(
     plane: FakePlane | None = None,
     github: FakeGitHub | None = None,
     notify: FakeNotify | None = None,
+    route_fn: Any = None,
 ) -> tuple[Scheduler, TicketStore]:
     await mappings.set_project("proj-1", enabled=True)
     await mappings.set_repo(
         "proj-1", "backend", github_repo="octo/backend", base_branch="main"
     )
     tickets = TicketStore(sessionmaker)
+
+    async def _default_route(cfg: Any, *, ticket: str, catalog: Any) -> list[str]:
+        return [catalog[0][0]]  # first repo, never hits the network in tests
+
     scheduler = Scheduler(
         sessionmaker=sessionmaker,
         store=store,
@@ -213,6 +221,7 @@ async def _scheduler(
         plane_factory=lambda _cfg: plane or FakePlane(),  # type: ignore[arg-type,return-value]
         github_factory=lambda _cfg: github or FakeGitHub(),  # type: ignore[arg-type,return-value]
         notify_fn=notify or FakeNotify(),
+        route_fn=route_fn or _default_route,
     )
     return scheduler, tickets
 
@@ -331,6 +340,34 @@ async def test_tick_dispatches_engineer(
     assert any("Preparing repository" in e for e in events)
     assert any("Opened PR #7" in e for e in events)
     assert any("Review passed" in e for e in events)
+
+
+async def test_router_selects_repo_for_human_ticket(
+    store: ConfigStore,
+    mappings: MappingStore,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    # Second repo so the router actually runs (single-repo projects skip it).
+    await mappings.set_repo("proj-1", "ui", github_repo="octo/ui", base_branch="main")
+    dispatcher, volumes = FakeDispatcher(), FakeVolumes()
+    plane = FakePlane()
+
+    async def route(cfg: Any, *, ticket: str, catalog: Any) -> list[str]:
+        return ["ui"]
+
+    scheduler, _ = await _scheduler(
+        store, mappings, sessionmaker, dispatcher, volumes, plane=plane, route_fn=route
+    )
+    await _enqueue(sessionmaker, "ISSUE-1")
+
+    await scheduler.tick()
+
+    # Routed to ui — not the first-mapped backend — and the decision is on the timeline.
+    assert volumes.prepared[0]["github_repo"] == "octo/ui"
+    assert any(
+        "Determined repo(s) needed: ui" in e
+        for e in await _event_messages(sessionmaker)
+    )
 
 
 async def test_no_changes_parks_ticket(
