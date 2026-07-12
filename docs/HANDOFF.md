@@ -4,7 +4,7 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.11):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+**Status (VERSION 0.5.12):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
 full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
 wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove **PRs #55–#59
 (merged)** — parking/422s/stop-job, agent-run capture + console log viewer, job-delete cascade +
@@ -46,6 +46,13 @@ QA review **every** repo the ticket touched. `_build` opens **one PR per repo wi
 `Opened PR #n in <key>` timeline event each. `_run_cleanup` records each merged PR
 (`mark_pr_merged`); the ticket is `done` (volumes reclaimed, dependents released) only once
 `all_prs_merged`. A single-repo ticket is just the one-target case. Migration `f7a8b9c0d1e2`.
+
+**Live-run fix (PR #63, open, VERSION 0.5.12):** first multi-repo live run (router → ChessLearnerUI)
+failed on push — the `ticket/<id>` branch already existed on the remote from a prior run, so a plain
+`git push` was a non-fast-forward ("Updates were rejected … fetch first"). Fix: `git push --force` in
+the push helper (`_push_script`) — the conductor solely owns `ticket/<id>` and each build is
+authoritative for it. (Router itself worked: it fetched both repos' READMEs — 404, no README — and
+still routed to `frontend`.)
 Then Phase 6 (observability) — still waiting on the otel-collector host:port and ntfy/Slack target.
 
 **Live-run fixes (PR #59, open, VERSION 0.5.8):** first real epic run surfaced a parser bug that
