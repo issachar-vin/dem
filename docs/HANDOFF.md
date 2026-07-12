@@ -4,15 +4,15 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.10):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+**Status (VERSION 0.5.11):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
 full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
-wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove: **PR #55 (merged)** —
-empty-diff/needs-input parking, clearer GitHub 422s, console stop-job; **PR #56 (merged)** —
-agent-run output capture + console log viewer; **PR #57 (merged)** — job-delete cascade, readable log
-viewer, EDT/EST display; **PR #58 (merged)** — live agent monitoring, agent write-permission fix,
-`blocked` state; **PR #59 (merged)** — verdict JSON parsing fix + review UX; **PR #60 (open, 0.5.9)** —
-resume-parked-ticket-with-memory, and (still being added to the same PR) the event timeline + job
-failure reasons + multi-repo router (below). Phases 1–4 provenance (PRs #39–#50) in the fold below.
+wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove **PRs #55–#59
+(merged)** — parking/422s/stop-job, agent-run capture + console log viewer, job-delete cascade +
+EDT/EST, live agent monitoring + write-permission fix + `blocked` state, verdict JSON parsing fix;
+**PR #60 (merged)** — resume-parked-ticket-with-memory; **PR #61 (merged)** — event timeline + job
+failure reasons + free-form repo keys; **PR #62 (open, 0.5.11)** — smart repo router, with multi-repo
+build + multi-PR still being added to the same PR (below). Phases 1–4 provenance (PRs #39–#50) in the
+fold below.
 
 **Resume parked ticket with memory (PR #60, merged, VERSION 0.5.9):** a parked ticket in a resumable
 status (`awaiting_human`/`no_changes`) with a saved `engineer_session_id` and surviving `psa-repo-*`
@@ -22,24 +22,23 @@ is pulled from the Plane comment thread (`PlaneClient.list_comments`) into a new
 prompt. Falls back to a fresh build if the volumes were pruned (`VolumeManager.has_session` gates it).
 `_build(ctx, resume=…)` carries both paths.
 
-**PR #61 (open, VERSION 0.5.10) — event timeline + failure reasons done; router being added to the
-same PR:**
-- **Event timeline (done):** new `job_events` table + store; the scheduler records each pipeline step
-  (prep repo, resuming, opened PR, review passed/changes/stalled, parked, decomposed epic, merged,
-  failed) with a level. The console run modal is now a **timeline** — events interleaved with agent
-  runs by timestamp (colored markers between the run cards). Events cascade-delete with the job.
-- **Job failure reasons (done):** `Job.error` shows on hover of the failed/stopped badge in the jobs
-  table, and the failure is also a red timeline event in the job view.
-- **Still to add on this PR — multi-repo smart router:** a text-only router agent (ticket + repo
-  catalog → repo keys; **no GitHub access** — conductor still does the credentialed clone) that
-  decides which repo(s) a ticket needs; an optional repo **description** field (RepoMapping + console)
-  for routing quality; and the **multi-PR-per-ticket** machinery a cross-repo ticket needs
-  (`Ticket.pr_number` → many; review loop / cleanup / webhook routing per PR). The router's
-  "Determined repos needed: …" step emits into the new timeline.
-**Next up:** the **multi-repo smart router** (decided) — a text-only router agent (ticket + repo
-catalog → JSON list of repo keys; no GitHub access, conductor still does the credentialed clone),
-an optional repo **description** field for routing, and the **multi-PR-per-ticket** machinery a
-cross-repo ticket needs (`Ticket.pr_number` → many; review loop / cleanup / webhook routing per PR).
+**Event timeline + failure reasons (PR #61, merged, VERSION 0.5.10):** `job_events` table + store; the
+scheduler records each pipeline step (prep repo, resuming, opened PR, review passed/changes/stalled,
+parked, decomposed epic, merged, failed) with a level, and the console run modal is now a **timeline**
+— events interleaved with agent runs by timestamp (colored markers between the run cards), cascade-
+deleted with the job. `Job.error` shows on hover of the failed/stopped badge in the jobs table and as
+a red timeline event. Repo-key inputs are now free-form (any custom key) with helper text that keys
+drive agent routing.
+
+**Smart repo router (PR #62, open, VERSION 0.5.11):** `router.py` makes a direct Anthropic Messages
+call (no container) taking the ticket + a catalog of `{repo_key, README}` and returning the repo keys
+the ticket needs; the **conductor** fetches each README (`GitHubClient.get_readme`) so the agent gets
+no GitHub access. The scheduler routes a human ticket to the chosen repo (planner `target_repo` wins;
+single-repo projects skip it) and emits `Determined repo(s) needed: …` to the timeline; failure falls
+back to the first repo. `route_fn` is injected for tests. **Still being added to this PR:** when the
+router picks >1 repo — clone each into `/work/<key>`, engineer across them, one **PR per repo with
+commits**, all PR links as comments, reviewer reviews **all** PRs, cleanup per PR (ticket `done` only
+when all merge). Today the build still targets the first chosen repo.
 Then Phase 6 (observability) — still waiting on the otel-collector host:port and ntfy/Slack target.
 
 **Live-run fixes (PR #59, open, VERSION 0.5.8):** first real epic run surfaced a parser bug that
