@@ -4,7 +4,7 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.12):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+**Status (VERSION 0.5.13):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
 full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
 wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove **PRs #55–#59
 (merged)** — parking/422s/stop-job, agent-run capture + console log viewer, job-delete cascade +
@@ -53,6 +53,13 @@ failed on push — the `ticket/<id>` branch already existed on the remote from a
 the push helper (`_push_script`) — the conductor solely owns `ticket/<id>` and each build is
 authoritative for it. (Router itself worked: it fetched both repos' READMEs — 404, no README — and
 still routed to `frontend`.)
+
+**First full multi-repo run succeeded (0.5.12).** Then two console/UX asks (PR #64, open, VERSION
+0.5.13): (1) the `/jobs` page auto-refreshes every 3s, swapping `table.rows` in place (Quasar diffs
+cells) only when the data changed — live job states, no flicker, same idea as the run modal; (2) Plane
+comments now linkify bare URLs into `<a href target=_blank>` (`_html_paragraphs`/`_linkify`) so PR
+links on a work item are clickable — **unverified**: depends on Plane's comment sanitizer accepting
+anchors; the URL text survives regardless.
 Then Phase 6 (observability) — still waiting on the otel-collector host:port and ntfy/Slack target.
 
 **Live-run fixes (PR #59, open, VERSION 0.5.8):** first real epic run surfaced a parser bug that
