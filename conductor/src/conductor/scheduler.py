@@ -734,10 +734,27 @@ def _needs_input(result: str) -> str | None:
     return None
 
 
+_URL_RE = re.compile(r"https?://[^\s<]+")
+
+
 def _html_paragraphs(text: str) -> str:
+    return "".join(f"<p>{_linkify(block)}</p>" for block in text.split("\n\n") if block.strip())
+
+
+def _linkify(block: str) -> str:
+    """Escape a text block for Plane's `comment_html`, turning bare URLs into clickable `<a>` links
+    (so PR links posted to a ticket are actually clickable)."""
     from html import escape
 
-    return "".join(f"<p>{escape(block)}</p>" for block in text.split("\n\n") if block.strip())
+    parts: list[str] = []
+    last = 0
+    for match in _URL_RE.finditer(block):
+        parts.append(escape(block[last : match.start()]))
+        url = match.group(0)
+        parts.append(f'<a href="{escape(url)}" target="_blank">{escape(url)}</a>')
+        last = match.end()
+    parts.append(escape(block[last:]))
+    return "".join(parts)
 
 
 def _plan_issue_html(planned: contracts.PlannedTicket) -> str:

@@ -990,3 +990,16 @@ async def test_recover_requeues_orphaned_running_job(
 
     await scheduler.recover()
     assert await _job_status(sessionmaker, "ISSUE-1") == "queued"
+
+
+def test_html_paragraphs_linkifies_urls_and_escapes() -> None:
+    from conductor.scheduler import _html_paragraphs
+
+    html = _html_paragraphs(
+        "Pull request(s) opened:\n\nui: https://github.com/o/r/pull/7"
+    )
+    # The URL is a real clickable anchor…
+    assert '<a href="https://github.com/o/r/pull/7" target="_blank">' in html
+    # …and surrounding text is still escaped (no raw injection).
+    assert "Pull request(s) opened:" in html
+    assert _html_paragraphs("a <b> & c") == "<p>a &lt;b&gt; &amp; c</p>"
