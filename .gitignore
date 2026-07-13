@@ -186,3 +186,4 @@ secrets/
 
 # NiceGUI session storage (created when running the console locally)
 .nicegui/
+conductor/verify.db*

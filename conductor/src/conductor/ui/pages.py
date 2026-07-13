@@ -15,7 +15,7 @@ import yaml
 from cryptography.fernet import InvalidToken
 from nicegui import ui
 
-from conductor import agent_runs, job_events, plane, verify
+from conductor import agent_runs, job_events, plane, prompts, verify
 from conductor import jobs as jobs_mod
 from conductor.agents import dockerctl
 from conductor.localtime import format_display
@@ -216,6 +216,101 @@ def _migration_panel() -> None:
                 ui.upload(
                     label="targets.yml file", auto_upload=True, on_upload=on_targets_upload
                 ).classes("v2-upload").props("flat")
+
+
+# ── agents ───────────────────────────────────────────────────────────────────────
+_PROMPT_LABELS = {
+    "engineer": "Engineer — builds the ticket",
+    "planner": "Planner — splits the epic into tickets",
+    "reviewer": "Reviewer — critiques the diff",
+    "qa": "QA — verifies against the ticket",
+    "engineer_followup": "Engineer · follow-up — addresses review findings",
+    "engineer_resume": "Engineer · resume — continues a parked ticket",
+}
+
+
+@ui.page("/agents")
+async def agents_page() -> None:
+    layout("/agents")
+    views = await get_context().prompts.list()
+
+    with page():
+        kit.page_header(
+            "Agents",
+            "Edit the prompt each agent role runs. Saved to the database — takes effect on the "
+            "next dispatch, no redeploy.",
+        )
+        with kit.panel():
+            labels = {v.role: _PROMPT_LABELS.get(v.role, v.role) for v in views}
+            with widgets.labeled("Prompt"):
+                picker = (
+                    ui.select(options=labels, value=views[0].role)
+                    .props("outlined dense options-dark")
+                    .classes("w-full v2-field")
+                )
+            editor_area = ui.column().classes("w-full gap-4")
+
+            async def load() -> None:
+                editor_area.clear()
+                with editor_area:
+                    await _render_prompt_editor(str(picker.value))
+
+            picker.on_value_change(load)
+            await load()
+
+
+async def _render_prompt_editor(role: str) -> None:
+    """CodeMirror markdown editor for one role's template, with an Edit/Preview toggle, save
+    (validated), and reset-to-default. Shared shape with the states page's per-project form."""
+    ctx = get_context()
+    content = await ctx.prompts.get(role)
+    allowed = ", ".join(f"{{{f}}}" for f in sorted(prompts.FIELDS[role]))
+
+    with ui.row().classes("w-full items-center justify-between no-wrap gap-4"):
+        ui.label(f"Placeholders you can use: {allowed}").classes("text-xs").style(
+            f"color:{kit.MUTED}"
+        )
+        mode = ui.toggle(["Edit", "Preview"], value="Edit").props("dense no-caps")
+
+    editor = (
+        ui.codemirror(content, language="Markdown", theme="githubDark", line_wrapping=True)
+        .classes("w-full v2-codemirror")
+        .style("min-height:420px")
+    )
+    preview = (
+        ui.markdown("")
+        .classes("w-full v2-md")
+        .style(
+            f"min-height:420px;padding:16px;border:1px solid {kit.BORDER};"
+            f"border-radius:10px;background:{kit.PAGE_BG}"
+        )
+    )
+
+    def show_mode() -> None:
+        previewing = mode.value == "Preview"
+        editor.set_visibility(not previewing)
+        preview.set_visibility(previewing)
+        if previewing:
+            preview.set_content(editor.value)
+
+    mode.on_value_change(show_mode)
+    show_mode()
+
+    async def save() -> None:
+        try:
+            await ctx.prompts.set(role, editor.value)
+        except ValueError as exc:
+            ui.notify(str(exc), color="negative")
+            return
+        ui.notify("Prompt saved.")
+
+    def reset() -> None:
+        editor.set_value(prompts.default_template(role))
+        ui.notify("Reset to the bundled default — not saved yet.")
+
+    with ui.row().classes("w-full items-center gap-3"):
+        kit.primary_button("Save", icon="save", on_click=save)
+        kit.secondary_button("Reset to default", icon="rotate-ccw", on_click=reset)
 
 
 # ── projects ─────────────────────────────────────────────────────────────────────

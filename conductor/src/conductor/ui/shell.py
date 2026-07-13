@@ -14,6 +14,7 @@ NAV = (
     ("Wizard", "/", "wand-sparkles"),
     ("Configuration", "/config", "sliders-horizontal"),
     ("Projects", "/projects", "layout-grid"),
+    ("Agents", "/agents", "bot"),
     ("States", "/states", "workflow"),
     ("Jobs", "/jobs", "inbox"),
 )

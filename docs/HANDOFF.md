@@ -4,7 +4,7 @@
 > work progresses; trim finished detail once a phase merges. Durable detail lives in the code and
 > `docs/PLAN.md`; this file is state + decisions, not a changelog.
 
-**Status (VERSION 0.5.15):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
+**Status (VERSION 0.5.16):** **Phases 1–5 DONE & merged; live-acceptance hardening in progress.** The
 full pipeline (planner → engineer → reviewer/QA loop → ready_for_approval → human merge → cleanup) is
 wired and merged (Phase 5 PRs #51–#54). Live acceptance on barad-dur then drove **PRs #55–#59
 (merged)** — parking/422s/stop-job, agent-run capture + console log viewer, job-delete cascade +
@@ -67,6 +67,19 @@ purpose (easy-to-deploy autonomous AI SWE tool, two human touchpoints), setup (t
 wizard walkthrough per credential), config backup via Config → Migration (encrypted bundle
 export/import as the fast re-setup path), and a brief "how it works" (intake → planner → engineer →
 review loop → cleanup).
+
+**Agents page + DB-backed prompts (PR pending, VERSION 0.5.16):** agent prompt templates moved from
+the bundled `prompts/*.md` files into a new **`agent_prompts`** table (migration `c8d9e0f1a2b3`),
+editable from a new console **`/agents`** page — a CodeMirror markdown editor (Edit/Preview toggle,
+reset-to-default, save-time validation that a template only uses the allowed `{placeholders}`). The
+`.md` files stay in the repo as the **seed source + runtime fallback**: `PromptStore.seed_defaults()`
+(called in the lifespan) inserts any missing `(role,"default")` rows seed-once, DB wins after.
+`prompts.render` is gone; the scheduler now injects a `PromptStore` and `await`s
+`self._prompts.render(role, …)`. **Future-proofing seam:** `agent_prompts` is keyed `(role, variant)`
+with `variant="default"` today — later a project/repo mapping can name a variant and the scheduler
+resolves it, giving per-project/per-repo agent types. Not browser-verified (app boots, route + auth
+redirect + seed confirmed, page mirrors the states page); nested CodeMirror interaction is
+import/unit-verified only.
 
 **Docker deploy compose (PR pending, VERSION 0.5.15):** the default `docker-compose.yml` is now a
 **production deploy** off the published GHCR images (`ghcr.io/issachar-vin/dem-conductor:latest` +

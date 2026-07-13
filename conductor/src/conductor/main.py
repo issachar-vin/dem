@@ -17,6 +17,7 @@ from conductor.config import BootstrapSettings, get_settings
 from conductor.crypto import SecretBox
 from conductor.db import create_engine, create_sessionmaker
 from conductor.mappings import MappingStore
+from conductor.prompts import PromptStore
 from conductor.store import ConfigStore
 from conductor.tickets import TicketStore
 
@@ -55,11 +56,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     mappings = MappingStore(sessionmaker, box)
     app.state.mappings = mappings
 
+    prompts_store = PromptStore(sessionmaker)
+    app.state.prompts = prompts_store
+    seeded_prompts = await prompts_store.seed_defaults()
+    logger.info("Seeded %d agent prompt(s) from bundled defaults", seeded_prompts)
+
     docker_factory = default_factory((await store.resolved()).get("docker_host"))
     ui.configure(
         store=store,
         mappings=mappings,
         auth=auth,
+        prompts=prompts_store,
         settings=settings,
         sessionmaker=sessionmaker,
         docker_factory=docker_factory,
@@ -93,6 +100,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         tickets=TicketStore(sessionmaker),
         dispatcher=dispatcher,
         volumes=VolumeManager(store=store, docker_factory=docker_factory),
+        prompts_store=prompts_store,
     )
     sched_task = await scheduler.start(sched)
 

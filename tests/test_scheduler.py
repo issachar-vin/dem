@@ -16,6 +16,7 @@ from conductor.jobs import enqueue_job
 from conductor.mappings import MappingStore
 from conductor.models import Job, Ticket, WorkflowState
 from conductor.plane import PlaneError
+from conductor.prompts import PromptStore
 from conductor.scheduler import Scheduler
 from conductor.store import ConfigStore
 from conductor.tickets import TicketStore
@@ -212,6 +213,7 @@ async def _scheduler(
         tickets=tickets,
         dispatcher=dispatcher,  # type: ignore[arg-type]
         volumes=volumes,  # type: ignore[arg-type]
+        prompts_store=PromptStore(sessionmaker),
         plane_factory=lambda _cfg: plane or FakePlane(),  # type: ignore[arg-type,return-value]
         github_factory=lambda _cfg: github or FakeGitHub(),  # type: ignore[arg-type,return-value]
         notify_fn=notify or FakeNotify(),
