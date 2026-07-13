@@ -8,6 +8,7 @@ from conductor.agents.dockerctl import DockerFactory
 from conductor.auth import AuthStore
 from conductor.config import BootstrapSettings
 from conductor.mappings import MappingStore
+from conductor.prompts import PromptStore
 from conductor.store import ConfigStore
 
 
@@ -21,6 +22,7 @@ class AppContext:
     store: ConfigStore
     mappings: MappingStore
     auth: AuthStore
+    prompts: PromptStore
     settings: BootstrapSettings
     sessionmaker: async_sessionmaker[AsyncSession]
     docker_factory: DockerFactory
@@ -34,6 +36,7 @@ def configure(
     store: ConfigStore,
     mappings: MappingStore,
     auth: AuthStore,
+    prompts: PromptStore,
     settings: BootstrapSettings,
     sessionmaker: async_sessionmaker[AsyncSession],
     docker_factory: DockerFactory,
@@ -43,6 +46,7 @@ def configure(
         store=store,
         mappings=mappings,
         auth=auth,
+        prompts=prompts,
         settings=settings,
         sessionmaker=sessionmaker,
         docker_factory=docker_factory,

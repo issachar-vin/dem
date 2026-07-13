@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from conductor import github, job_events, notify, plane, prompts, router
+from conductor import github, job_events, notify, plane, router
 from conductor.agents import contracts
 from conductor.agents.contracts import Finding, Plan, Verdict
 from conductor.agents.dispatcher import AgentRun, Dispatcher
@@ -33,6 +33,7 @@ from conductor.jobs import claim_job, complete_job, requeue_running
 from conductor.mappings import MappingStore, RepoMappingView
 from conductor.models import Job, JobStatus, Ticket, WorkflowState
 from conductor.plane import PlaneClient
+from conductor.prompts import PromptStore
 from conductor.store import ConfigStore
 from conductor.tickets import TicketStore
 
@@ -85,6 +86,7 @@ class Scheduler:
         tickets: TicketStore,
         dispatcher: Dispatcher,
         volumes: VolumeManager,
+        prompts_store: PromptStore,
         plane_factory: Callable[[dict[str, str]], PlaneClient] = plane.client_from_resolved,
         github_factory: Callable[[dict[str, str]], GitHubClient] = github.client_from_resolved,
         notify_fn: Callable[[dict[str, str], str], Awaitable[None]] = notify.notify,
@@ -96,6 +98,7 @@ class Scheduler:
         self._tickets = tickets
         self._dispatcher = dispatcher
         self._volumes = volumes
+        self._prompts = prompts_store
         self._plane_factory = plane_factory
         self._github_factory = github_factory
         self._notify = notify_fn
@@ -272,7 +275,7 @@ class Scheduler:
                     role=AgentRole.PLANNER,
                     ticket_id=epic_id,
                     job_id=job.id,
-                    prompt=_planner_prompt(epic, repos),
+                    prompt=await self._planner_prompt(epic, repos),
                     model=self._model(cfg, AgentRole.PLANNER),
                 ),
                 contracts.parse_plan,
@@ -345,14 +348,14 @@ class Scheduler:
                 ctx.job_id, f"Preparing repositories — cloning {keys}", ticket_id=ctx.issue_id
             )
             await self._volumes.prepare(ticket_id=ctx.issue_id, targets=ctx.targets)
-            prompt = _engineer_prompt(ctx.issue_id, ctx.issue, ctx.targets)
+            prompt = await self._engineer_prompt(ctx.issue_id, ctx.issue, ctx.targets)
         else:
             await self._emit(
                 ctx.job_id,
                 "Resuming from the saved session — reusing the existing checkout, no re-clone",
                 ticket_id=ctx.issue_id,
             )
-            prompt = prompts.render(
+            prompt = await self._prompts.render(
                 "engineer_resume", ticket_id=ctx.issue_id, conversation=resume.conversation
             )
         envelope = await self._dispatcher.run(
@@ -570,7 +573,7 @@ class Scheduler:
                     role=role,
                     ticket_id=ctx.issue_id,
                     job_id=ctx.job_id,
-                    prompt=_checker_prompt(role, ctx),
+                    prompt=await self._checker_prompt(role, ctx),
                     model=self._model(ctx.cfg, role),
                 ),
                 contracts.parse_verdict,
@@ -590,7 +593,7 @@ class Scheduler:
                 role=AgentRole.ENGINEER,
                 ticket_id=ctx.issue_id,
                 job_id=ctx.job_id,
-                prompt=prompts.render(
+                prompt=await self._prompts.render(
                     "engineer_followup",
                     ticket_id=ctx.issue_id,
                     findings=_format_findings(verdicts),
@@ -599,6 +602,34 @@ class Scheduler:
                 resume_session_id=session_id,
                 loop_round=round_no,
             )
+        )
+
+    async def _engineer_prompt(
+        self, issue_id: str, issue: dict[str, object], targets: list[RepoClone]
+    ) -> str:
+        return await self._prompts.render(
+            "engineer",
+            ticket_id=issue_id,
+            title=_issue_title(issue),
+            body=_issue_body(issue),
+            repos=_repos_block(targets),
+        )
+
+    async def _planner_prompt(self, epic: dict[str, object], repos: list[RepoMappingView]) -> str:
+        repo_lines = "\n".join(
+            f"- `{r.key}` → {r.github_repo} (base branch `{r.base_branch}`)" for r in repos
+        )
+        return await self._prompts.render(
+            "planner", title=_issue_title(epic), body=_issue_body(epic), repos=repo_lines
+        )
+
+    async def _checker_prompt(self, role: AgentRole, ctx: _Pipeline) -> str:
+        return await self._prompts.render(
+            role.value,
+            ticket_id=ctx.issue_id,
+            title=_issue_title(ctx.issue),
+            body=_issue_body(ctx.issue),
+            repos=_repos_block(ctx.built or ctx.targets),
         )
 
     async def _post_findings(
@@ -697,28 +728,9 @@ def _repos_block(targets: list[RepoClone]) -> str:
     )
 
 
-def _engineer_prompt(issue_id: str, issue: dict[str, object], targets: list[RepoClone]) -> str:
-    return prompts.render(
-        "engineer",
-        ticket_id=issue_id,
-        title=_issue_title(issue),
-        body=_issue_body(issue),
-        repos=_repos_block(targets),
-    )
-
-
 def _pr_body(issue_id: str, issue: dict[str, object]) -> str:
     body = _issue_body(issue)
     return f"Automated implementation of ticket `{issue_id}`.\n\n{body}".rstrip()
-
-
-def _planner_prompt(epic: dict[str, object], repos: list[RepoMappingView]) -> str:
-    repo_lines = "\n".join(
-        f"- `{r.key}` → {r.github_repo} (base branch `{r.base_branch}`)" for r in repos
-    )
-    return prompts.render(
-        "planner", title=_issue_title(epic), body=_issue_body(epic), repos=repo_lines
-    )
 
 
 _NEEDS_INPUT_MARKER = "NEEDS_INPUT:"
@@ -762,16 +774,6 @@ def _plan_issue_html(planned: contracts.PlannedTicket) -> str:
     if planned.acceptance_criteria:
         html += f"<p><b>Acceptance criteria</b></p><p>{planned.acceptance_criteria}</p>"
     return html
-
-
-def _checker_prompt(role: AgentRole, ctx: _Pipeline) -> str:
-    return prompts.render(
-        role.value,
-        ticket_id=ctx.issue_id,
-        title=_issue_title(ctx.issue),
-        body=_issue_body(ctx.issue),
-        repos=_repos_block(ctx.built or ctx.targets),
-    )
 
 
 def _format_findings(verdicts: list[tuple[AgentRole, Verdict]]) -> str:

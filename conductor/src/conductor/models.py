@@ -282,3 +282,25 @@ class AgentRunLog(Base):
     # the store so a runaway agent can't bloat the DB.
     output: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AgentPrompt(Base):
+    """The editable prompt template for one agent role, stored in the DB so it can be changed from
+    the console without a redeploy. `role` is the template key (engineer/planner/reviewer/qa and the
+    engineer sub-prompts). `variant` names an agent "type": today only "default", but the column is
+    the seam for future per-project/per-repo agent variants — the scheduler resolves a variant name
+    to a row here. Seeded once from the bundled `prompts/*.md` files on first boot; DB wins after.
+    """
+
+    __tablename__ = "agent_prompts"
+    __table_args__ = (UniqueConstraint("role", "variant"),)
+
+    id: Mapped[int] = mapped_column(_AutoPK, primary_key=True, autoincrement=True)
+    role: Mapped[str] = mapped_column(String(32), index=True)
+    variant: Mapped[str] = mapped_column(String(64), default="default")
+    content: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16), default="seed")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
